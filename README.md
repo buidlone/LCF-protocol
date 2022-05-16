@@ -1,2 +1,2 @@
 # LCF-protocol
-Linear Cash Flow protocol repo
+Linear Cash Flow protocol monorepo
