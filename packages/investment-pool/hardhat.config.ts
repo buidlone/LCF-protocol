@@ -35,12 +35,7 @@ const config: HardhatUserConfig = {
   },
   defaultNetwork: "hardhat",
   networks: {
-    hardhat: {
-      // forking: {
-      //   url: "https://eth-goerli.alchemyapi.io/v2/_R6distPAqZjV9rdH6F0YlgJ9y4nCtI8",
-      //   blockNumber: 7031409,
-      // },
-    },
+    hardhat: {},
     ropsten: {
       url: process.env.ROPSTEN_URL || "",
       accounts:

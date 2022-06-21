@@ -44,7 +44,8 @@ contract Investment is SuperAppBase, Context{
     event Refund(uint256 id, address indexed caller, uint256 amount);
 
     // TODO: Optimize the struct layout, giving a full storage slot(32 bytes) to a bool is unreasonable
-    // Probably can shift around the dates and alter their types
+    // Probably can shift around the dates and alter their types 
+    // (uint48 for timestamps should be plenty, and all of them would fit into a single storage slot)
     struct Campaign {
         // Creator of campaign
         address creator;
@@ -88,6 +89,10 @@ contract Investment is SuperAppBase, Context{
     // Mapping from campaign id => pledger => amount invested
     mapping(uint256 => mapping(address => uint256)) public investedAmount;
 
+    // Add mapping from campaignId to campaign milestones
+    // Add mapping from creator address to actively streaming milestones
+
+
 
     constructor(
         ISuperfluid _host,
@@ -112,7 +117,10 @@ contract Investment is SuperAppBase, Context{
         uint256 configWord = SuperAppDefinitions.APP_LEVEL_FINAL
              | SuperAppDefinitions.BEFORE_AGREEMENT_CREATED_NOOP
              | SuperAppDefinitions.BEFORE_AGREEMENT_UPDATED_NOOP
-             | SuperAppDefinitions.BEFORE_AGREEMENT_TERMINATED_NOOP;
+             | SuperAppDefinitions.BEFORE_AGREEMENT_TERMINATED_NOOP
+             | SuperAppDefinitions.AFTER_AGREEMENT_CREATED_NOOP
+             | SuperAppDefinitions.AFTER_AGREEMENT_UPDATED_NOOP
+             | SuperAppDefinitions.AFTER_AGREEMENT_TERMINATED_NOOP;
 
         if (bytes(_registrationKey).length > 0) {
             _host.registerAppWithKey(configWord, _registrationKey);
@@ -237,7 +245,7 @@ contract Investment is SuperAppBase, Context{
     ) external {
         require(_startAt >= _getNow(), "start at < now");
         require(_endAt >= _startAt, "end at < start at");
-        require(_endAt - _startAt <= 90 days, "fundraiser duration exceeds max duration");
+        require(_endAt - _startAt <= FUNDRAISER_MAX_DURATION, "fundraiser duration exceeds max duration");
         require(
             _endAt <= _milestoneStartDate,
             "milestone start date cannot start before campain ends"
@@ -247,7 +255,7 @@ contract Investment is SuperAppBase, Context{
             "milestone start date > milestone end date "
         );
         require(
-            _milestoneEndDate - _milestoneStartDate >= 30 days,
+            _milestoneEndDate - _milestoneStartDate >= MILESTONE_MIN_DURATION,
             "milestone lenght must be at least 1 month "
         );
 
@@ -346,7 +354,12 @@ contract Investment is SuperAppBase, Context{
         uint96 milestonePeriod = campaign.milestoneEndDate -
             campaign.milestoneStartDate;
 
+        // Need clarification on this, why softCap, why not total investedAmount?
+        // Why 7 days specifically?
         // Creates flowRate with 7 days delay
+        // Perhaps we need to take into account the milestone end date instead?
+        // Because it'd make sense for campaign creator to receive all of the
+        // funds before the milestone ends, regardless of the time when "claim()" was triggered
         int96 flowRate = int96(campaign.softCap) /
             int96(milestonePeriod + 7 days);
 
@@ -383,9 +396,24 @@ contract Investment is SuperAppBase, Context{
         emit Claim(_id);
     }
 
+    function _onStreamingToCreatorStopped(address receiver) internal{
+        // Primary use of this function is to handle the corner case, 
+        // where creator stops money streaming for some reason
+
+        // Find campaigns/milestones where money streaming is active
+        // Calculate the amout of money that has been streamed out
+        // Keep tabs on it, so we can restart the streaming with a correct flow rate
+        // Update the streaming status for each campaign/milestone
+    }
+
     function _getNow() internal view virtual returns(uint256) {
         // TODO: ISuperfluid host can provide time with .getNow(), investigate that
         // solhint-disable-next-line not-rely-on-time
         return block.timestamp;
     }
+
+    // TODO: Insert SuperApp callbacks here
+
+    // TODO: Insert termination checker and termination logic
+    // once termination window is added
 }
