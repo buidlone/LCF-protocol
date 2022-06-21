@@ -17,6 +17,7 @@ import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.s
 import {IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
 
 
+
 contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, Initializable {
 
 
@@ -88,6 +89,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     /// @param token The Super Token streamed in. MUST be the in-token.
     modifier validCallback(ISuperToken token) {
         if (token != acceptedToken) revert InvalidToken();
+
+        // NOTE: Checking msg.sender here instead of _msgSender()
+        // because it's supposed to be called by the Superfluid host only
         if (msg.sender != address(cfaV1Lib.host)) revert Unauthorized();
         _;
     }
@@ -358,7 +362,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
         // TODO: handle overstream case in-between milestones
         // (if stream was not terminated in time)
-        uint256 streamedAmount = timestamp * uint256(int256(flowRate));
+        uint256 streamedAmount = (_getNow() - timestamp) * uint256(int256(flowRate));
 
         cfaV1Lib.deleteFlow(address(this), creator, acceptedToken);
 
@@ -382,12 +386,12 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     function _afterMilestoneStreamTermination(uint256 _milestoneId, uint256 streamedAmount, bool finalTermination) internal {
         Milestone storage milestone = milestones[_milestoneId];
-
+        // TODO: Handle overstream situations here, if it wasn't closed in time
         milestone.streamOngoing = false;
 
         if (finalTermination) {
             uint256 tokenPortion = calculateTokenPortionForMilestone(_milestoneId);
-            uint256 owedAmount = tokenPortion - milestone.paidAmount + streamedAmount;
+            uint256 owedAmount = tokenPortion - milestone.paidAmount - streamedAmount;
 
             milestone.paidAmount = tokenPortion;
             milestone.paid = true;
@@ -475,7 +479,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
         // TODO: handle overstream case in-between milestones
         // (if stream was not terminated in time)
-        uint256 streamedAmount = timestamp * uint256(int256(flowRate));
+        uint256 streamedAmount = (_getNow() - timestamp) * uint256(int256(flowRate));
 
         // At this point the stream itself was already terminated, just do some bookkeeping
         // NOTE: think about termination window edge cases here

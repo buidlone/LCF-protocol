@@ -1,6 +1,6 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { Framework, WrapperSuperToken } from "@superfluid-finance/sdk-core";
-import { BigNumber, ContractTransaction } from "ethers";
+import { BigNumber, ContractTransaction, providers } from "ethers";
 import { ethers, web3 } from "hardhat";
 import { assert, expect } from "chai";
 import {
@@ -8,7 +8,7 @@ import {
   InvestmentPoolFactoryMock,
   InvestmentPoolMock,
 } from "../typechain";
-// import traveler from "ganache-time-traveler";
+import traveler from "ganache-time-traveler";
 
 // const { toWad } = require("@decentral.ee/web3-helpers");
 // const { assert, should, expect } = require("chai");
@@ -68,6 +68,13 @@ async function getInvestmentFromTx(
   const pool = contractFactory.attach(poolAddress);
 
   return pool;
+}
+
+async function getTimeStamp(
+  tx: providers.TransactionResponse
+): Promise<BigNumber> {
+  const timestamp = (await provider.eth.getBlock(tx.blockHash!)).timestamp;
+  return BigNumber.from(timestamp);
 }
 
 before(async function () {
@@ -2061,25 +2068,494 @@ describe("Investment Pool", async () => {
         // Try to double claim
         await expect(investment.connect(creator).claim(0)).to.be.reverted;
       });
-      // TODO: Test flowrates
+
+      it("[IP][4.2.6] Creates a stream of funds on claim", async () => {
+        const softCap = ethers.utils.parseEther("1500");
+        const milestoneStartDate = BigNumber.from(
+          new Date("2022/09/01").getTime() / 1000
+        );
+        const milestoneEndDate = BigNumber.from(
+          new Date("2022/10/01").getTime() / 1000
+        );
+        const campaignStartDate = BigNumber.from(
+          new Date("2022/07/01").getTime() / 1000
+        );
+        const campaignEndDate = BigNumber.from(
+          new Date("2022/08/01").getTime() / 1000
+        );
+
+        const creationRes = await investmentPoolFactory
+          .connect(creator)
+          .createInvestmentPool(
+            fUSDTx.address,
+            softCap,
+            campaignStartDate,
+            campaignEndDate,
+            0, // NON-UPGRADEABLE
+            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
+          );
+
+        investment = await getInvestmentFromTx(creationRes);
+
+        // NOTE: Time traveling to 2022/07/15
+        let timeStamp = new Date("2022/07/15").getTime() / 1000;
+        await investment.setTimestamp(timeStamp);
+
+        // Invest more than soft cap here to make sure the campaign is a success
+        const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+        // Give token approval
+        await fUSDTx
+          .approve({
+            receiver: investment.address,
+            // Max value here to test if contract attempts something out of line
+            amount: UINT256_MAX.toString(),
+          })
+          .exec(investorA);
+
+        // Invest money
+        await expect(investment.connect(investorA).invest(investedAmount)).to
+          .not.be.reverted;
+
+        const votingPeriod = BigNumber.from(await investment.votingPeriod());
+
+        // NOTE: Time traveling to 2022/09/15 when the milestone is active
+        timeStamp = new Date("2022/09/15").getTime() / 1000;
+        await investment.setTimestamp(timeStamp);
+
+        await traveler.advanceBlockAndSetTime(timeStamp);
+        await investment.connect(creator).claim(0);
+
+        // NOTE: even though we cannot get precise time with the traveler,
+        // the investment contract itself creates flowrate, and uses the timestamp that was passed to it
+        // So it's ok to make calculations using it
+        // Calculate the desired flowrate, should match the one from contract
+        const timeLeft = milestoneEndDate.add(votingPeriod).sub(timeStamp);
+        const flowRate = investedAmount.div(timeLeft);
+
+        const flowInfo = await sf.cfaV1.getFlow({
+          superToken: fUSDTx.address,
+          sender: investment.address,
+          receiver: creator.address,
+          providerOrSigner: creator,
+        });
+
+        assert.isDefined(flowInfo);
+
+        assert.deepEqual(
+          BigNumber.from(flowInfo.flowRate),
+          flowRate,
+          "Flow Rate must match the predicted one"
+        );
+      });
+
+      it("[IP][4.2.7] Storage variables are updated on claim", async () => {
+        const softCap = ethers.utils.parseEther("1500");
+        const milestoneStartDate = BigNumber.from(
+          new Date("2022/09/01").getTime() / 1000
+        );
+        const milestoneEndDate = BigNumber.from(
+          new Date("2022/10/01").getTime() / 1000
+        );
+        const campaignStartDate = BigNumber.from(
+          new Date("2022/07/01").getTime() / 1000
+        );
+        const campaignEndDate = BigNumber.from(
+          new Date("2022/08/01").getTime() / 1000
+        );
+
+        const creationRes = await investmentPoolFactory
+          .connect(creator)
+          .createInvestmentPool(
+            fUSDTx.address,
+            softCap,
+            campaignStartDate,
+            campaignEndDate,
+            0, // NON-UPGRADEABLE
+            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
+          );
+
+        investment = await getInvestmentFromTx(creationRes);
+
+        // NOTE: Time traveling to 2022/07/15
+        let timeStamp = new Date("2022/07/15").getTime() / 1000;
+        await investment.setTimestamp(timeStamp);
+
+        // Invest more than soft cap here to make sure the campaign is a success
+        const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+        // Give token approval
+        await fUSDTx
+          .approve({
+            receiver: investment.address,
+            // Max value here to test if contract attempts something out of line
+            amount: UINT256_MAX.toString(),
+          })
+          .exec(investorA);
+
+        // Invest money
+        await expect(investment.connect(investorA).invest(investedAmount)).to
+          .not.be.reverted;
+
+        // NOTE: Time traveling to 2022/09/15 when the milestone is active
+        timeStamp = new Date("2022/09/15").getTime() / 1000;
+        await investment.setTimestamp(timeStamp);
+
+        await expect(investment.connect(creator).claim(0)).to.not.be.reverted;
+
+        const milestone = await investment.milestones(0);
+
+        assert.equal(
+          milestone.streamOngoing,
+          true,
+          "milestone's stream should be ongoing"
+        );
+      });
+
+      // TODO: Test multiple milestones (distribution of funds)
+      // TODO: Test claiming after the milestone end(immediate transfer)
     });
   });
 
   describe("5. Money streaming corner cases", () => {
-    // Test the volunteer termination of streaming by campaign creator
+    describe("5.1 Interactions", () => {
+      it("[IP][5.1.1] Volunteer stopping of streamed funds updates records", async () => {
+        const softCap = ethers.utils.parseEther("1500");
+        const milestoneStartDate = BigNumber.from(
+          new Date("2022/09/01").getTime() / 1000
+        );
+        const milestoneEndDate = BigNumber.from(
+          new Date("2022/10/01").getTime() / 1000
+        );
+        const campaignStartDate = BigNumber.from(
+          new Date("2022/07/01").getTime() / 1000
+        );
+        const campaignEndDate = BigNumber.from(
+          new Date("2022/08/01").getTime() / 1000
+        );
+
+        const creationRes = await investmentPoolFactory
+          .connect(creator)
+          .createInvestmentPool(
+            fUSDTx.address,
+            softCap,
+            campaignStartDate,
+            campaignEndDate,
+            0, // NON-UPGRADEABLE
+            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
+          );
+
+        investment = await getInvestmentFromTx(creationRes);
+
+        // NOTE: Time traveling to 2022/07/15
+        let timeStamp = new Date("2022/07/15").getTime() / 1000;
+        await investment.setTimestamp(timeStamp);
+
+        // Invest more than soft cap here to make sure the campaign is a success
+        const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+        // Give token approval
+        await fUSDTx
+          .approve({
+            receiver: investment.address,
+            // Max value here to test if contract attempts something out of line
+            amount: UINT256_MAX.toString(),
+          })
+          .exec(investorA);
+
+        // Invest money
+        await expect(investment.connect(investorA).invest(investedAmount)).to
+          .not.be.reverted;
+
+        // NOTE: Time traveling to 2022/09/15 when the milestone is active
+        timeStamp = new Date("2022/09/15").getTime() / 1000;
+
+        // NOTE: Here we we want explicitly the chain reported time
+        await investment.setTimestamp(0);
+        await traveler.advanceBlockAndSetTime(timeStamp);
+
+        await investment.connect(creator).claim(0);
+
+        timeStamp = new Date("2022/09/16").getTime() / 1000;
+        // NOTE: Here we we want explicitly the chain reported time
+        await investment.setTimestamp(0);
+        await traveler.advanceBlockAndSetTime(timeStamp);
+
+        // NOTE: we are implicitly testing the SuperApp callback here
+        // we want to find out, what happens if the flow is voluntarily terminated by the creator
+        await sf.cfaV1
+          .deleteFlow({
+            superToken: fUSDTx.address,
+            sender: investment.address,
+            receiver: creator.address,
+          })
+          .exec(creator);
+
+        const creatorBalance = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: creator.address,
+            providerOrSigner: creator,
+          })
+        );
+
+        const milestone = await investment.milestones(0);
+        const paidAmount = milestone.paidAmount;
+
+        assert.deepEqual(
+          paidAmount,
+          creatorBalance,
+          "Streamed balance and stored record should match"
+        );
+
+        assert.equal(
+          milestone.paid,
+          false,
+          "Partial stream should not be paid yet"
+        );
+      });
+
+      it("[IP][5.1.2] (Callback)Volunteer stopping during termination window instantly transfers the rest of funds", async () => {
+        const softCap = ethers.utils.parseEther("1500");
+        const milestoneStartDate = BigNumber.from(
+          new Date("2022/09/01").getTime() / 1000
+        );
+        const milestoneEndDate = BigNumber.from(
+          new Date("2022/10/01").getTime() / 1000
+        );
+        const campaignStartDate = BigNumber.from(
+          new Date("2022/07/01").getTime() / 1000
+        );
+        const campaignEndDate = BigNumber.from(
+          new Date("2022/08/01").getTime() / 1000
+        );
+
+        const creationRes = await investmentPoolFactory
+          .connect(creator)
+          .createInvestmentPool(
+            fUSDTx.address,
+            softCap,
+            campaignStartDate,
+            campaignEndDate,
+            0, // NON-UPGRADEABLE
+            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
+          );
+
+        investment = await getInvestmentFromTx(creationRes);
+
+        // NOTE: Time traveling to 2022/07/15
+        let timeStamp = new Date("2022/07/15").getTime() / 1000;
+        await investment.setTimestamp(timeStamp);
+
+        // Invest more than soft cap here to make sure the campaign is a success
+        const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+        // Give token approval
+        await fUSDTx
+          .approve({
+            receiver: investment.address,
+            // Max value here to test if contract attempts something out of line
+            amount: UINT256_MAX.toString(),
+          })
+          .exec(investorA);
+
+        // Invest money
+        await expect(investment.connect(investorA).invest(investedAmount)).to
+          .not.be.reverted;
+
+        // NOTE: Time traveling to 2022/09/15 when the milestone is active
+        timeStamp = new Date("2022/09/15").getTime() / 1000;
+
+        // NOTE: Here we we want explicitly the chain reported time
+        await investment.setTimestamp(0);
+        await traveler.advanceBlockAndSetTime(timeStamp);
+
+        await investment.connect(creator).claim(0);
+
+        const terminationWindow = BigNumber.from(
+          await investment.terminationWindow()
+        );
+
+        const votingPeriod = await BigNumber.from(
+          await investmentPoolFactory.VOTING_PERIOD()
+        );
+
+        // Let's make sure we are in the termination window
+        // It is sometime at the end of a voting period
+        timeStamp = milestoneEndDate
+          .add(votingPeriod)
+          .sub(terminationWindow.div(2))
+          .toNumber();
+        // NOTE: Here we we want explicitly the chain reported time
+        await investment.setTimestamp(0);
+        await traveler.advanceBlockAndSetTime(timeStamp);
+
+        // NOTE: we are implicitly testing the SuperApp callback here
+        // we want to find out, what happens if the flow is voluntarily terminated by the creator
+        await sf.cfaV1
+          .deleteFlow({
+            superToken: fUSDTx.address,
+            sender: investment.address,
+            receiver: creator.address,
+          })
+          .exec(creator);
+
+        const creatorBalance = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: creator.address,
+            providerOrSigner: creator,
+          })
+        );
+
+        const milestone = await investment.milestones(0);
+        const paidAmount = milestone.paidAmount;
+
+        assert.deepEqual(
+          paidAmount,
+          creatorBalance,
+          "Streamed balance and stored record should match"
+        );
+
+        assert.equal(
+          milestone.paid,
+          true,
+          "Milestone should be fully paid by now"
+        );
+
+        assert.deepEqual(
+          creatorBalance,
+          investedAmount,
+          "should transfer all of the funds during the termination"
+        );
+      });
+
+      // TODO: Test the ovestream case during a single milestone, probably results in internal contract undeflow, need to confirm
+      // TODO: Test stream termination -> resume (with higher flowrate)
+      // TODO: Test stream termination -> resume (with higher flowrate) -> normal termination
+      // TODO: Test stream termination -> resume (with higher flowrate) -> termination using a callback
+      // TODO: Test stream termination -> claim (instant) after the milestone has ended
+    });
   });
 
   describe("6. Money stream termination", () => {
-    // Test money streaming termination using checker(for example for Gelato)
-    // Test money streaming termination with a small window near the end of streaming (to avoid going over budget)
-    // Test termination by 3P system (patricians, plebs, pirates) in case we wouldn't stop it in time, what happens then?
+    describe("6.1 Interactions", () => {
+      it("[IP][6.1.1] Anyone can stop milestone during termination window, it instantly transfers the rest of funds", async () => {
+        const softCap = ethers.utils.parseEther("1500");
+        const milestoneStartDate = BigNumber.from(
+          new Date("2022/09/01").getTime() / 1000
+        );
+        const milestoneEndDate = BigNumber.from(
+          new Date("2022/10/01").getTime() / 1000
+        );
+        const campaignStartDate = BigNumber.from(
+          new Date("2022/07/01").getTime() / 1000
+        );
+        const campaignEndDate = BigNumber.from(
+          new Date("2022/08/01").getTime() / 1000
+        );
+
+        const creationRes = await investmentPoolFactory
+          .connect(creator)
+          .createInvestmentPool(
+            fUSDTx.address,
+            softCap,
+            campaignStartDate,
+            campaignEndDate,
+            0, // NON-UPGRADEABLE
+            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
+          );
+
+        investment = await getInvestmentFromTx(creationRes);
+
+        // NOTE: Time traveling to 2022/07/15
+        let timeStamp = new Date("2022/07/15").getTime() / 1000;
+        await investment.setTimestamp(timeStamp);
+
+        // Invest more than soft cap here to make sure the campaign is a success
+        const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+        // Give token approval
+        await fUSDTx
+          .approve({
+            receiver: investment.address,
+            // Max value here to test if contract attempts something out of line
+            amount: UINT256_MAX.toString(),
+          })
+          .exec(investorA);
+
+        // Invest money
+        await expect(investment.connect(investorA).invest(investedAmount)).to
+          .not.be.reverted;
+
+        // NOTE: Time traveling to 2022/09/15 when the milestone is active
+        timeStamp = new Date("2022/09/15").getTime() / 1000;
+
+        // NOTE: Here we we want explicitly the chain reported time
+        await investment.setTimestamp(0);
+        await traveler.advanceBlockAndSetTime(timeStamp);
+
+        await investment.connect(creator).claim(0);
+
+        const terminationWindow = BigNumber.from(
+          await investment.terminationWindow()
+        );
+
+        const votingPeriod = await BigNumber.from(
+          await investmentPoolFactory.VOTING_PERIOD()
+        );
+
+        // Let's make sure we are in the termination window
+        // It is sometime at the end of a voting period
+        timeStamp = milestoneEndDate
+          .add(votingPeriod)
+          .sub(terminationWindow.div(2))
+          .toNumber();
+        // NOTE: Here we we want explicitly the chain reported time
+        await investment.setTimestamp(0);
+        await traveler.advanceBlockAndSetTime(timeStamp);
+
+        await expect(
+          investment
+            .connect(foreignActor) // Anyone can terminate it, no access rights needed
+            .terminateMilestoneStreamFinal(0)
+        ).to.not.be.reverted;
+
+        const creatorBalance = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: creator.address,
+            providerOrSigner: creator,
+          })
+        );
+
+        const milestone = await investment.milestones(0);
+        const paidAmount = milestone.paidAmount;
+
+        assert.deepEqual(
+          paidAmount,
+          creatorBalance,
+          "Streamed balance and stored record should match"
+        );
+
+        assert.equal(
+          milestone.paid,
+          true,
+          "Milestone should be fully paid by now"
+        );
+
+        assert.deepEqual(
+          creatorBalance,
+          investedAmount,
+          "should transfer all of the funds during the termination"
+        );
+      });
+    });
+    // TODO: Test money streaming termination using checker(for example for Gelato)
+    // TODO: Test termination by 3P system (patricians, plebs, pirates) in case we wouldn't stop it in time, what happens then?
   });
 
-  describe("7. Upgradeability", () => {
+  describe("7. Governance", () => {
+    // TODO: Test milestone unlocking, once governance is in place
+  });
+
+  describe("8. Upgradeability", () => {
     // Validate that the storage slots for contract variables don't change their storage slot and offset
     // Validate that struct member order hasn't changed
-    // it("7.1 Contract storage variables didn't shift during development", async () => {
-    //   // await investment.validateStorageLayout();
+    // it("8.1 Contract storage variables didn't shift during development", async () => {
+    //   await investment.validateStorageLayout();
     // });
   });
 });

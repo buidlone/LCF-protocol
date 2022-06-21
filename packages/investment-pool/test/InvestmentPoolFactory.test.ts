@@ -25,6 +25,25 @@ let creator: SignerWithAddress;
 let sf: Framework;
 let investmentPoolFactory: InvestmentPoolFactoryMock;
 
+function generateGaplessMilestones(
+  startTimeStamp: BigNumber,
+  duration: BigNumber,
+  votingPeriod: BigNumber,
+  amount: number
+): { startDate: BigNumber; endDate: BigNumber }[] {
+  const arr: { startDate: BigNumber; endDate: BigNumber }[] = [];
+  let prevTimestamp = startTimeStamp;
+
+  for (let i = 0; i < amount; i++) {
+    const endDate = prevTimestamp.add(duration);
+    arr.push({ startDate: prevTimestamp, endDate: endDate });
+
+    prevTimestamp = endDate.add(votingPeriod);
+  }
+
+  return arr;
+}
+
 const errorHandler = (err: any) => {
   if (err) throw err;
 };
@@ -366,6 +385,122 @@ describe("Investment Pool Factory", async () => {
             campaignEndDate,
             0, // NON-UPGRADEABLE
             [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
+          )
+        ).to.be.reverted;
+      });
+
+      it("[IPF][1.1.8] Respects milestone count limit", async () => {
+        const softCap = ethers.utils.parseEther("1500");
+        const milestoneStartDate = BigNumber.from(
+          new Date("2022/09/01").getTime() / 1000
+        );
+        // Campaign ends before it starts
+        const campaignStartDate = BigNumber.from(
+          new Date("2022/07/01").getTime() / 1000
+        );
+        const campaignEndDate = BigNumber.from(
+          new Date("2022/08/01").getTime() / 1000
+        );
+
+        // 30 days
+        const milestoneDuration = BigNumber.from(30 * 24 * 60 * 60);
+        const votingPeriod = BigNumber.from(
+          await investmentPoolFactory.VOTING_PERIOD()
+        );
+        const maxMilestones = await investmentPoolFactory.MAX_MILESTONE_COUNT();
+
+        await expect(
+          investmentPoolFactory.connect(creator).createInvestmentPool(
+            fUSDTx.address,
+            softCap,
+            campaignStartDate,
+            campaignEndDate,
+            0, // NON-UPGRADEABLE
+            generateGaplessMilestones(
+              milestoneStartDate,
+              milestoneDuration,
+              votingPeriod,
+              maxMilestones + 1 // Intentionally provoke reverting
+            )
+          )
+        ).to.be.reverted;
+      });
+
+      it("[IPF][1.1.9] Can create multiple milestones", async () => {
+        const softCap = ethers.utils.parseEther("1500");
+        const milestoneStartDate = BigNumber.from(
+          new Date("2022/09/01").getTime() / 1000
+        );
+        // Campaign ends before it starts
+        const campaignStartDate = BigNumber.from(
+          new Date("2022/07/01").getTime() / 1000
+        );
+        const campaignEndDate = BigNumber.from(
+          new Date("2022/08/01").getTime() / 1000
+        );
+
+        // 30 days
+        const milestoneDuration = BigNumber.from(30 * 24 * 60 * 60);
+
+        const votingPeriod = BigNumber.from(
+          await investmentPoolFactory.VOTING_PERIOD()
+        );
+        const maxMilestones = await investmentPoolFactory.MAX_MILESTONE_COUNT();
+
+        const milestones = generateGaplessMilestones(
+          milestoneStartDate,
+          milestoneDuration,
+          votingPeriod,
+          maxMilestones // Let's create as many as it's allowed
+        );
+
+        await expect(
+          investmentPoolFactory.connect(creator).createInvestmentPool(
+            fUSDTx.address,
+            softCap,
+            campaignStartDate,
+            campaignEndDate,
+            0, // NON-UPGRADEABLE
+            milestones
+          )
+        ).to.not.be.reverted;
+      });
+
+      it("[IPF][1.1.10] Ensures minimal voting period and milestone spacing", async () => {
+        const softCap = ethers.utils.parseEther("1500");
+        const milestoneStartDate = BigNumber.from(
+          new Date("2022/09/01").getTime() / 1000
+        );
+        // Campaign ends before it starts
+        const campaignStartDate = BigNumber.from(
+          new Date("2022/07/01").getTime() / 1000
+        );
+        const campaignEndDate = BigNumber.from(
+          new Date("2022/08/01").getTime() / 1000
+        );
+
+        // 30 days
+        const milestoneDuration = BigNumber.from(30 * 24 * 60 * 60);
+
+        const votingPeriod = BigNumber.from(
+          await investmentPoolFactory.VOTING_PERIOD()
+        );
+
+        const milestones = generateGaplessMilestones(
+          milestoneStartDate,
+          milestoneDuration,
+          votingPeriod.sub(1), // Make it one second less than minimal
+          2 // will be enough
+        );
+
+        await expect(
+          investmentPoolFactory.connect(creator).createInvestmentPool(
+            fUSDTx.address,
+            softCap,
+            campaignStartDate,
+            campaignEndDate,
+            0, // NON-UPGRADEABLE
+            milestones
           )
         ).to.be.reverted;
       });

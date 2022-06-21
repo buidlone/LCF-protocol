@@ -105,7 +105,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         uint96 _fundraiserStartAt,
         uint96 _fundraiserEndAt,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
-    ) internal 
+    ) internal view
     {
         require(address(_superToken) != address(0), "[IPF]: accepted token zero address");
         require(address(_creator) != address(0), "[IPF]: creator zero address");
