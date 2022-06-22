@@ -21,4 +21,10 @@ module.exports = {
       { ignores: ["modules"] },
     ],
   },
+  "prettier/prettier": [
+    "error",
+    {
+      endOfLine: "auto",
+    },
+  ],
 };
