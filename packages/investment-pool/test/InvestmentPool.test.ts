@@ -2928,8 +2928,6 @@ describe("Investment Pool", async () => {
       });
 
       // TODO: Test the ovestream case during a single milestone, probably results in internal contract undeflow, need to confirm
-      // TODO: Test stream termination -> resume (with higher flowrate) -> normal termination
-      // TODO: Test stream termination -> resume (with higher flowrate) -> termination using a callback
     });
   });
 

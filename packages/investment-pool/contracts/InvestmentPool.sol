@@ -287,7 +287,6 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         emit Invest(_msgSender(), _amount);
     }
 
-    
 
     /** @notice Allows investors to change their mind during the fundraiser period and get their funds back. All at once, or just a specified portion
         @param _amount Amount of funds to withdraw.
@@ -308,7 +307,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      */
     function refund() 
         external
-        failedFundraiser
+        failedFundraiser // TODO: Possible that after milestone voting is added, this needs to be changed
+                         // to account for milestone rejection
     {
         uint256 bal = investedAmount[_msgSender()];
         investedAmount[_msgSender()] = 0;
@@ -317,6 +317,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         emit Refund(_msgSender(), bal);
     }
 
+    /** @notice Allows the pool creator to start streaming/receive funds for a certain milestone
+        @param _milestoneId Milestone index to claim funds for
+     */
     function claim(uint256 _milestoneId) 
         external 
         milestoneUnlocked(_milestoneId)
@@ -339,14 +342,15 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         }
         else {
             require(!milestone.streamOngoing, "[IP]: already streaming for this milestone");
-            // At this point, there should be no active stream
-            // to the creator's account
-            // so it's safe to open a new one
-
             // Milestone is still ongoing, calculate the flowrate and stream
             uint leftStreamDuration = milestone.endDate + votingPeriod - _getNow();
 
-            // NOTE: Calculate the limits here, make sure there is no possibility of overflow
+            // TODO: Calculate the limits here, make sure there is no possibility of overflow
+
+            // NOTE: we are not checking for existing flow here, because such existance would violate our contract rules
+            // At this point, there should be no active stream
+            // to the creator's account
+            // so it's safe to open a new one
             int96 flowRate = int96(int256(owedAmount / leftStreamDuration));
             cfaV1Lib.createFlow(creator, acceptedToken, flowRate);
 
@@ -354,6 +358,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         }
     }
 
+    /** @notice Terminates the stream of funds from contract to creator
+        @dev can only be called during the termination window for a particular milestone
+        @param _milestoneId Milestone index to terminate the stream for
+     */
     function terminateMilestoneStreamFinal(uint256 _milestoneId) 
         external
         canTerminateMilestoneFinal(_milestoneId) 

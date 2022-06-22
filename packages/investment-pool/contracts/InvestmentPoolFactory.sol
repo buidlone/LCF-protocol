@@ -63,7 +63,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         // Other supported types will just deploy a proxy to an existing logic contract
         // Perhaps clones can be used here for super cheap deployments
         else {
-            revert("Upgradeability types other than NON_UPGRADEABLE are not yet supported");
+            revert("[IPF]: upgradeability types other than NON_UPGRADEABLE are not yet supported");
         }
 
         invPool.initialize(
