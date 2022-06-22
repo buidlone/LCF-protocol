@@ -426,7 +426,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     /// @dev Callback executed BEFORE a stream is TERMINATED.
     /// @param token Super Token being streamed in
-    /// @param agreementId Unique stream ID for fetchign the flowRate and timestamp.
+    /// @param agreementId Unique stream ID for fetching the flowRate and timestamp.
     function beforeAgreementTerminated(
         ISuperToken token,
         address agreementClass,

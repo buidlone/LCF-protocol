@@ -171,15 +171,6 @@ before(async function () {
 
 describe("Investment Pool", async () => {
   afterEach(async () => {
-    console.log("Cleanining up investment: ", investment.address);
-
-    const netFlow = await sf.cfaV1.getNetFlow({
-      account: creator.address,
-      superToken: fUSDTx.address,
-      providerOrSigner: creator,
-    });
-    console.log(netFlow);
-
     // If prior investment exists, check if it has an active money stream, terminate it
     if (investment) {
       const existingFlow = await sf.cfaV1.getFlow({
@@ -2697,6 +2688,12 @@ describe("Investment Pool", async () => {
           );
 
         investment = await getInvestmentFromTx(creationRes);
+        const initialCreatorBalance = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: creator.address,
+            providerOrSigner: creator,
+          })
+        );
 
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
@@ -2776,7 +2773,7 @@ describe("Investment Pool", async () => {
         });
 
         assert.deepEqual(
-          BigNumber.from(creatorBalance),
+          BigNumber.from(creatorBalance).sub(initialCreatorBalance),
           investedAmount,
           "Should transfer all of the funds to the creator"
         );
@@ -2821,6 +2818,12 @@ describe("Investment Pool", async () => {
           );
 
         investment = await getInvestmentFromTx(creationRes);
+        const initialCreatorBalance = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: creator.address,
+            providerOrSigner: creator,
+          })
+        );
 
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
@@ -2906,7 +2909,7 @@ describe("Investment Pool", async () => {
         });
 
         assert.deepEqual(
-          BigNumber.from(creatorBalance),
+          BigNumber.from(creatorBalance).sub(initialCreatorBalance),
           investedAmount,
           "Should transfer all of the funds to the creator"
         );
@@ -2959,6 +2962,12 @@ describe("Investment Pool", async () => {
           );
 
         investment = await getInvestmentFromTx(creationRes);
+        const initialCreatorBalance = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: creator.address,
+            providerOrSigner: creator,
+          })
+        );
 
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
@@ -3024,7 +3033,7 @@ describe("Investment Pool", async () => {
 
         assert.deepEqual(
           paidAmount,
-          creatorBalance,
+          creatorBalance.sub(initialCreatorBalance),
           "Streamed balance and stored record should match"
         );
 
@@ -3035,7 +3044,7 @@ describe("Investment Pool", async () => {
         );
 
         assert.deepEqual(
-          creatorBalance,
+          creatorBalance.sub(initialCreatorBalance),
           investedAmount,
           "should transfer all of the funds during the termination"
         );
