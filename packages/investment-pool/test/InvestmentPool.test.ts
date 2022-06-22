@@ -3,11 +3,7 @@ import { Framework, WrapperSuperToken } from "@superfluid-finance/sdk-core";
 import { BigNumber, ContractTransaction, providers } from "ethers";
 import { ethers, web3 } from "hardhat";
 import { assert, expect } from "chai";
-import {
-  InvestmentMock,
-  InvestmentPoolFactoryMock,
-  InvestmentPoolMock,
-} from "../typechain";
+import { InvestmentPoolFactoryMock, InvestmentPoolMock } from "../typechain";
 import traveler from "ganache-time-traveler";
 
 // const { toWad } = require("@decentral.ee/web3-helpers");
@@ -36,11 +32,9 @@ let creator: SignerWithAddress;
 let investorA: SignerWithAddress;
 let investorB: SignerWithAddress;
 
-let activeAccounts: SignerWithAddress[];
 let investors: SignerWithAddress[];
 
 let foreignActor: SignerWithAddress;
-let tokenDump: SignerWithAddress;
 
 let sf: Framework;
 let investmentPoolFactory: InvestmentPoolFactoryMock;
@@ -89,9 +83,6 @@ before(async function () {
   investorB = accounts[4];
 
   foreignActor = accounts[8];
-  tokenDump = accounts[9];
-
-  activeAccounts = [creator, investorA, investorB];
   investors = [investorA, investorB];
 
   // deploy the framework

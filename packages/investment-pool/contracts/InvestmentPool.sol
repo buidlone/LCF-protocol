@@ -1,7 +1,7 @@
 // @ DPATRON 2022
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.9;
 
 // Superfluid imports
 import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
@@ -395,6 +395,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     function _afterMilestoneStreamTermination(uint256 _milestoneId, uint256 streamedAmount, bool finalTermination) internal {
         Milestone storage milestone = milestones[_milestoneId];
         // TODO: Handle overstream situations here, if it wasn't closed in time
+        // TODO: Should probably transfer tokens using try/catch pattern with gas ensurance.
+        // Even though the gas limit for a callback is large, something can still hapen in internal call to transfer
+        // Consult with the 1 rule of App jailing
+        // https://docs.superfluid.finance/superfluid/developers/developer-guides/super-apps/super-app#super-app-rules-jail-system
         milestone.streamOngoing = false;
 
         if (finalTermination) {

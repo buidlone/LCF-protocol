@@ -1,7 +1,7 @@
 // @ DPATRON 2022
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.9;
 
 import {ISuperToken} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {IInvestmentPool} from "./IInvestmentPool.sol";
