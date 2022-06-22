@@ -19,7 +19,8 @@ const deployTestToken = require("@superfluid-finance/ethereum-contracts/scripts/
 const deploySuperToken = require("@superfluid-finance/ethereum-contracts/scripts/deploy-super-token");
 
 // Corresponds to each investor having N fUSDTx (fake USDT wrapped into a SuperToken, hence x suffix)
-const INVESTOR_INITIAL_FUNDS = ethers.utils.parseEther("5000");
+// Should be enough for all of the tests, in order to not perform funding before each
+const INVESTOR_INITIAL_FUNDS = ethers.utils.parseEther("50000000000");
 
 const UINT256_MAX = BigNumber.from(2).pow(256).sub(1);
 
@@ -143,10 +144,42 @@ before(async function () {
   await investmentPoolFactory
     .connect(dPatronAdmin)
     .setTimestamp(BigNumber.from(time));
+
+  const totalAmount = INVESTOR_INITIAL_FUNDS.mul(investors.length);
+
+  // Fund investors
+  await fUSDT.connect(admin).mint(admin.address, totalAmount);
+  await fUSDT
+    .connect(admin)
+    .approve(fUSDTx.address, INVESTOR_INITIAL_FUNDS.mul(investors.length));
+
+  const upgradeOperation = fUSDTx.upgrade({ amount: totalAmount.toString() });
+  const operations = [upgradeOperation];
+
+  // Transfer upgraded tokens to investors
+  for (let i = 0; i < investors.length; i++) {
+    const operation = fUSDTx.transferFrom({
+      sender: admin.address,
+      amount: INVESTOR_INITIAL_FUNDS.toString(),
+      receiver: investors[i].address,
+    });
+    operations.push(operation);
+  }
+
+  await sf.batchCall(operations).exec(admin);
 });
 
 describe("Investment Pool", async () => {
-  beforeEach(async () => {
+  afterEach(async () => {
+    console.log("Cleanining up investment: ", investment.address);
+
+    const netFlow = await sf.cfaV1.getNetFlow({
+      account: creator.address,
+      superToken: fUSDTx.address,
+      providerOrSigner: creator,
+    });
+    console.log(netFlow);
+
     // If prior investment exists, check if it has an active money stream, terminate it
     if (investment) {
       const existingFlow = await sf.cfaV1.getFlow({
@@ -157,7 +190,8 @@ describe("Investment Pool", async () => {
       });
 
       // App is actively streaming money to our creator, terminate that stream
-      if (!BigNumber.from(existingFlow.flowRate).isZero()) {
+      if (BigNumber.from(existingFlow.flowRate).gt(0)) {
+        console.log("TERMINATE FLOW");
         await sf.cfaV1
           .deleteFlow({
             sender: investment.address,
@@ -166,46 +200,6 @@ describe("Investment Pool", async () => {
           })
           .exec(creator);
       }
-    }
-
-    // Transfer all of the money from active accounts to a token dump to make sure we have a clean state
-    // TODO: Refactor this into a batch call for faster cleanup between test runs, now it takes too much time
-    for (let i = 0; i < activeAccounts.length; i++) {
-      const account = activeAccounts[i];
-
-      const balance = await fUSDTx.balanceOf({
-        account: account.address,
-        providerOrSigner: account,
-      });
-      const balanceBn = BigNumber.from(balance);
-      if (!balanceBn.isZero()) {
-        // Transfer leftover tokens to the TokenDump account
-        await fUSDTx
-          .transfer({
-            receiver: tokenDump.address,
-            amount: balance,
-          })
-          .exec(account);
-      }
-    }
-
-    // Fund investors
-    // TODO: Refactor into a batch call for speed
-    for (let i = 0; i < investors.length; i++) {
-      const investor = investors[i];
-      await fUSDT
-        .connect(investor)
-        .mint(investor.address, INVESTOR_INITIAL_FUNDS);
-
-      await fUSDT
-        .connect(investor)
-        .approve(fUSDTx.address, INVESTOR_INITIAL_FUNDS);
-
-      const fUSDtxUpgradeOperation = fUSDTx.upgrade({
-        amount: INVESTOR_INITIAL_FUNDS.toString(),
-      });
-
-      await fUSDtxUpgradeOperation.exec(investor);
     }
   });
 
@@ -793,6 +787,13 @@ describe("Investment Pool", async () => {
 
         investment = await getInvestmentFromTx(creationRes);
 
+        const investorPriorBalance = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: investorA.address,
+            providerOrSigner: investorA,
+          })
+        );
+
         // NOTE: Time traveling to 2022/07/15
         const timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -826,7 +827,7 @@ describe("Investment Pool", async () => {
           providerOrSigner: investorA,
         });
 
-        const balanceDiff = INVESTOR_INITIAL_FUNDS.sub(investedAmount);
+        const balanceDiff = investorPriorBalance.sub(investedAmount);
         assert.deepEqual(
           BigNumber.from(investorBalance),
           balanceDiff,
@@ -862,6 +863,13 @@ describe("Investment Pool", async () => {
 
         investment = await getInvestmentFromTx(creationRes);
 
+        const investorPriorBalance = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: investorA.address,
+            providerOrSigner: investorA,
+          })
+        );
+
         // NOTE: Time traveling to 2022/07/15
         const timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -891,7 +899,7 @@ describe("Investment Pool", async () => {
 
         assert.deepEqual(
           BigNumber.from(investorsBalance),
-          INVESTOR_INITIAL_FUNDS,
+          investorPriorBalance,
           "Investor's balance should be == initial, after full unpledge"
         );
       });
@@ -923,6 +931,12 @@ describe("Investment Pool", async () => {
           );
 
         investment = await getInvestmentFromTx(creationRes);
+        const investorPriorBalance = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: investorA.address,
+            providerOrSigner: investorA,
+          })
+        );
 
         // NOTE: Time traveling to 2022/07/15
         const timeStamp = new Date("2022/07/15").getTime() / 1000;
@@ -954,7 +968,7 @@ describe("Investment Pool", async () => {
 
         assert.deepEqual(
           BigNumber.from(investorsBalance),
-          INVESTOR_INITIAL_FUNDS.sub(investedAmount.div(2)),
+          investorPriorBalance.sub(investedAmount.div(2)),
           "Investor's balance should get half of invested funds back"
         );
 
@@ -1411,6 +1425,13 @@ describe("Investment Pool", async () => {
           })
           .exec(investorA);
 
+        const investorPriorBalance = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: investorA.address,
+            providerOrSigner: investorA,
+          })
+        );
+
         // Invest money
         await expect(investment.connect(investorA).invest(investedAmount)).to
           .not.be.reverted;
@@ -1429,7 +1450,7 @@ describe("Investment Pool", async () => {
 
         assert.deepEqual(
           BigNumber.from(balance),
-          INVESTOR_INITIAL_FUNDS,
+          investorPriorBalance,
           "All of the funds from a failed campaign should have returned to the investor"
         );
       });
@@ -2244,6 +2265,13 @@ describe("Investment Pool", async () => {
 
         investment = await getInvestmentFromTx(creationRes);
 
+        const initialCreatorBalance = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: creator.address,
+            providerOrSigner: creator,
+          })
+        );
+
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -2299,7 +2327,7 @@ describe("Investment Pool", async () => {
 
         assert.deepEqual(
           paidAmount,
-          creatorBalance,
+          creatorBalance.sub(initialCreatorBalance),
           "Streamed balance and stored record should match"
         );
 
@@ -2341,6 +2369,13 @@ describe("Investment Pool", async () => {
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
+
+        const initialCreatorBalance = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: creator.address,
+            providerOrSigner: creator,
+          })
+        );
 
         // Invest more than soft cap here to make sure the campaign is a success
         const investedAmount: BigNumber = ethers.utils.parseEther("2000");
@@ -2406,7 +2441,7 @@ describe("Investment Pool", async () => {
 
         assert.deepEqual(
           paidAmount,
-          creatorBalance,
+          creatorBalance.sub(initialCreatorBalance),
           "Streamed balance and stored record should match"
         );
 
@@ -2417,7 +2452,7 @@ describe("Investment Pool", async () => {
         );
 
         assert.deepEqual(
-          creatorBalance,
+          creatorBalance.sub(initialCreatorBalance),
           investedAmount,
           "should transfer all of the funds during the termination"
         );
@@ -2450,6 +2485,13 @@ describe("Investment Pool", async () => {
           );
 
         investment = await getInvestmentFromTx(creationRes);
+
+        const initialCreatorBalance = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: creator.address,
+            providerOrSigner: creator,
+          })
+        );
 
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
@@ -2490,12 +2532,12 @@ describe("Investment Pool", async () => {
 
         assert.deepEqual(
           paidAmount,
-          creatorBalance,
+          creatorBalance.sub(initialCreatorBalance),
           "Streamed balance and stored record should match"
         );
 
         assert.deepEqual(
-          creatorBalance,
+          creatorBalance.sub(initialCreatorBalance),
           investedAmount,
           "Should transfer all of the funds to the creator"
         );
@@ -2531,6 +2573,13 @@ describe("Investment Pool", async () => {
 
         investment = await getInvestmentFromTx(creationRes);
 
+        const initialCreatorBalance = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: creator.address,
+            providerOrSigner: creator,
+          })
+        );
+
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -2561,6 +2610,13 @@ describe("Investment Pool", async () => {
 
         await investment.connect(creator).claim(0);
 
+        // TODO: time travel fails here
+        const block = await provider.eth.getBlock("latest");
+        const actualTimestamp = block.timestamp;
+        console.log(
+          new Date(BigNumber.from(actualTimestamp).mul(1000).toNumber())
+        );
+
         // Advance in time a little
         timeStamp = new Date("2022/09/20").getTime() / 1000;
 
@@ -2577,10 +2633,12 @@ describe("Investment Pool", async () => {
           })
           .exec(creator);
 
-        const streamedSoFar = await fUSDTx.balanceOf({
-          account: creator.address,
-          providerOrSigner: creator,
-        });
+        const streamedSoFar = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: creator.address,
+            providerOrSigner: creator,
+          })
+        ).sub(initialCreatorBalance);
 
         // Advance in time a little
         timeStamp = new Date("2022/09/25").getTime() / 1000;

@@ -35,10 +35,7 @@ const config: HardhatUserConfig = {
   },
   defaultNetwork: "hardhat",
   networks: {
-    hardhat: {
-      gas: 21000000,
-      gasPrice: 8000000000,
-    },
+    hardhat: {},
     ropsten: {
       url: process.env.ROPSTEN_URL || "",
       accounts:
