@@ -3,11 +3,7 @@ import { Framework, WrapperSuperToken } from "@superfluid-finance/sdk-core";
 import { BigNumber, ContractTransaction, providers } from "ethers";
 import { ethers, web3 } from "hardhat";
 import { assert, expect } from "chai";
-import {
-  InvestmentMock,
-  InvestmentPoolFactoryMock,
-  InvestmentPoolMock,
-} from "../typechain";
+import { InvestmentPoolFactoryMock, InvestmentPoolMock } from "../typechain";
 import traveler from "ganache-time-traveler";
 
 // const { toWad } = require("@decentral.ee/web3-helpers");
@@ -36,11 +32,9 @@ let creator: SignerWithAddress;
 let investorA: SignerWithAddress;
 let investorB: SignerWithAddress;
 
-let activeAccounts: SignerWithAddress[];
 let investors: SignerWithAddress[];
 
 let foreignActor: SignerWithAddress;
-let tokenDump: SignerWithAddress;
 
 let sf: Framework;
 let investmentPoolFactory: InvestmentPoolFactoryMock;
@@ -89,9 +83,6 @@ before(async function () {
   investorB = accounts[4];
 
   foreignActor = accounts[8];
-  tokenDump = accounts[9];
-
-  activeAccounts = [creator, investorA, investorB];
   investors = [investorA, investorB];
 
   // deploy the framework
@@ -171,15 +162,6 @@ before(async function () {
 
 describe("Investment Pool", async () => {
   afterEach(async () => {
-    console.log("Cleanining up investment: ", investment.address);
-
-    const netFlow = await sf.cfaV1.getNetFlow({
-      account: creator.address,
-      superToken: fUSDTx.address,
-      providerOrSigner: creator,
-    });
-    console.log(netFlow);
-
     // If prior investment exists, check if it has an active money stream, terminate it
     if (investment) {
       const existingFlow = await sf.cfaV1.getFlow({
@@ -2697,6 +2679,12 @@ describe("Investment Pool", async () => {
           );
 
         investment = await getInvestmentFromTx(creationRes);
+        const initialCreatorBalance = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: creator.address,
+            providerOrSigner: creator,
+          })
+        );
 
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
@@ -2776,7 +2764,7 @@ describe("Investment Pool", async () => {
         });
 
         assert.deepEqual(
-          BigNumber.from(creatorBalance),
+          BigNumber.from(creatorBalance).sub(initialCreatorBalance),
           investedAmount,
           "Should transfer all of the funds to the creator"
         );
@@ -2821,6 +2809,12 @@ describe("Investment Pool", async () => {
           );
 
         investment = await getInvestmentFromTx(creationRes);
+        const initialCreatorBalance = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: creator.address,
+            providerOrSigner: creator,
+          })
+        );
 
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
@@ -2906,7 +2900,7 @@ describe("Investment Pool", async () => {
         });
 
         assert.deepEqual(
-          BigNumber.from(creatorBalance),
+          BigNumber.from(creatorBalance).sub(initialCreatorBalance),
           investedAmount,
           "Should transfer all of the funds to the creator"
         );
@@ -2925,8 +2919,6 @@ describe("Investment Pool", async () => {
       });
 
       // TODO: Test the ovestream case during a single milestone, probably results in internal contract undeflow, need to confirm
-      // TODO: Test stream termination -> resume (with higher flowrate) -> normal termination
-      // TODO: Test stream termination -> resume (with higher flowrate) -> termination using a callback
     });
   });
 
@@ -2959,6 +2951,12 @@ describe("Investment Pool", async () => {
           );
 
         investment = await getInvestmentFromTx(creationRes);
+        const initialCreatorBalance = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: creator.address,
+            providerOrSigner: creator,
+          })
+        );
 
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
@@ -3024,7 +3022,7 @@ describe("Investment Pool", async () => {
 
         assert.deepEqual(
           paidAmount,
-          creatorBalance,
+          creatorBalance.sub(initialCreatorBalance),
           "Streamed balance and stored record should match"
         );
 
@@ -3035,7 +3033,7 @@ describe("Investment Pool", async () => {
         );
 
         assert.deepEqual(
-          creatorBalance,
+          creatorBalance.sub(initialCreatorBalance),
           investedAmount,
           "should transfer all of the funds during the termination"
         );

@@ -1,7 +1,7 @@
 // @ DPATRON 2022
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.9;
 
 // Superfluid imports
 import {ISuperfluid, ISuperToken, ISuperApp, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
@@ -63,7 +63,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         // Other supported types will just deploy a proxy to an existing logic contract
         // Perhaps clones can be used here for super cheap deployments
         else {
-            revert("Upgradeability types other than NON_UPGRADEABLE are not yet supported");
+            revert("[IPF]: upgradeability types other than NON_UPGRADEABLE are not yet supported");
         }
 
         invPool.initialize(
