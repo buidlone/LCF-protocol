@@ -40,6 +40,8 @@ let sf: Framework;
 let investmentPoolFactory: InvestmentPoolFactoryMock;
 let investment: InvestmentPoolMock;
 
+let snapshotId: string;
+
 const errorHandler = (err: any) => {
   if (err) throw err;
 };
@@ -2219,6 +2221,15 @@ describe("Investment Pool", async () => {
 
   describe("5. Money streaming corner cases", () => {
     describe("5.1 Interactions", () => {
+      beforeEach(async () => {
+        let snapshot = await traveler.takeSnapshot();
+        snapshotId = snapshot["result"];
+      });
+
+      afterEach(async () => {
+        await traveler.revertToSnapshot(snapshotId);
+      });
+
       it("[IP][5.1.1] Volunteer stopping of streamed funds updates records", async () => {
         const softCap = ethers.utils.parseEther("1500");
         const milestoneStartDate = BigNumber.from(
@@ -2591,13 +2602,6 @@ describe("Investment Pool", async () => {
         await traveler.advanceBlockAndSetTime(timeStamp);
 
         await investment.connect(creator).claim(0);
-
-        // TODO: time travel fails here
-        const block = await provider.eth.getBlock("latest");
-        const actualTimestamp = block.timestamp;
-        console.log(
-          new Date(BigNumber.from(actualTimestamp).mul(1000).toNumber())
-        );
 
         // Advance in time a little
         timeStamp = new Date("2022/09/20").getTime() / 1000;
