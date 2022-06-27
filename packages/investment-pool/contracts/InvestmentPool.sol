@@ -24,7 +24,7 @@ contract InvestmentPool is
     event Cancel();
     event Invest(address indexed caller, uint256 amount);
     event Unpledge(address indexed caller, uint256 amount);
-    event Claim();
+    event Claim(uint256 milestoneId);
     event Refund(address indexed caller, uint256 amount);
 
     bytes32 public constant CFA_ID =
@@ -322,6 +322,8 @@ contract InvestmentPool is
     // to account for milestone rejection
     {
         uint256 bal = investedAmount[_msgSender()];
+        require(bal > 0, "[IP]: no money invested");
+
         investedAmount[_msgSender()] = 0;
         acceptedToken.transfer(_msgSender(), bal);
 
@@ -333,6 +335,7 @@ contract InvestmentPool is
      */
     function claim(uint256 _milestoneId)
         external
+        onlyCreator
         milestoneUnlocked(_milestoneId)
         milestoneNotPaid(_milestoneId)
         isNotCanceled
@@ -371,6 +374,8 @@ contract InvestmentPool is
 
             milestone.streamOngoing = true;
         }
+
+        emit Claim(_milestoneId);
     }
 
     /** @notice Terminates the stream of funds from contract to creator
