@@ -13,34 +13,31 @@ import {SuperAppBase} from "@superfluid-finance/ethereum-contracts/contracts/app
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
-
 import {IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
 
-
-
-contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, Initializable {
-
-
+contract InvestmentPool is
+    IInitializableInvestmentPool,
+    SuperAppBase,
+    Context,
+    Initializable
+{
     event Cancel();
     event Invest(address indexed caller, uint256 amount);
     event Unpledge(address indexed caller, uint256 amount);
     event Claim();
     event Refund(address indexed caller, uint256 amount);
 
-    bytes32 constant public CFA_ID = keccak256("org.superfluid-finance.agreements.ConstantFlowAgreement.v1");
-    
+    bytes32 public constant CFA_ID =
+        keccak256("org.superfluid-finance.agreements.ConstantFlowAgreement.v1");
 
     using CFAv1Library for CFAv1Library.InitData;
     /* WARNING: NEVER RE-ORDER VARIABLES! Always double-check that new
        variables are added APPEND-ONLY. Re-ordering variables can
        permanently BREAK the deployed proxy contract. */
 
-
     // Contains addresses of superfluid's host and ConstanFlowAgreement
     CFAv1Library.InitData public cfaV1Lib;
 
-    
-    
     // Contains the address of accepted investment token
     ISuperToken public acceptedToken;
 
@@ -65,7 +62,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     uint256 public totalInvestedAmount;
     // Mapping from pledger => amount invested
     mapping(address => uint256) public investedAmount;
-    
+
     // Milestone data
     // Total amount of milestones in this investment pool
     uint256 public milestoneCount;
@@ -73,7 +70,6 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     mapping(uint256 => Milestone) public milestones;
     uint256 public currentMilestone;
     uint256 public maxUnlockedMilestone;
-
 
     // //////////////////////////////////////////////////////////////
     // Superfluid ERRORS for callbacks
@@ -101,59 +97,61 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         _;
     }
 
-
     /** @notice Confirms that the investor's current investment is greater or equal to amount
         @param _investor Address of the investor to check
         @param _amount Amount of funds to check for
      */
-    modifier hasInvestedSufficientAmount(address _investor, uint256 _amount)
-    {
-        require(investedAmount[_investor] >= _amount, "[IP]: amount > invested");
+    modifier hasInvestedSufficientAmount(address _investor, uint256 _amount) {
+        require(
+            investedAmount[_investor] >= _amount,
+            "[IP]: amount > invested"
+        );
         _;
     }
 
     /** @notice Confirms that the fundraiser has reached a soft cap
      */
-    modifier softCapReached()
-    {
+    modifier softCapReached() {
         require(isSoftCapReached(), "[IP]: total investment < softCap");
         _;
     }
 
     /** @notice Ensures that the fundraiser is not started yet
      */
-    modifier fundraiserNotStartedYet()
-    {
-        require(_getNow() < fundraiserStartAt, "[IP]: campaign started already");
+    modifier fundraiserNotStartedYet() {
+        require(
+            _getNow() < fundraiserStartAt,
+            "[IP]: campaign started already"
+        );
         _;
     }
 
     /** @notice Ensures that the fundraiser period for a given campaign is ongoing
      */
-    modifier fundraiserOngoingNow()
-    {
+    modifier fundraiserOngoingNow() {
         require(isFundraiserOngoingNow(), "[IP]: not in fundraiser period");
         _;
     }
 
     /** @notice Ensures that the fundraiser has failed and investors are eligible for refunds
      */
-    modifier failedFundraiser()
-    {
+    modifier failedFundraiser() {
         require(isFailedFundraiser(), "[IP]: is not a failed campaign");
         _;
     }
 
     /** @notice Ensures that the message sender is the fundraiser creator
      */
-    modifier onlyCreator()
-    {
+    modifier onlyCreator() {
         require(creator == _msgSender(), "[IP]: not creator");
         _;
     }
 
     modifier milestoneUnlocked(uint256 index) {
-        require(index <= _getMaxUnlockedMilestone(), "[IP]: milestone still locked");
+        require(
+            index <= _getMaxUnlockedMilestone(),
+            "[IP]: milestone still locked"
+        );
         _;
     }
 
@@ -163,16 +161,17 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     }
 
     modifier canTerminateMilestoneFinal(uint index) {
-        require(canTerminateMilestoneStreamFinal(index), "[IP]: cannot terminate stream for this milestone");
+        require(
+            canTerminateMilestoneStreamFinal(index),
+            "[IP]: cannot terminate stream for this milestone"
+        );
         _;
     }
-
 
     /** @notice Check if in fundraiser period
         @return true if currently accepting investments
      */
-    function isFundraiserOngoingNow() public view returns(bool)
-    {
+    function isFundraiserOngoingNow() public view returns (bool) {
         return _getNow() >= fundraiserStartAt && _getNow() < fundraiserEndAt;
     }
 
@@ -180,49 +179,65 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         @param _id Milestone Id
         @return true if currently in milestone period
      */
-    function isMilestoneOngoingNow(uint _id) public view returns(bool)
-    {
-        return _getNow() >= milestones[_id].startDate && _getNow() < milestones[_id].endDate;
+    function isMilestoneOngoingNow(uint _id) public view returns (bool) {
+        return
+            _getNow() >= milestones[_id].startDate &&
+            _getNow() < milestones[_id].endDate;
     }
 
     /** @notice Check if the fundraiser has raised enough invested funds to reach soft cap
         @return true if fundraiser has raised enough invested funds to reach soft cap
      */
-    function isSoftCapReached() public view returns(bool)
-    {
+    function isSoftCapReached() public view returns (bool) {
         return softCap <= totalInvestedAmount;
     }
 
     /** @notice Check if the fundraiser period has ended
      */
-    function didFundraiserPeriodEnd() public view returns(bool)
-    {
+    function didFundraiserPeriodEnd() public view returns (bool) {
         return _getNow() >= fundraiserEndAt;
     }
 
     /** @notice Check if fundraiser has failed (didn't raise >= soft cap and ended)
         @return true if the fundraiser is considered failed and investors are eligible for refunds
      */
-    function isFailedFundraiser() public view returns(bool)
-    {
+    function isFailedFundraiser() public view returns (bool) {
         return didFundraiserPeriodEnd() && !isSoftCapReached();
     }
 
-    function calculateTokenPortionForMilestone(uint256 _milestoneId) public view returns(uint256) {
-        return totalInvestedAmount * totalStreamingDuration / getMilestoneDuration(_milestoneId);
+    function calculateTokenPortionForMilestone(uint256 _milestoneId)
+        public
+        view
+        returns (uint256)
+    {
+        return
+            (totalInvestedAmount * totalStreamingDuration) /
+            getMilestoneDuration(_milestoneId);
     }
 
-    function getMilestoneDuration(uint256 _milestoneId) public view returns(uint256) {
-        return milestones[_milestoneId].endDate - milestones[_milestoneId].startDate;
+    function getMilestoneDuration(uint256 _milestoneId)
+        public
+        view
+        returns (uint256)
+    {
+        return
+            milestones[_milestoneId].endDate -
+            milestones[_milestoneId].startDate;
     }
 
-    function canTerminateMilestoneStreamFinal(uint256 _milestoneId) public view returns (bool) {
+    function canTerminateMilestoneStreamFinal(uint256 _milestoneId)
+        public
+        view
+        returns (bool)
+    {
         Milestone storage milestone = milestones[_milestoneId];
 
-        return milestone.streamOngoing && milestone.endDate + votingPeriod - terminationWindow <= _getNow();
+        return
+            milestone.streamOngoing &&
+            milestone.endDate + votingPeriod - terminationWindow <= _getNow();
     }
 
-    function initialize (
+    function initialize(
         ISuperfluid _host,
         ISuperToken _acceptedToken,
         address _creator,
@@ -233,15 +248,12 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         uint48 _terminationWindow,
         MilestoneInterval[] calldata _milestones
     ) public initializer {
-
         // NOTE: Parameter validation was already done for us by the Factory, so it's safe to use "as is" and save gas
 
         // Resolve the agreement address and initialize the lib
         cfaV1Lib = CFAv1Library.InitData(
             _host,
-            IConstantFlowAgreementV1(
-                address(_host.getAgreementClass(CFA_ID))
-            )
+            IConstantFlowAgreementV1(address(_host.getAgreementClass(CFA_ID)))
         );
 
         acceptedToken = _acceptedToken;
@@ -253,10 +265,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         terminationWindow = _terminationWindow;
         milestoneCount = _milestones.length;
         currentMilestone = 0;
-        
+
         MilestoneInterval memory interval;
         for (uint32 i = 0; i < _milestones.length; ++i) {
-            
             interval = _milestones[i];
             milestones[i] = Milestone({
                 startDate: interval.startDate,
@@ -266,17 +277,18 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
                 paidAmount: 0
             });
 
-            totalStreamingDuration = totalStreamingDuration + (_milestones[i].endDate - _milestones[i].startDate);
+            totalStreamingDuration =
+                totalStreamingDuration +
+                (_milestones[i].endDate - _milestones[i].startDate);
         }
     }
-
 
     /** @notice Allows to invest a specified amount of funds
         @dev Prior approval from _msgSender() to this contract is required
         @param _amount Amount of tokens to invest, must be <= approved amount
      */
-    function invest(uint256 _amount) 
-        external 
+    function invest(uint256 _amount)
+        external
         fundraiserOngoingNow
         isNotCanceled
     {
@@ -287,11 +299,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         emit Invest(_msgSender(), _amount);
     }
 
-
     /** @notice Allows investors to change their mind during the fundraiser period and get their funds back. All at once, or just a specified portion
         @param _amount Amount of funds to withdraw.
      */
-    function unpledge(uint256 _amount) 
+    function unpledge(uint256 _amount)
         external
         fundraiserOngoingNow
         hasInvestedSufficientAmount(_msgSender(), _amount)
@@ -305,10 +316,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     /** @notice Allows investors to withdraw all locked funds for a failed campaign(if the soft cap has not been raised by the fundraiser end date)
      */
-    function refund() 
+    function refund()
         external
         failedFundraiser // TODO: Possible that after milestone voting is added, this needs to be changed
-                         // to account for milestone rejection
+    // to account for milestone rejection
     {
         uint256 bal = investedAmount[_msgSender()];
         investedAmount[_msgSender()] = 0;
@@ -320,8 +331,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     /** @notice Allows the pool creator to start streaming/receive funds for a certain milestone
         @param _milestoneId Milestone index to claim funds for
      */
-    function claim(uint256 _milestoneId) 
-        external 
+    function claim(uint256 _milestoneId)
+        external
         milestoneUnlocked(_milestoneId)
         milestoneNotPaid(_milestoneId)
         isNotCanceled
@@ -339,11 +350,15 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             milestone.paid = true;
             milestone.paidAmount = tokenPortion;
             acceptedToken.transfer(creator, owedAmount);
-        }
-        else {
-            require(!milestone.streamOngoing, "[IP]: already streaming for this milestone");
+        } else {
+            require(
+                !milestone.streamOngoing,
+                "[IP]: already streaming for this milestone"
+            );
             // Milestone is still ongoing, calculate the flowrate and stream
-            uint leftStreamDuration = milestone.endDate + votingPeriod - _getNow();
+            uint leftStreamDuration = milestone.endDate +
+                votingPeriod -
+                _getNow();
 
             // TODO: Calculate the limits here, make sure there is no possibility of overflow
 
@@ -362,15 +377,20 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         @dev can only be called during the termination window for a particular milestone
         @param _milestoneId Milestone index to terminate the stream for
      */
-    function terminateMilestoneStreamFinal(uint256 _milestoneId) 
+    function terminateMilestoneStreamFinal(uint256 _milestoneId)
         external
-        canTerminateMilestoneFinal(_milestoneId) 
+        canTerminateMilestoneFinal(_milestoneId)
     {
-        (uint256 timestamp, int96 flowRate, , ) = cfaV1Lib.cfa.getFlow(acceptedToken, address(this), creator);
+        (uint256 timestamp, int96 flowRate, , ) = cfaV1Lib.cfa.getFlow(
+            acceptedToken,
+            address(this),
+            creator
+        );
 
         // TODO: handle overstream case in-between milestones
         // (if stream was not terminated in time)
-        uint256 streamedAmount = (_getNow() - timestamp) * uint256(int256(flowRate));
+        uint256 streamedAmount = (_getNow() - timestamp) *
+            uint256(int256(flowRate));
 
         cfaV1Lib.deleteFlow(address(this), creator, acceptedToken);
 
@@ -380,8 +400,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     /** @notice Stops fundraiser campaign
      */
-    function cancel() 
-        external 
+    function cancel()
+        external
         onlyCreator
         isNotCanceled
         fundraiserNotStartedYet
@@ -390,9 +410,11 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         emit Cancel();
     }
 
-    
-
-    function _afterMilestoneStreamTermination(uint256 _milestoneId, uint256 streamedAmount, bool finalTermination) internal {
+    function _afterMilestoneStreamTermination(
+        uint256 _milestoneId,
+        uint256 streamedAmount,
+        bool finalTermination
+    ) internal {
         Milestone storage milestone = milestones[_milestoneId];
         // TODO: Handle overstream situations here, if it wasn't closed in time
         // TODO: Should probably transfer tokens using try/catch pattern with gas ensurance.
@@ -402,31 +424,44 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         milestone.streamOngoing = false;
 
         if (finalTermination) {
-            uint256 tokenPortion = calculateTokenPortionForMilestone(_milestoneId);
-            uint256 owedAmount = tokenPortion - milestone.paidAmount - streamedAmount;
+            uint256 tokenPortion = calculateTokenPortionForMilestone(
+                _milestoneId
+            );
+            uint256 owedAmount = tokenPortion -
+                milestone.paidAmount -
+                streamedAmount;
 
             milestone.paidAmount = tokenPortion;
             milestone.paid = true;
             if (owedAmount > 0) {
                 acceptedToken.transfer(creator, owedAmount);
             }
-        }
-        else {
+        } else {
             milestone.paidAmount = milestone.paidAmount + streamedAmount;
         }
     }
 
-    function _getMaxUnlockedMilestone() internal view virtual returns(uint256) {
+    function _getMaxUnlockedMilestone()
+        internal
+        view
+        virtual
+        returns (uint256)
+    {
         // NOTE: Use internal storage for now, later can swap for governance implementation
         return maxUnlockedMilestone;
     }
 
-    function _getCurrentMilestoneIndex() internal view virtual returns(uint256) {
+    function _getCurrentMilestoneIndex()
+        internal
+        view
+        virtual
+        returns (uint256)
+    {
         // NOTE: Use internal storage for now, later can swap for governance implementation
         return currentMilestone;
     }
 
-    function _getNow() internal view virtual returns(uint256) {
+    function _getNow() internal view virtual returns (uint256) {
         // TODO: ISuperfluid host can provide time with .getNow(), investigate that
         // solhint-disable-next-line not-rely-on-time
         return block.timestamp;
@@ -445,10 +480,13 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         bytes32 agreementId,
         bytes calldata,
         bytes calldata
-    ) external override(ISuperApp, SuperAppBase) view returns (bytes memory) {
+    ) external view override(ISuperApp, SuperAppBase) returns (bytes memory) {
         if (agreementClass != address(cfaV1Lib.cfa)) return new bytes(0);
 
-        (uint256 timestamp, int96 flowRate, , ) = cfaV1Lib.cfa.getFlowByID(token, agreementId);
+        (uint256 timestamp, int96 flowRate, , ) = cfaV1Lib.cfa.getFlowByID(
+            token,
+            agreementId
+        );
 
         return abi.encode(timestamp, flowRate);
     }
@@ -464,12 +502,20 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         bytes calldata agreementData,
         bytes calldata cbdata,
         bytes calldata ctx
-    ) external override(ISuperApp, SuperAppBase) validCallback(token) returns (bytes memory) {
+    )
+        external
+        override(ISuperApp, SuperAppBase)
+        validCallback(token)
+        returns (bytes memory)
+    {
         // MUST NOT revert. If agreement is not explicitly CFA, return context, DO NOT update state.
         // If this reverts, then no user can approve subscriptions.
         if (agreementClass != address(cfaV1Lib.cfa)) return ctx;
 
-        (address sender, address receiver) = abi.decode(agreementData, (address, address));
+        (address sender, address receiver) = abi.decode(
+            agreementData,
+            (address, address)
+        );
 
         if (sender != address(this) || receiver != creator) return ctx;
 
@@ -485,17 +531,27 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         // during milestones in-between, INVESTORS have a financial incentive to terminate the stream early
         // to ensure that the CREATOR wouldn't get too much money
 
-        (uint256 timestamp, int96 flowRate) = abi.decode(cbdata, (uint256, int96));
+        (uint256 timestamp, int96 flowRate) = abi.decode(
+            cbdata,
+            (uint256, int96)
+        );
         uint256 currentMilestoneIndex = _getCurrentMilestoneIndex();
-        bool finalTermination = canTerminateMilestoneStreamFinal(currentMilestoneIndex);
+        bool finalTermination = canTerminateMilestoneStreamFinal(
+            currentMilestoneIndex
+        );
 
         // TODO: handle overstream case in-between milestones
         // (if stream was not terminated in time)
-        uint256 streamedAmount = (_getNow() - timestamp) * uint256(int256(flowRate));
+        uint256 streamedAmount = (_getNow() - timestamp) *
+            uint256(int256(flowRate));
 
         // At this point the stream itself was already terminated, just do some bookkeeping
         // NOTE: think about termination window edge cases here
-        _afterMilestoneStreamTermination(currentMilestoneIndex, streamedAmount, finalTermination);
+        _afterMilestoneStreamTermination(
+            currentMilestoneIndex,
+            streamedAmount,
+            finalTermination
+        );
 
         // TODO: However, that does not provide a 100% guarantee that the stream will be terminated in time
         // we still need to handle that "overstream" case
