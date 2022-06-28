@@ -48,52 +48,52 @@ const errorHandler = (err: any) => {
   if (err) throw err;
 };
 
-before(async function () {
-  // get accounts from hardhat
-  accounts = await ethers.getSigners();
-
-  admin = accounts[0];
-  dPatronAdmin = accounts[1];
-  creator = accounts[2];
-
-  // deploy the framework
-  await deployFramework(errorHandler, {
-    web3,
-    from: admin.address,
-  });
-
-  // deploy a fake erc20 token
-  const fUSDTAddress = await deployTestToken(errorHandler, [":", "fUSDT"], {
-    web3,
-    from: admin.address,
-  });
-
-  // deploy a fake erc20 wrapper super token around the fUSDT token
-  const fUSDTxAddress = await deploySuperToken(errorHandler, [":", "fUSDT"], {
-    web3,
-    from: admin.address,
-  });
-
-  console.log("fUSDT  Address: ", fUSDTAddress);
-  console.log("fUSDTx Address: ", fUSDTxAddress);
-
-  // initialize the superfluid framework...put custom and web3 only bc we are using hardhat locally
-  sf = await Framework.create({
-    networkName: "custom",
-    provider,
-    dataMode: "WEB3_ONLY",
-    resolverAddress: process.env.RESOLVER_ADDRESS, // resolver address will be set to the env by the framework deployer
-    protocolReleaseVersion: "test",
-  });
-
-  fUSDTx = await sf.loadWrapperSuperToken("fUSDTx");
-
-  const underlyingAddr = fUSDTx.underlyingToken.address;
-
-  fUSDT = new ethers.Contract(underlyingAddr, fTokenAbi, admin);
-});
-
 describe("Investment Pool Factory", async () => {
+  before(async () => {
+    // get accounts from hardhat
+    accounts = await ethers.getSigners();
+
+    admin = accounts[0];
+    dPatronAdmin = accounts[1];
+    creator = accounts[2];
+
+    // deploy the framework
+    await deployFramework(errorHandler, {
+      web3,
+      from: admin.address,
+    });
+
+    // deploy a fake erc20 token
+    const fUSDTAddress = await deployTestToken(errorHandler, [":", "fUSDT"], {
+      web3,
+      from: admin.address,
+    });
+
+    // deploy a fake erc20 wrapper super token around the fUSDT token
+    const fUSDTxAddress = await deploySuperToken(errorHandler, [":", "fUSDT"], {
+      web3,
+      from: admin.address,
+    });
+
+    console.log("fUSDT  Address: ", fUSDTAddress);
+    console.log("fUSDTx Address: ", fUSDTxAddress);
+
+    // initialize the superfluid framework...put custom and web3 only bc we are using hardhat locally
+    sf = await Framework.create({
+      networkName: "custom",
+      provider,
+      dataMode: "WEB3_ONLY",
+      resolverAddress: process.env.RESOLVER_ADDRESS, // resolver address will be set to the env by the framework deployer
+      protocolReleaseVersion: "test",
+    });
+
+    fUSDTx = await sf.loadWrapperSuperToken("fUSDTx");
+
+    const underlyingAddr = fUSDTx.underlyingToken.address;
+
+    fUSDT = new ethers.Contract(underlyingAddr, fTokenAbi, admin);
+  });
+
   beforeEach(async () => {
     // Create investment pool factory contract
     const investmentPoolDepFactory = await ethers.getContractFactory(
