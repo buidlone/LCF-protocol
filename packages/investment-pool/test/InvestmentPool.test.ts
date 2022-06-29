@@ -42,13 +42,21 @@ let investment: InvestmentPoolMock;
 
 let snapshotId: string;
 
+let softCap: BigNumber;
+let milestoneStartDate: BigNumber;
+let milestoneEndDate: BigNumber;
+let campaignStartDate: BigNumber;
+let campaignEndDate: BigNumber;
+
+let creationRes: ContractTransaction;
+
 const errorHandler = (err: any) => {
   if (err) throw err;
 };
 
-async function getInvestmentFromTx(
+const getInvestmentFromTx = async (
   tx: ContractTransaction
-): Promise<InvestmentPoolMock> {
+): Promise<InvestmentPoolMock> => {
   const creationEvent = (await tx.wait(1)).events?.find(
     (e) => e.event === "Created"
   );
@@ -65,104 +73,129 @@ async function getInvestmentFromTx(
   const pool = contractFactory.attach(poolAddress);
 
   return pool;
-}
+};
 
-async function getTimeStamp(
+const getTimeStamp = async (
   tx: providers.TransactionResponse
-): Promise<BigNumber> {
+): Promise<BigNumber> => {
   const timestamp = (await provider.eth.getBlock(tx.blockHash!)).timestamp;
   return BigNumber.from(timestamp);
-}
-
-before(async function () {
-  // get accounts from hardhat
-  accounts = await ethers.getSigners();
-
-  admin = accounts[0];
-  dPatronAdmin = accounts[1];
-  creator = accounts[2];
-  investorA = accounts[3];
-  investorB = accounts[4];
-
-  foreignActor = accounts[8];
-  investors = [investorA, investorB];
-
-  // deploy the framework
-  await deployFramework(errorHandler, {
-    web3,
-    from: admin.address,
-  });
-
-  // deploy a fake erc20 token
-  const fUSDTAddress = await deployTestToken(errorHandler, [":", "fUSDT"], {
-    web3,
-    from: admin.address,
-  });
-
-  // deploy a fake erc20 wrapper super token around the fUSDT token
-  const fUSDTxAddress = await deploySuperToken(errorHandler, [":", "fUSDT"], {
-    web3,
-    from: admin.address,
-  });
-
-  console.log("fUSDT  Address: ", fUSDTAddress);
-  console.log("fUSDTx Address: ", fUSDTxAddress);
-
-  // initialize the superfluid framework...put custom and web3 only bc we are using hardhat locally
-  sf = await Framework.create({
-    networkName: "custom",
-    provider,
-    dataMode: "WEB3_ONLY",
-    resolverAddress: process.env.RESOLVER_ADDRESS, // resolver address will be set to the env by the framework deployer
-    protocolReleaseVersion: "test",
-  });
-
-  fUSDTx = await sf.loadWrapperSuperToken("fUSDTx");
-
-  const underlyingAddr = fUSDTx.underlyingToken.address;
-
-  fUSDT = new ethers.Contract(underlyingAddr, fTokenAbi, admin);
-
-  // Create investment pool factory contract
-  const investmentPoolDepFactory = await ethers.getContractFactory(
-    "InvestmentPoolFactoryMock",
-    dPatronAdmin
-  );
-
-  investmentPoolFactory = await investmentPoolDepFactory.deploy(
-    sf.settings.config.hostAddress
-  );
-  // Enforce a starting timestamp to avoid time based bugs
-  const time = new Date("2022/06/01").getTime() / 1000;
-  await investmentPoolFactory
-    .connect(dPatronAdmin)
-    .setTimestamp(BigNumber.from(time));
-
-  const totalAmount = INVESTOR_INITIAL_FUNDS.mul(investors.length);
-
-  // Fund investors
-  await fUSDT.connect(admin).mint(admin.address, totalAmount);
-  await fUSDT
-    .connect(admin)
-    .approve(fUSDTx.address, INVESTOR_INITIAL_FUNDS.mul(investors.length));
-
-  const upgradeOperation = fUSDTx.upgrade({ amount: totalAmount.toString() });
-  const operations = [upgradeOperation];
-
-  // Transfer upgraded tokens to investors
-  for (let i = 0; i < investors.length; i++) {
-    const operation = fUSDTx.transferFrom({
-      sender: admin.address,
-      amount: INVESTOR_INITIAL_FUNDS.toString(),
-      receiver: investors[i].address,
-    });
-    operations.push(operation);
-  }
-
-  await sf.batchCall(operations).exec(admin);
-});
+};
 
 describe("Investment Pool", async () => {
+  before(async () => {
+    // get accounts from hardhat
+    accounts = await ethers.getSigners();
+
+    admin = accounts[0];
+    dPatronAdmin = accounts[1];
+    creator = accounts[2];
+    investorA = accounts[3];
+    investorB = accounts[4];
+
+    foreignActor = accounts[8];
+    investors = [investorA, investorB];
+
+    // deploy the framework
+    await deployFramework(errorHandler, {
+      web3,
+      from: admin.address,
+    });
+
+    // deploy a fake erc20 token
+    const fUSDTAddress = await deployTestToken(errorHandler, [":", "fUSDT"], {
+      web3,
+      from: admin.address,
+    });
+
+    // deploy a fake erc20 wrapper super token around the fUSDT token
+    const fUSDTxAddress = await deploySuperToken(errorHandler, [":", "fUSDT"], {
+      web3,
+      from: admin.address,
+    });
+
+    console.log("fUSDT  Address: ", fUSDTAddress);
+    console.log("fUSDTx Address: ", fUSDTxAddress);
+
+    // initialize the superfluid framework...put custom and web3 only bc we are using hardhat locally
+    sf = await Framework.create({
+      networkName: "custom",
+      provider,
+      dataMode: "WEB3_ONLY",
+      resolverAddress: process.env.RESOLVER_ADDRESS, // resolver address will be set to the env by the framework deployer
+      protocolReleaseVersion: "test",
+    });
+
+    fUSDTx = await sf.loadWrapperSuperToken("fUSDTx");
+
+    const underlyingAddr = fUSDTx.underlyingToken.address;
+
+    fUSDT = new ethers.Contract(underlyingAddr, fTokenAbi, admin);
+
+    // Create investment pool factory contract
+    const investmentPoolDepFactory = await ethers.getContractFactory(
+      "InvestmentPoolFactoryMock",
+      dPatronAdmin
+    );
+
+    investmentPoolFactory = await investmentPoolDepFactory.deploy(
+      sf.settings.config.hostAddress
+    );
+    // Enforce a starting timestamp to avoid time based bugs
+    const time = new Date("2022/06/01").getTime() / 1000;
+    await investmentPoolFactory
+      .connect(dPatronAdmin)
+      .setTimestamp(BigNumber.from(time));
+
+    const totalAmount = INVESTOR_INITIAL_FUNDS.mul(investors.length);
+
+    // Fund investors
+    await fUSDT.connect(admin).mint(admin.address, totalAmount);
+    await fUSDT
+      .connect(admin)
+      .approve(fUSDTx.address, INVESTOR_INITIAL_FUNDS.mul(investors.length));
+
+    const upgradeOperation = fUSDTx.upgrade({
+      amount: totalAmount.toString(),
+    });
+    const operations = [upgradeOperation];
+
+    // Transfer upgraded tokens to investors
+    for (let i = 0; i < investors.length; i++) {
+      const operation = fUSDTx.transferFrom({
+        sender: admin.address,
+        amount: INVESTOR_INITIAL_FUNDS.toString(),
+        receiver: investors[i].address,
+      });
+      operations.push(operation);
+    }
+
+    await sf.batchCall(operations).exec(admin);
+  });
+
+  beforeEach(async () => {
+    softCap = ethers.utils.parseEther("1500");
+    milestoneStartDate = BigNumber.from(
+      new Date("2022/09/01").getTime() / 1000
+    );
+    milestoneEndDate = BigNumber.from(new Date("2022/10/01").getTime() / 1000);
+    campaignStartDate = BigNumber.from(new Date("2022/07/01").getTime() / 1000);
+    campaignEndDate = BigNumber.from(new Date("2022/08/01").getTime() / 1000);
+
+    creationRes = await investmentPoolFactory
+      .connect(creator)
+      .createInvestmentPool(
+        fUSDTx.address,
+        softCap,
+        campaignStartDate,
+        campaignEndDate,
+        0, // NON-UPGRADEABLE
+        [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
+      );
+
+    investment = await getInvestmentFromTx(creationRes);
+  });
+
   afterEach(async () => {
     // If prior investment exists, check if it has an active money stream, terminate it
     if (investment) {
@@ -190,33 +223,6 @@ describe("Investment Pool", async () => {
   describe("1. Investment creation", () => {
     describe("1.1 Public state", () => {
       it("[IP][1.1.1] Fundraiser shouldn't be ongoing on a fresh campaign if the start date is in the future", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: At this point we at 2022/06/01
         const isFundraiserOngoing = await investment.isFundraiserOngoingNow();
         assert.equal(
@@ -227,65 +233,11 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][1.1.2] Fundraiser shouldn't have a failed fundraiser state on creation", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         const isFailed = await investment.isFailedFundraiser();
         assert.equal(isFailed, false, "Fresh fundraiser is failed already");
       });
 
       it("[IP][1.1.3] Fundraiser shouldn't have reached soft cap upon creation", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         const hasRaisedSoftCap = await investment.isSoftCapReached();
         assert.equal(
           hasRaisedSoftCap,
@@ -295,33 +247,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][1.1.4] Fundraiser shouldn't have ender upon campaign creation", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         const hasFundraiserEnded = await investment.didFundraiserPeriodEnd();
         assert.equal(
           hasFundraiserEnded,
@@ -333,33 +258,6 @@ describe("Investment Pool", async () => {
 
     describe("1.2 Interactions", () => {
       it("[IP][1.2.1] Can create an investment", async function () {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         const creatorAddress = await investment.creator();
         const invested = await investment.totalInvestedAmount();
         const fundraiserStartAt = await investment.fundraiserStartAt();
@@ -419,114 +317,45 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][1.2.2] Campaign can be cancelled if it's not started yet", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // Enforce a timestamp before campaign start
         const time = new Date("2022/06/15").getTime() / 1000;
         await investment
           .connect(dPatronAdmin)
           .setTimestamp(BigNumber.from(time));
 
-        await expect(investment.connect(creator).cancel()).to.not.be.reverted;
+        await expect(investment.connect(creator).cancel()).to.emit(
+          investment,
+          "Cancel"
+        );
       });
 
       it("[IP][1.2.3] Campaign can't be cancelled by anyone, except creator", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // Enforce a timestamp before campaign start
         const time = new Date("2022/06/15").getTime() / 1000;
         await investment
           .connect(dPatronAdmin)
           .setTimestamp(BigNumber.from(time));
 
-        await expect(investment.connect(foreignActor).cancel()).to.be.reverted;
+        await expect(
+          investment.connect(foreignActor).cancel()
+        ).to.be.revertedWith("[IP]: not creator");
+
+        await expect(investment.connect(creator).cancel()).to.emit(
+          investment,
+          "Cancel"
+        );
       });
 
       it("[IP][1.2.4] Campaign can't be cancelled, if it's already started", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // Fundraiser has already started by now
         const time = new Date("2022/07/15").getTime() / 1000;
         await investment
           .connect(dPatronAdmin)
           .setTimestamp(BigNumber.from(time));
 
-        await expect(investment.connect(foreignActor).cancel()).to.be.reverted;
+        await expect(investment.connect(creator).cancel()).to.be.revertedWith(
+          "[IP]: campaign started already"
+        );
       });
     });
 
@@ -537,33 +366,6 @@ describe("Investment Pool", async () => {
   describe("2. Fundraiser", () => {
     describe("2.1 Public state", () => {
       it("[IP][2.1.1] Fundraiser should be ongoing if the starting date has passed", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         const timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -577,33 +379,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][2.1.2] Campaign shouldn't have a failed state during active fundraiser", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         const timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -617,33 +392,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][2.1.3] Campaign shouldn't have a soft cap raised initially after the fundraiser start", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         const timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -657,33 +405,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][2.1.4] Fundraiser period shouldn't have ended yet", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         const timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -698,33 +419,6 @@ describe("Investment Pool", async () => {
     });
     describe("2.2 Interactions", () => {
       it("[IP][2.2.1] Investors should not be able to invest before the fundraiser period", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/06/15
         const timeStamp = new Date("2022/06/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -739,38 +433,12 @@ describe("Investment Pool", async () => {
           })
           .exec(investorA);
 
-        await expect(investment.connect(investorA).invest(investedAmount)).to.be
-          .reverted;
+        await expect(
+          investment.connect(investorA).invest(investedAmount)
+        ).to.be.revertedWith("[IP]: not in fundraiser period");
       });
 
       it("[IP][2.2.2] Investors should be able to invest money", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         const investorPriorBalance = BigNumber.from(
           await fUSDTx.balanceOf({
             account: investorA.address,
@@ -793,8 +461,9 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         const investedFunds = await investment.investedAmount(
           investorA.address
@@ -820,33 +489,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][2.2.3] Investor should be able to do a full unpledge", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         const investorPriorBalance = BigNumber.from(
           await fUSDTx.balanceOf({
             account: investorA.address,
@@ -869,12 +511,14 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // Request them back
-        await expect(investment.connect(investorA).unpledge(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).unpledge(investedAmount))
+          .to.emit(investment, "Unpledge")
+          .withArgs(investorA.address, investedAmount);
 
         const investorsBalance = await fUSDTx.balanceOf({
           account: investorA.address,
@@ -889,32 +533,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][2.2.4] Investor should be able to do a partial unpledge", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
         const investorPriorBalance = BigNumber.from(
           await fUSDTx.balanceOf({
             account: investorA.address,
@@ -937,13 +555,16 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // Request half of the funds back
         await expect(
           investment.connect(investorA).unpledge(investedAmount.div(2))
-        ).to.not.be.reverted;
+        )
+          .to.emit(investment, "Unpledge")
+          .withArgs(investorA.address, investedAmount.div(2));
 
         const investorsBalance = await fUSDTx.balanceOf({
           account: investorA.address,
@@ -966,33 +587,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][2.2.5] Investor shouldn't be able to unpledge more than invested", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         const timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -1008,43 +602,17 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // Request them back, but 1 wei more, should revert
         await expect(
           investment.connect(investorA).unpledge(investedAmount.add(1))
-        ).to.be.reverted;
+        ).to.be.revertedWith("[IP]: amount > invested");
       });
 
       it("[IP][2.2.6] Investors should be able to collectively raise the soft cap", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         const timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -1060,8 +628,9 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // Give token approval Investor B
         await fUSDTx
@@ -1073,8 +642,9 @@ describe("Investment Pool", async () => {
           .exec(investorB);
 
         // Invest money
-        await expect(investment.connect(investorB).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorB).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorB.address, investedAmount);
 
         const softCapRaised = await investment.isSoftCapReached();
 
@@ -1082,33 +652,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][2.2.7] Non-investor shouldn't be able to unpledge", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         const timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -1124,12 +667,17 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // Note, the case testing unpledging more than investment is tested separately,
         // here we'll test that unpledging 0 does not change the balance
-        await investment.connect(foreignActor).unpledge(BigNumber.from(0));
+        await expect(
+          investment.connect(foreignActor).unpledge(BigNumber.from(0))
+        )
+          .to.emit(investment, "Unpledge")
+          .withArgs(foreignActor.address, BigNumber.from(0));
 
         const balance = await fUSDTx.balanceOf({
           account: foreignActor.address,
@@ -1144,33 +692,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][2.2.8] Refund should be inactive during the fundraiser period", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         const timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -1186,11 +707,14 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // Try to refund
-        await expect(investment.connect(investorA).refund()).to.be.reverted;
+        await expect(investment.connect(investorA).refund()).to.be.revertedWith(
+          "[IP]: is not a failed campaign"
+        );
       });
     });
   });
@@ -1198,33 +722,6 @@ describe("Investment Pool", async () => {
   describe("3. Failed investment campaigns", () => {
     describe("3.1 Public state", () => {
       it("[IP][3.1.1] Campaign should have a failed campaign state for unsuccessful fundraiser", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // No one invests, let the fundraiser expire
 
         // NOTE: Time traveling to 2022/08/15
@@ -1240,33 +737,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][3.1.2] Soft cap shouldn't be raised for failed fundraisers", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // No one invests, let the fundraiser expire
 
         // NOTE: Time traveling to 2022/08/15
@@ -1282,33 +752,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][3.1.3] Fundraiser shouldn't be ongoing for a failed campaign", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // No one invests, let the fundraiser expire
 
         // NOTE: Time traveling to 2022/08/15
@@ -1324,33 +767,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][3.1.4] Fundraiser should have ended for a failed campaign", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // No one invests, let the fundraiser expire
 
         // NOTE: Time traveling to 2022/08/15
@@ -1368,33 +784,6 @@ describe("Investment Pool", async () => {
 
     describe("3.2 Interactions", () => {
       it("[IP][3.2.1] Should be able to refund assets from a failed campaign", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -1417,15 +806,18 @@ describe("Investment Pool", async () => {
         );
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/08/15 when the fundraiser ends
         timeStamp = new Date("2022/08/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
 
         // Try to refund
-        await expect(investment.connect(investorA).refund()).to.not.be.reverted;
+        await expect(investment.connect(investorA).refund())
+          .to.emit(investment, "Refund")
+          .withArgs(investorA.address, investedAmount);
 
         const balance = await fUSDTx.balanceOf({
           account: investorA.address,
@@ -1439,34 +831,7 @@ describe("Investment Pool", async () => {
         );
       });
 
-      it("[IP][3.2.2] Should not get anything back if haven't invested", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
+      it("[IP][3.2.2] Should not be able to get back anything if haven't invested", async () => {
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -1482,57 +847,21 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/08/15 when the fundraiser ends
         timeStamp = new Date("2022/08/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
 
         // Try to refund
-        await expect(investment.connect(foreignActor).refund()).to.not.be
-          .reverted;
-
-        const balance = await fUSDTx.balanceOf({
-          account: foreignActor.address,
-          providerOrSigner: foreignActor,
-        });
-
-        assert.deepEqual(
-          BigNumber.from(balance),
-          BigNumber.from(0),
-          "Foreign actor should not get any funds"
-        );
+        await expect(
+          investment.connect(foreignActor).refund()
+        ).to.be.revertedWith("[IP]: no money invested");
       });
 
       it("[IP][3.2.3] Unpledge shouldn't work on a failed campaign", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -1548,16 +877,18 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/08/15 when the fundraiser ends
         timeStamp = new Date("2022/08/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
 
         // Try to unpledge
-        await expect(investment.connect(investorA).unpledge(investedAmount)).to
-          .be.reverted;
+        await expect(
+          investment.connect(investorA).unpledge(investedAmount)
+        ).to.be.revertedWith("[IP]: not in fundraiser period");
       });
     });
   });
@@ -1565,32 +896,6 @@ describe("Investment Pool", async () => {
   describe("4. Successful fundraiser(Milestone period)", () => {
     describe("4.1 Public state", () => {
       it("[IP][4.1.1] Campaign shouldn't have a failed campaign state", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -1607,8 +912,9 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/08/15 when the fundraiser ends
         timeStamp = new Date("2022/08/15").getTime() / 1000;
@@ -1623,33 +929,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][4.1.2] Successful campaign should have reached soft cap", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -1666,8 +945,9 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/08/15 when the fundraiser ends
         timeStamp = new Date("2022/08/15").getTime() / 1000;
@@ -1682,33 +962,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][4.1.3] Fundraiser shouldn't be ongoing", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -1725,8 +978,9 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/08/15 when the fundraiser ends
         timeStamp = new Date("2022/08/15").getTime() / 1000;
@@ -1741,33 +995,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][4.1.4] Fundraiser period should have ended for a successful campaign", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -1784,8 +1011,9 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/08/15 when the fundraiser ends
         timeStamp = new Date("2022/08/15").getTime() / 1000;
@@ -1802,33 +1030,6 @@ describe("Investment Pool", async () => {
 
     describe("4.2 Interactions", () => {
       it("[IP][4.2.1] Investors are unable to unpledge from successful campaign", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -1845,44 +1046,20 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/08/15 when the fundraiser ends
         timeStamp = new Date("2022/08/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
 
-        await expect(investment.unpledge(investedAmount)).to.be.reverted;
+        await expect(investment.unpledge(investedAmount)).to.be.revertedWith(
+          "[IP]: not in fundraiser period"
+        );
       });
 
       it("[IP][4.2.2] Investors are unable to refund from successful campaign", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -1899,44 +1076,21 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/08/15 when the fundraiser ends
         timeStamp = new Date("2022/08/15").getTime() / 1000;
+
         await investment.setTimestamp(timeStamp);
 
-        await expect(investment.refund()).to.be.reverted;
+        await expect(investment.refund()).to.be.revertedWith(
+          "[IP]: is not a failed campaign"
+        );
       });
 
       it("[IP][4.2.3] Creator should be able to start money streaming to their account", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -1953,44 +1107,20 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/09/15 when the milestone is active
         timeStamp = new Date("2022/09/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
 
-        await investment.connect(creator).claim(0);
+        await expect(investment.connect(creator).claim(0))
+          .to.emit(investment, "Claim")
+          .withArgs(0);
       });
 
       it("[IP][4.2.4] Creator shouldn't be able to start money streaming to their account before milestone starts", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -2007,44 +1137,20 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/08/15 when the fundraiser ends
         timeStamp = new Date("2022/08/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
 
-        await expect(investment.connect(creator).claim(1)).to.be.reverted;
+        await expect(investment.connect(creator).claim(1)).to.be.revertedWith(
+          "[IP]: milestone still locked"
+        );
       });
 
       it("[IP][4.2.5] Double claim is prevented", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -2061,47 +1167,25 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/09/15 when the milestone is active
         timeStamp = new Date("2022/09/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
 
-        await expect(investment.connect(creator).claim(0)).to.not.be.reverted;
+        await expect(investment.connect(creator).claim(0))
+          .to.emit(investment, "Claim")
+          .withArgs(0);
 
         // Try to double claim
-        await expect(investment.connect(creator).claim(0)).to.be.reverted;
+        await expect(investment.connect(creator).claim(0)).to.be.revertedWith(
+          "[IP]: already streaming for this milestone"
+        );
       });
 
       it("[IP][4.2.6] Creates a stream of funds on claim", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -2118,8 +1202,9 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         const votingPeriod = BigNumber.from(await investment.votingPeriod());
 
@@ -2128,7 +1213,9 @@ describe("Investment Pool", async () => {
         await investment.setTimestamp(timeStamp);
 
         await traveler.advanceBlockAndSetTime(timeStamp);
-        await investment.connect(creator).claim(0);
+        await expect(investment.connect(creator).claim(0))
+          .to.emit(investment, "Claim")
+          .withArgs(0);
 
         // NOTE: even though we cannot get precise time with the traveler,
         // the investment contract itself creates flowrate, and uses the timestamp that was passed to it
@@ -2154,33 +1241,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][4.2.7] Storage variables are updated on claim", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -2197,14 +1257,17 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/09/15 when the milestone is active
         timeStamp = new Date("2022/09/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
 
-        await expect(investment.connect(creator).claim(0)).to.not.be.reverted;
+        await expect(investment.connect(creator).claim(0))
+          .to.emit(investment, "Claim")
+          .withArgs(0);
 
         const milestone = await investment.milestones(0);
 
@@ -2213,6 +1276,39 @@ describe("Investment Pool", async () => {
           true,
           "milestone's stream should be ongoing"
         );
+      });
+
+      it("[IP][4.2.8] Only the creator should be able to call claim function", async () => {
+        // NOTE: Time traveling to 2022/07/15
+        let timeStamp = new Date("2022/07/15").getTime() / 1000;
+        await investment.setTimestamp(timeStamp);
+
+        // Invest more than soft cap here to make sure the campaign is a success
+        const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+        // Give token approval
+        await fUSDTx
+          .approve({
+            receiver: investment.address,
+            // Max value here to test if contract attempts something out of line
+            amount: UINT256_MAX.toString(),
+          })
+          .exec(investorA);
+
+        // Invest money
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
+
+        // NOTE: Time traveling to 2022/09/15 when the milestone is active
+        timeStamp = new Date("2022/09/15").getTime() / 1000;
+        await investment.setTimestamp(timeStamp);
+
+        await expect(
+          investment.connect(foreignActor).claim(0)
+        ).to.be.revertedWith("[IP]: not creator");
+        await expect(investment.connect(creator).claim(0))
+          .to.emit(investment, "Claim")
+          .withArgs(0);
       });
 
       // TODO: Test multiple milestones (distribution of funds)
@@ -2231,33 +1327,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][5.1.1] Volunteer stopping of streamed funds updates records", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         const initialCreatorBalance = BigNumber.from(
           await fUSDTx.balanceOf({
             account: creator.address,
@@ -2281,8 +1350,9 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/09/15 when the milestone is active
         timeStamp = new Date("2022/09/15").getTime() / 1000;
@@ -2291,7 +1361,9 @@ describe("Investment Pool", async () => {
         await investment.setTimestamp(0);
         await traveler.advanceBlockAndSetTime(timeStamp);
 
-        await investment.connect(creator).claim(0);
+        await expect(investment.connect(creator).claim(0))
+          .to.emit(investment, "Claim")
+          .withArgs(0);
 
         timeStamp = new Date("2022/09/16").getTime() / 1000;
         // NOTE: Here we we want explicitly the chain reported time
@@ -2332,33 +1404,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][5.1.2] (Callback)Volunteer stopping during termination window instantly transfers the rest of funds", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
@@ -2382,8 +1427,9 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/09/15 when the milestone is active
         timeStamp = new Date("2022/09/15").getTime() / 1000;
@@ -2392,7 +1438,9 @@ describe("Investment Pool", async () => {
         await investment.setTimestamp(0);
         await traveler.advanceBlockAndSetTime(timeStamp);
 
-        await investment.connect(creator).claim(0);
+        await expect(investment.connect(creator).claim(0))
+          .to.emit(investment, "Claim")
+          .withArgs(0);
 
         const terminationWindow = BigNumber.from(
           await investment.terminationWindow()
@@ -2452,33 +1500,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][5.1.3] Should claim instantly after milestone end", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         const initialCreatorBalance = BigNumber.from(
           await fUSDTx.balanceOf({
             account: creator.address,
@@ -2502,8 +1523,9 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/10/15 when the milestone has ended
         timeStamp = new Date("2022/10/15").getTime() / 1000;
@@ -2511,7 +1533,9 @@ describe("Investment Pool", async () => {
         // NOTE: testing with just contract timestamp is fine, cause it tests internal logic
         await investment.setTimestamp(timeStamp);
 
-        await investment.connect(creator).claim(0);
+        await expect(investment.connect(creator).claim(0))
+          .to.emit(investment, "Claim")
+          .withArgs(0);
 
         const creatorBalance = BigNumber.from(
           await fUSDTx.balanceOf({
@@ -2539,33 +1563,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][5.1.4] Should be able to pause the stream and resume later", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
-
         const initialCreatorBalance = BigNumber.from(
           await fUSDTx.balanceOf({
             account: creator.address,
@@ -2589,8 +1586,9 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/09/15 when the milestone is active
         timeStamp = new Date("2022/09/15").getTime() / 1000;
@@ -2601,7 +1599,9 @@ describe("Investment Pool", async () => {
         await investment.setTimestamp(0);
         await traveler.advanceBlockAndSetTime(timeStamp);
 
-        await investment.connect(creator).claim(0);
+        await expect(investment.connect(creator).claim(0))
+          .to.emit(investment, "Claim")
+          .withArgs(0);
 
         // Advance in time a little
         timeStamp = new Date("2022/09/20").getTime() / 1000;
@@ -2632,7 +1632,9 @@ describe("Investment Pool", async () => {
         await investment.setTimestamp(0);
         await traveler.advanceBlockAndSetTime(timeStamp);
 
-        await expect(investment.connect(creator).claim(0)).to.not.be.reverted;
+        await expect(investment.connect(creator).claim(0))
+          .to.emit(investment, "Claim")
+          .withArgs(0);
 
         const flowInfo = await sf.cfaV1.getFlow({
           superToken: fUSDTx.address,
@@ -2657,32 +1659,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][5.1.5] Should be able to pause the stream, resume later, get terminated", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
         const initialCreatorBalance = BigNumber.from(
           await fUSDTx.balanceOf({
             account: creator.address,
@@ -2706,8 +1682,9 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/09/15 when the milestone is active
         timeStamp = new Date("2022/09/15").getTime() / 1000;
@@ -2718,7 +1695,9 @@ describe("Investment Pool", async () => {
         await investment.setTimestamp(0);
         await traveler.advanceBlockAndSetTime(timeStamp);
 
-        await investment.connect(creator).claim(0);
+        await expect(investment.connect(creator).claim(0))
+          .to.emit(investment, "Claim")
+          .withArgs(0);
 
         // Advance in time a little
         timeStamp = new Date("2022/09/20").getTime() / 1000;
@@ -2742,7 +1721,9 @@ describe("Investment Pool", async () => {
         await investment.setTimestamp(0);
         await traveler.advanceBlockAndSetTime(timeStamp);
 
-        await expect(investment.connect(creator).claim(0)).to.not.be.reverted;
+        await expect(investment.connect(creator).claim(0))
+          .to.emit(investment, "Claim")
+          .withArgs(0);
 
         const terminationWindow = BigNumber.from(
           await investment.terminationWindow()
@@ -2787,32 +1768,6 @@ describe("Investment Pool", async () => {
       });
 
       it("[IP][5.1.6] (Callback)Should be able to pause the stream, resume later, get terminated", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
         const initialCreatorBalance = BigNumber.from(
           await fUSDTx.balanceOf({
             account: creator.address,
@@ -2836,8 +1791,9 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/09/15 when the milestone is active
         timeStamp = new Date("2022/09/15").getTime() / 1000;
@@ -2848,7 +1804,9 @@ describe("Investment Pool", async () => {
         await investment.setTimestamp(0);
         await traveler.advanceBlockAndSetTime(timeStamp);
 
-        await investment.connect(creator).claim(0);
+        await expect(investment.connect(creator).claim(0))
+          .to.emit(investment, "Claim")
+          .withArgs(0);
 
         // Advance in time a little
         timeStamp = new Date("2022/09/20").getTime() / 1000;
@@ -2872,7 +1830,9 @@ describe("Investment Pool", async () => {
         await investment.setTimestamp(0);
         await traveler.advanceBlockAndSetTime(timeStamp);
 
-        await expect(investment.connect(creator).claim(0)).to.not.be.reverted;
+        await expect(investment.connect(creator).claim(0))
+          .to.emit(investment, "Claim")
+          .withArgs(0);
 
         const terminationWindow = BigNumber.from(
           await investment.terminationWindow()
@@ -2929,32 +1889,6 @@ describe("Investment Pool", async () => {
   describe("6. Money stream termination", () => {
     describe("6.1 Interactions", () => {
       it("[IP][6.1.1] Anyone can stop milestone during termination window, it instantly transfers the rest of funds", async () => {
-        const softCap = ethers.utils.parseEther("1500");
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // NON-UPGRADEABLE
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        investment = await getInvestmentFromTx(creationRes);
         const initialCreatorBalance = BigNumber.from(
           await fUSDTx.balanceOf({
             account: creator.address,
@@ -2978,8 +1912,9 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount)).to
-          .not.be.reverted;
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/09/15 when the milestone is active
         timeStamp = new Date("2022/09/15").getTime() / 1000;
@@ -2988,7 +1923,9 @@ describe("Investment Pool", async () => {
         await investment.setTimestamp(0);
         await traveler.advanceBlockAndSetTime(timeStamp);
 
-        await investment.connect(creator).claim(0);
+        await expect(investment.connect(creator).claim(0))
+          .to.emit(investment, "Claim")
+          .withArgs(0);
 
         const terminationWindow = BigNumber.from(
           await investment.terminationWindow()
