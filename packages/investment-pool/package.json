@@ -46,6 +46,7 @@
     "web3-utils": "^1.5.1"
   },
   "dependencies": {
+    "@chainlink/contracts": "^0.4.1",
     "@decentral.ee/web3-helpers": "^0.5.3",
     "@openzeppelin/contracts": "^4.6.0",
     "@superfluid-finance/ethereum-contracts": "^1.2.2",

@@ -1,7 +1,7 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { Framework, WrapperSuperToken } from "@superfluid-finance/sdk-core";
 import { BigNumber, ContractTransaction, providers } from "ethers";
-import { ethers, web3 } from "hardhat";
+import { ethers, web3, network } from "hardhat";
 import { assert, expect } from "chai";
 import { InvestmentPoolFactoryMock, InvestmentPoolMock } from "../typechain";
 import traveler from "ganache-time-traveler";
@@ -1739,7 +1739,8 @@ describe("Investment Pool", async () => {
         await investment.setTimestamp(0);
         await traveler.advanceBlockAndSetTime(timeStamp);
 
-        await investment.terminateMilestoneStreamFinal(0);
+        await expect(investment.terminateMilestoneStreamFinal(0)).to.not.be
+          .reverted;
 
         const milestone = await investment.milestones(0);
 
@@ -1887,7 +1888,7 @@ describe("Investment Pool", async () => {
   });
 
   describe("6. Money stream termination", () => {
-    describe("6.1 Interactions", () => {
+    describe.only("6.1 Interactions", () => {
       it("[IP][6.1.1] Anyone can stop milestone during termination window, it instantly transfers the rest of funds", async () => {
         const initialCreatorBalance = BigNumber.from(
           await fUSDTx.balanceOf({
@@ -1976,7 +1977,113 @@ describe("Investment Pool", async () => {
         assert.deepEqual(
           creatorBalance.sub(initialCreatorBalance),
           investedAmount,
-          "should transfer all of the funds during the termination"
+          "Should transfer all of the funds during the termination"
+        );
+      });
+
+      it("[IP][6.1.2] Should be able to call checkUpkeep", async () => {
+        const checkData = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(""));
+        const { upkeepNeeded } = await investment.callStatic.checkUpkeep(
+          checkData
+        );
+        assert.equal(upkeepNeeded, false);
+      });
+      it("[IP][6.1.3] Should not be able to call perform upkeep if conditions are not met", async () => {
+        const checkData = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(""));
+        await expect(investment.performUpkeep(checkData)).to.be.revertedWith(
+          "[IP]: conditions for automated termination not met"
+        );
+      });
+      it("[IP][6.1.4] Should be able to call performUpkeep if conditions are met", async () => {
+        const initialCreatorBalance = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: creator.address,
+            providerOrSigner: creator,
+          })
+        );
+
+        // NOTE: Time traveling to 2022/07/15
+        let timeStamp = new Date("2022/07/15").getTime() / 1000;
+        await investment.setTimestamp(timeStamp);
+
+        // Invest more than soft cap here to make sure the campaign is a success
+        const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+        // Give token approval
+        await fUSDTx
+          .approve({
+            receiver: investment.address,
+            // Max value here to test if contract attempts something out of line
+            amount: UINT256_MAX.toString(),
+          })
+          .exec(investorA);
+
+        // Invest money
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
+
+        // NOTE: Time traveling to 2022/09/15 when the milestone is active
+        timeStamp = new Date("2022/09/15").getTime() / 1000;
+
+        // NOTE: Here we we want explicitly the chain reported time
+        await investment.setTimestamp(0);
+        await traveler.advanceBlockAndSetTime(timeStamp);
+
+        await expect(investment.connect(creator).claim(0))
+          .to.emit(investment, "Claim")
+          .withArgs(0);
+
+        const terminationWindow = BigNumber.from(
+          await investment.terminationWindow()
+        );
+
+        const votingPeriod = await BigNumber.from(
+          await investmentPoolFactory.VOTING_PERIOD()
+        );
+
+        // Let's make sure we are in the termination window
+        // It is sometime at the end of a voting period
+        timeStamp = milestoneEndDate
+          .add(votingPeriod)
+          .sub(terminationWindow.div(2))
+          .toNumber();
+
+        // NOTE: Here we we want explicitly the chain reported time
+        await investment.setTimestamp(0);
+        await traveler.advanceBlockAndSetTime(timeStamp);
+
+        // Perform Upkeep check
+        const checkData = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(""));
+
+        // TODO: check if checkUpkeep function returns true first
+        await investment.performUpkeep(checkData);
+
+        const creatorBalance = BigNumber.from(
+          await fUSDTx.balanceOf({
+            account: creator.address,
+            providerOrSigner: creator,
+          })
+        );
+
+        const milestone = await investment.milestones(0);
+        const paidAmount = milestone.paidAmount;
+
+        assert.deepEqual(
+          paidAmount,
+          creatorBalance.sub(initialCreatorBalance),
+          "Streamed balance and stored record should match"
+        );
+
+        assert.equal(
+          milestone.paid,
+          true,
+          "Milestone should be fully paid by now"
+        );
+
+        assert.deepEqual(
+          creatorBalance.sub(initialCreatorBalance),
+          investedAmount,
+          "Should transfer all of the funds during the termination"
         );
       });
     });

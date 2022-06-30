@@ -12,14 +12,20 @@ import {SuperAppBase} from "@superfluid-finance/ethereum-contracts/contracts/app
 // Openzepelin imports
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import "@chainlink/contracts/src/v0.8/KeeperCompatible.sol";
 
 import {IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
+// import {IOps} from "./interfaces/IGelatoOps.sol";
+import {IKeeperRegistry} from "./interfaces/IKeeperRegistry.sol";
+
+import "hardhat/console.sol";
 
 contract InvestmentPool is
     IInitializableInvestmentPool,
     SuperAppBase,
     Context,
-    Initializable
+    Initializable,
+    KeeperCompatibleInterface
 {
     event Cancel();
     event Invest(address indexed caller, uint256 amount);
@@ -383,7 +389,7 @@ contract InvestmentPool is
         @param _milestoneId Milestone index to terminate the stream for
      */
     function terminateMilestoneStreamFinal(uint256 _milestoneId)
-        external
+        public
         canTerminateMilestoneFinal(_milestoneId)
     {
         (uint256 timestamp, int96 flowRate, , ) = cfaV1Lib.cfa.getFlow(
@@ -563,5 +569,81 @@ contract InvestmentPool is
 
         // By the Superfluid's rules, must return valid context, otherwise - app is jailed.
         return ctx;
+    }
+
+    // //////////////////////////////////////////////////////////////
+    // GELATO AUTOMATION FOR TERMINATION
+    // //////////////////////////////////////////////////////////////
+
+    // /// @dev This function is called by Gelato network to check if automated termination is needed.
+    // function gelatoChecker()
+    //     external
+    //     view
+    //     returns (bool canExec, bytes memory execPayload)
+    // {
+    //     uint256 currentMilestoneIndex = _getCurrentMilestoneIndex();
+
+    //     // TODO: define the time when automated termination should come in and end the stream
+    //     // Currently using default termination window
+    //     canExec = canTerminateMilestoneStreamFinal(currentMilestoneIndex);
+
+    //     execPayload = abi.encodeWithSelector(
+    //         this.terminateMilestoneStreamFinal.selector,
+    //         currentMilestoneIndex
+    //     );
+    // }
+
+    // function startTask() external {
+    //     IOps.createTask(
+    //         address(this),
+    //         this.terminateMilestoneStreamFinal.selector,
+    //         address(this),
+    //         abi.encodeWithSelector(this.gelatoChecker.selector)
+    //     );
+    // }
+
+    // CHAINLINK KEEPER AUTOMATION FOR TERMINATION
+
+    event PerformAutomatedTermination(uint256 milestoneId);
+
+    /**
+     * @dev chainlink keeper checkUpkeep function to constantly check whether we need function call
+     **/
+
+    function checkUpkeep(bytes memory)
+        public
+        override
+        returns (bool upkeepNeeded, bytes memory)
+    {
+        uint256 currentMilestoneIndex = _getCurrentMilestoneIndex();
+
+        // TODO: define the time when automated termination should come in and end the stream
+        // Currently using default termination window
+        upkeepNeeded = canTerminateMilestoneStreamFinal(currentMilestoneIndex);
+    }
+
+    /**
+     * @dev once checkUpKeep been triggered, keeper will call performUpKeep
+     **/
+    function performUpkeep(bytes calldata) external override {
+        (bool upkeepNeeded, ) = checkUpkeep("");
+        require(
+            upkeepNeeded,
+            "[IP]: conditions for automated termination not met"
+        );
+
+        uint256 currentMilestoneIndex = _getCurrentMilestoneIndex();
+
+        terminateMilestoneStreamFinal(currentMilestoneIndex);
+        emit PerformAutomatedTermination(currentMilestoneIndex);
+    }
+
+    function createKeeperAutomation() public {
+        // TODO: create variable for keeper registry contract and use it here.
+        // Currently using rinkeby testnet contract address
+        IKeeperRegistry(0x409CF388DaB66275dA3e44005D182c12EeAa12A0)
+            .registerUpkeep(address(this), uint32(2300), address(this), "");
+
+        console.log("Registered Upkeep");
     }
 }
