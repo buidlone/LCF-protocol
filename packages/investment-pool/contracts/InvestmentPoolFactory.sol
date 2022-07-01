@@ -17,6 +17,7 @@ import {InvestmentPool} from "./InvestmentPool.sol";
 contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
     uint48 public constant VOTING_PERIOD = 7 days;
     uint48 public constant TERMINATION_WINDOW = 12 hours;
+    uint48 public constant AUTOMATED_TERMINATION_WINDOW = 1 hours;
     // TODO: Add min/max durations for fundraiser campaign and milestone respectively
     uint public constant MILESTONE_MIN_DURATION = 30 days;
     uint public constant FUNDRAISER_MAX_DURATION = 90 days;
@@ -24,15 +25,18 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
     // TODO: Arbitrary choice, set this later to something that makes sense
     uint32 public constant MAX_MILESTONE_COUNT = 10;
 
+    address public immutable GELATO_OPS;
+
     /* WARNING: NEVER RE-ORDER VARIABLES! Always double-check that new
        variables are added APPEND-ONLY. Re-ordering variables can
        permanently BREAK the deployed proxy contract. */
 
     ISuperfluid public host;
 
-    constructor(ISuperfluid _host) {
+    constructor(ISuperfluid _host, address _gelatoOps) {
         assert(address(_host) != address(0));
         host = _host;
+        GELATO_OPS = _gelatoOps;
     }
 
     function createInvestmentPool(
@@ -70,11 +74,13 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
             host,
             _acceptedToken,
             _msgSender(),
+            GELATO_OPS,
             _softCap,
             _fundraiserStartAt,
             _fundraiserEndAt,
             VOTING_PERIOD,
             TERMINATION_WINDOW,
+            AUTOMATED_TERMINATION_WINDOW,
             _milestones
         );
 

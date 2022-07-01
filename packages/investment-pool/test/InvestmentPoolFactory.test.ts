@@ -3,7 +3,7 @@ import { Framework, WrapperSuperToken } from "@superfluid-finance/sdk-core";
 import { BigNumber } from "ethers";
 import { ethers, web3 } from "hardhat";
 import { assert, expect } from "chai";
-import { InvestmentPoolFactoryMock } from "../typechain";
+import { InvestmentPoolFactoryMock, GelatoOpsMock } from "../typechain";
 
 const fTokenAbi = require("./abis/fTokenAbi");
 
@@ -24,6 +24,7 @@ let creator: SignerWithAddress;
 
 let sf: Framework;
 let investmentPoolFactory: InvestmentPoolFactoryMock;
+let gelatoOpsMock: GelatoOpsMock;
 
 function generateGaplessMilestones(
   startTimeStamp: BigNumber,
@@ -87,6 +88,14 @@ describe("Investment Pool Factory", async () => {
       protocolReleaseVersion: "test",
     });
 
+    // Create and deploy Gelato Ops contract mock
+    const GelatoOpsMock = await ethers.getContractFactory(
+      "GelatoOpsMock",
+      dPatronAdmin
+    );
+    gelatoOpsMock = await GelatoOpsMock.deploy();
+    await gelatoOpsMock.deployed();
+
     fUSDTx = await sf.loadWrapperSuperToken("fUSDTx");
 
     const underlyingAddr = fUSDTx.underlyingToken.address;
@@ -102,8 +111,12 @@ describe("Investment Pool Factory", async () => {
     );
 
     investmentPoolFactory = await investmentPoolDepFactory.deploy(
-      sf.settings.config.hostAddress
+      sf.settings.config.hostAddress,
+      gelatoOpsMock.address
     );
+
+    await investmentPoolFactory.deployed();
+
     // Enforce a starting timestamp to avoid time based bugs
     const time = new Date("2022/06/01").getTime() / 1000;
     await investmentPoolFactory
@@ -144,6 +157,8 @@ describe("Investment Pool Factory", async () => {
         );
 
         assert.isDefined(creationEvent, "Didn't emit creation event");
+
+        await expect(creationRes).to.emit(gelatoOpsMock, "RegisterGelatoTask");
 
         const poolAddress = creationEvent?.args?.pool;
 

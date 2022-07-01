@@ -46,6 +46,16 @@ interface IInvestmentPool is ISuperApp {
         external
         view
         returns (bool);
+
+    function canAutomatedStreamTerminationBePerformed(uint256 _milestoneId)
+        external
+        view
+        returns (bool);
+
+    function gelatoChecker()
+        external
+        view
+        returns (bool canExec, bytes memory execPayload);
 }
 
 interface IInitializableInvestmentPool is IInvestmentPool {
@@ -53,11 +63,13 @@ interface IInitializableInvestmentPool is IInvestmentPool {
         ISuperfluid _host,
         ISuperToken _acceptedToken,
         address _creator,
+        address _gelatoOps,
         uint96 _softCap,
         uint48 _fundraiserStartAt,
         uint48 _fundraiserEndAt,
         uint48 _votingPeriod,
         uint48 _terminationWindow,
+        uint48 _automatedTerminationWindow,
         MilestoneInterval[] calldata _milestones
     ) external;
 }

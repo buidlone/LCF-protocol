@@ -12,11 +12,9 @@ import {SuperAppBase} from "@superfluid-finance/ethereum-contracts/contracts/app
 // Openzepelin imports
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
-import "@chainlink/contracts/src/v0.8/KeeperCompatible.sol";
 
 import {IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
-// import {IOps} from "./interfaces/IGelatoOps.sol";
-import {IKeeperRegistry} from "./interfaces/IKeeperRegistry.sol";
+import {IGelatoOps} from "./interfaces/IGelatoOps.sol";
 
 import "hardhat/console.sol";
 
@@ -24,8 +22,7 @@ contract InvestmentPool is
     IInitializableInvestmentPool,
     SuperAppBase,
     Context,
-    Initializable,
-    KeeperCompatibleInterface
+    Initializable
 {
     event Cancel();
     event Invest(address indexed caller, uint256 amount);
@@ -49,6 +46,8 @@ contract InvestmentPool is
 
     address public creator;
 
+    address public gelatoOps;
+
     // TODO: validate that uint96 for soft cap is enough
     uint96 public softCap;
 
@@ -61,6 +60,8 @@ contract InvestmentPool is
     uint48 public votingPeriod;
 
     uint48 public terminationWindow;
+
+    uint48 public automatedTerminationWindow;
 
     bool public canceled;
 
@@ -243,15 +244,30 @@ contract InvestmentPool is
             milestone.endDate + votingPeriod - terminationWindow <= _getNow();
     }
 
+    function canAutomatedStreamTerminationBePerformed(uint256 _milestoneId)
+        public
+        view
+        returns (bool)
+    {
+        Milestone storage milestone = milestones[_milestoneId];
+
+        return
+            milestone.streamOngoing &&
+            milestone.endDate + votingPeriod - automatedTerminationWindow <=
+            _getNow();
+    }
+
     function initialize(
         ISuperfluid _host,
         ISuperToken _acceptedToken,
         address _creator,
+        address _gelatoOps,
         uint96 _softCap,
         uint48 _fundraiserStartAt,
         uint48 _fundraiserEndAt,
         uint48 _votingPeriod,
         uint48 _terminationWindow,
+        uint48 _automatedTerminationWindow,
         MilestoneInterval[] calldata _milestones
     ) public initializer {
         // NOTE: Parameter validation was already done for us by the Factory, so it's safe to use "as is" and save gas
@@ -264,11 +280,13 @@ contract InvestmentPool is
 
         acceptedToken = _acceptedToken;
         creator = _creator;
+        gelatoOps = _gelatoOps;
         softCap = _softCap;
         fundraiserStartAt = _fundraiserStartAt;
         fundraiserEndAt = _fundraiserEndAt;
         votingPeriod = _votingPeriod;
         terminationWindow = _terminationWindow;
+        automatedTerminationWindow = _automatedTerminationWindow;
         milestoneCount = _milestones.length;
         currentMilestone = 0;
 
@@ -287,6 +305,9 @@ contract InvestmentPool is
                 totalStreamingDuration +
                 (_milestones[i].endDate - _milestones[i].startDate);
         }
+
+        // Register gelato's automation task
+        startGelatoTask();
     }
 
     /** @notice Allows to invest a specified amount of funds
@@ -575,75 +596,34 @@ contract InvestmentPool is
     // GELATO AUTOMATION FOR TERMINATION
     // //////////////////////////////////////////////////////////////
 
-    // /// @dev This function is called by Gelato network to check if automated termination is needed.
-    // function gelatoChecker()
-    //     external
-    //     view
-    //     returns (bool canExec, bytes memory execPayload)
-    // {
-    //     uint256 currentMilestoneIndex = _getCurrentMilestoneIndex();
-
-    //     // TODO: define the time when automated termination should come in and end the stream
-    //     // Currently using default termination window
-    //     canExec = canTerminateMilestoneStreamFinal(currentMilestoneIndex);
-
-    //     execPayload = abi.encodeWithSelector(
-    //         this.terminateMilestoneStreamFinal.selector,
-    //         currentMilestoneIndex
-    //     );
-    // }
-
-    // function startTask() external {
-    //     IOps.createTask(
-    //         address(this),
-    //         this.terminateMilestoneStreamFinal.selector,
-    //         address(this),
-    //         abi.encodeWithSelector(this.gelatoChecker.selector)
-    //     );
-    // }
-
-    // CHAINLINK KEEPER AUTOMATION FOR TERMINATION
-
-    event PerformAutomatedTermination(uint256 milestoneId);
-
-    /**
-     * @dev chainlink keeper checkUpkeep function to constantly check whether we need function call
-     **/
-
-    function checkUpkeep(bytes memory)
-        public
-        override
-        returns (bool upkeepNeeded, bytes memory)
+    /// @dev This function is called by Gelato network to check if automated termination is needed.
+    /// @return canExec : whether Gelato should execute the task.
+    /// @return execPayload :  data that executors should use for the execution.
+    function gelatoChecker()
+        external
+        view
+        returns (bool canExec, bytes memory execPayload)
     {
         uint256 currentMilestoneIndex = _getCurrentMilestoneIndex();
 
-        // TODO: define the time when automated termination should come in and end the stream
-        // Currently using default termination window
-        upkeepNeeded = canTerminateMilestoneStreamFinal(currentMilestoneIndex);
-    }
-
-    /**
-     * @dev once checkUpKeep been triggered, keeper will call performUpKeep
-     **/
-    function performUpkeep(bytes calldata) external override {
-        (bool upkeepNeeded, ) = checkUpkeep("");
-        require(
-            upkeepNeeded,
-            "[IP]: conditions for automated termination not met"
+        // Check if gelato can terminate stream of current milestone
+        canExec = canAutomatedStreamTerminationBePerformed(
+            currentMilestoneIndex
         );
 
-        uint256 currentMilestoneIndex = _getCurrentMilestoneIndex();
-
-        terminateMilestoneStreamFinal(currentMilestoneIndex);
-        emit PerformAutomatedTermination(currentMilestoneIndex);
+        execPayload = abi.encodeWithSelector(
+            this.terminateMilestoneStreamFinal.selector,
+            currentMilestoneIndex
+        );
     }
 
-    function createKeeperAutomation() public {
-        // TODO: create variable for keeper registry contract and use it here.
-        // Currently using rinkeby testnet contract address
-        IKeeperRegistry(0x409CF388DaB66275dA3e44005D182c12EeAa12A0)
-            .registerUpkeep(address(this), uint32(2300), address(this), "");
-
-        console.log("Registered Upkeep");
+    function startGelatoTask() public {
+        // Register task to run it automatically
+        IGelatoOps(gelatoOps).createTask(
+            address(this),
+            this.terminateMilestoneStreamFinal.selector,
+            address(this),
+            abi.encodeWithSelector(this.gelatoChecker.selector)
+        );
     }
 }
