@@ -396,16 +396,6 @@ contract Investment is SuperAppBase, Context{
         emit Claim(_id);
     }
 
-    function _onStreamingToCreatorStopped(address receiver) internal{
-        // Primary use of this function is to handle the corner case, 
-        // where creator stops money streaming for some reason
-
-        // Find campaigns/milestones where money streaming is active
-        // Calculate the amout of money that has been streamed out
-        // Keep tabs on it, so we can restart the streaming with a correct flow rate
-        // Update the streaming status for each campaign/milestone
-    }
-
     function _getNow() internal view virtual returns(uint256) {
         // TODO: ISuperfluid host can provide time with .getNow(), investigate that
         // solhint-disable-next-line not-rely-on-time
