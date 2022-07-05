@@ -1,9 +1,13 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { Framework, WrapperSuperToken } from "@superfluid-finance/sdk-core";
-import { BigNumber, ContractTransaction, providers } from "ethers";
-import { ethers, web3 } from "hardhat";
+import { BigNumber, ContractTransaction, providers, Contract } from "ethers";
+import { ethers, web3, network } from "hardhat";
 import { assert, expect } from "chai";
-import { InvestmentPoolFactoryMock, InvestmentPoolMock } from "../typechain";
+import {
+  InvestmentPoolFactoryMock,
+  InvestmentPoolMock,
+  GelatoOpsMock,
+} from "../typechain";
 import traveler from "ganache-time-traveler";
 
 // const { toWad } = require("@decentral.ee/web3-helpers");
@@ -49,6 +53,7 @@ let campaignStartDate: BigNumber;
 let campaignEndDate: BigNumber;
 
 let creationRes: ContractTransaction;
+let gelatoOpsMock: GelatoOpsMock;
 
 const errorHandler = (err: any) => {
   if (err) throw err;
@@ -126,6 +131,14 @@ describe("Investment Pool", async () => {
       protocolReleaseVersion: "test",
     });
 
+    // Create and deploy Gelato Ops contract mock
+    const GelatoOpsMock = await ethers.getContractFactory(
+      "GelatoOpsMock",
+      dPatronAdmin
+    );
+    gelatoOpsMock = await GelatoOpsMock.deploy();
+    await gelatoOpsMock.deployed();
+
     fUSDTx = await sf.loadWrapperSuperToken("fUSDTx");
 
     const underlyingAddr = fUSDTx.underlyingToken.address;
@@ -139,8 +152,12 @@ describe("Investment Pool", async () => {
     );
 
     investmentPoolFactory = await investmentPoolDepFactory.deploy(
-      sf.settings.config.hostAddress
+      sf.settings.config.hostAddress,
+      gelatoOpsMock.address
     );
+
+    await investmentPoolFactory.deployed();
+
     // Enforce a starting timestamp to avoid time based bugs
     const time = new Date("2022/06/01").getTime() / 1000;
     await investmentPoolFactory
@@ -1029,6 +1046,14 @@ describe("Investment Pool", async () => {
     });
 
     describe("4.2 Interactions", () => {
+      beforeEach(async () => {
+        let snapshot = await traveler.takeSnapshot();
+        snapshotId = snapshot["result"];
+      });
+
+      afterEach(async () => {
+        await traveler.revertToSnapshot(snapshotId);
+      });
       it("[IP][4.2.1] Investors are unable to unpledge from successful campaign", async () => {
         // NOTE: Time traveling to 2022/07/15
         let timeStamp = new Date("2022/07/15").getTime() / 1000;
@@ -1739,7 +1764,8 @@ describe("Investment Pool", async () => {
         await investment.setTimestamp(0);
         await traveler.advanceBlockAndSetTime(timeStamp);
 
-        await investment.terminateMilestoneStreamFinal(0);
+        await expect(investment.terminateMilestoneStreamFinal(0)).to.not.be
+          .reverted;
 
         const milestone = await investment.milestones(0);
 
@@ -1888,6 +1914,14 @@ describe("Investment Pool", async () => {
 
   describe("6. Money stream termination", () => {
     describe("6.1 Interactions", () => {
+      beforeEach(async () => {
+        let snapshot = await traveler.takeSnapshot();
+        snapshotId = snapshot["result"];
+      });
+
+      afterEach(async () => {
+        await traveler.revertToSnapshot(snapshotId);
+      });
       it("[IP][6.1.1] Anyone can stop milestone during termination window, it instantly transfers the rest of funds", async () => {
         const initialCreatorBalance = BigNumber.from(
           await fUSDTx.balanceOf({
@@ -1976,11 +2010,73 @@ describe("Investment Pool", async () => {
         assert.deepEqual(
           creatorBalance.sub(initialCreatorBalance),
           investedAmount,
-          "should transfer all of the funds during the termination"
+          "Should transfer all of the funds during the termination"
         );
       });
+
+      it("[IP][6.1.2] gelatoChecker should not pass if not in auto termination window", async () => {
+        const { canExec } = await investment.callStatic.gelatoChecker();
+
+        assert.equal(canExec, false);
+      });
+
+      it("[IP][6.1.3] gelatoChecker should pass if in auto termination window", async () => {
+        // NOTE: Time traveling to 2022/07/15
+        let timeStamp = new Date("2022/07/15").getTime() / 1000;
+        await investment.setTimestamp(timeStamp);
+
+        // Invest more than soft cap here to make sure the campaign is a success
+        const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+        // Give token approval
+        await fUSDTx
+          .approve({
+            receiver: investment.address,
+            // Max value here to test if contract attempts something out of line
+            amount: UINT256_MAX.toString(),
+          })
+          .exec(investorA);
+
+        // Invest money
+        await expect(investment.connect(investorA).invest(investedAmount))
+          .to.emit(investment, "Invest")
+          .withArgs(investorA.address, investedAmount);
+
+        // NOTE: Time traveling to 2022/09/15 when the milestone is active
+        timeStamp = new Date("2022/09/15").getTime() / 1000;
+
+        // NOTE: Here we we want explicitly the chain reported time
+        await investment.setTimestamp(0);
+        await traveler.advanceBlockAndSetTime(timeStamp);
+
+        await expect(investment.connect(creator).claim(0))
+          .to.emit(investment, "Claim")
+          .withArgs(0);
+
+        const automatedTerminationWindow = BigNumber.from(
+          await investment.automatedTerminationWindow()
+        );
+
+        const votingPeriod = await BigNumber.from(
+          await investmentPoolFactory.VOTING_PERIOD()
+        );
+
+        // Let's make sure we are in the automated termination window
+        // It is sometime at the end of a voting period
+        timeStamp = milestoneEndDate
+          .add(votingPeriod)
+          .sub(automatedTerminationWindow.div(2))
+          .toNumber();
+
+        // NOTE: Here we we want explicitly the chain reported time
+        await investment.setTimestamp(0);
+        await traveler.advanceBlockAndSetTime(timeStamp);
+
+        // Call gelatoChecker and return value (not the transaction)
+        const { canExec } = await investment.callStatic.gelatoChecker();
+
+        assert.equal(canExec, true);
+      });
     });
-    // TODO: Test money streaming termination using checker(for example for Gelato)
     // TODO: Test termination by 3P system (patricians, plebs, pirates) in case we wouldn't stop it in time, what happens then?
   });
 

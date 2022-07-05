@@ -11,12 +11,14 @@ import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 
 import {IInvestmentPool, IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
 import {IInvestmentPoolFactory} from "./interfaces/IInvestmentPoolFactory.sol";
+import {IGelatoOps} from "./interfaces/IGelatoOps.sol";
 
 import {InvestmentPool} from "./InvestmentPool.sol";
 
 contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
     uint48 public constant VOTING_PERIOD = 7 days;
     uint48 public constant TERMINATION_WINDOW = 12 hours;
+    uint48 public constant AUTOMATED_TERMINATION_WINDOW = 1 hours;
     // TODO: Add min/max durations for fundraiser campaign and milestone respectively
     uint public constant MILESTONE_MIN_DURATION = 30 days;
     uint public constant FUNDRAISER_MAX_DURATION = 90 days;
@@ -29,10 +31,12 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
        permanently BREAK the deployed proxy contract. */
 
     ISuperfluid public host;
+    IGelatoOps public gelatoOps;
 
-    constructor(ISuperfluid _host) {
+    constructor(ISuperfluid _host, IGelatoOps _gelatoOps) {
         assert(address(_host) != address(0));
         host = _host;
+        gelatoOps = _gelatoOps;
     }
 
     function createInvestmentPool(
@@ -70,11 +74,13 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
             host,
             _acceptedToken,
             _msgSender(),
+            gelatoOps,
             _softCap,
             _fundraiserStartAt,
             _fundraiserEndAt,
             VOTING_PERIOD,
             TERMINATION_WINDOW,
+            AUTOMATED_TERMINATION_WINDOW,
             _milestones
         );
 

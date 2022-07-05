@@ -14,6 +14,7 @@ import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
 import {IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
+import {IGelatoOps} from "./interfaces/IGelatoOps.sol";
 
 contract InvestmentPool is
     IInitializableInvestmentPool,
@@ -38,6 +39,8 @@ contract InvestmentPool is
 
     address public creator;
 
+    IGelatoOps public gelatoOps;
+
     // TODO: validate that uint96 for soft cap is enough
     uint96 public softCap;
 
@@ -50,6 +53,8 @@ contract InvestmentPool is
     uint48 public votingPeriod;
 
     uint48 public terminationWindow;
+
+    uint48 public automatedTerminationWindow;
 
     bool public canceled;
 
@@ -238,15 +243,30 @@ contract InvestmentPool is
             milestone.endDate + votingPeriod - terminationWindow <= _getNow();
     }
 
+    function canAutomatedStreamTerminationBePerformed(uint256 _milestoneId)
+        public
+        view
+        returns (bool)
+    {
+        Milestone storage milestone = milestones[_milestoneId];
+
+        return
+            milestone.streamOngoing &&
+            milestone.endDate + votingPeriod - automatedTerminationWindow <=
+            _getNow();
+    }
+
     function initialize(
         ISuperfluid _host,
         ISuperToken _acceptedToken,
         address _creator,
+        IGelatoOps _gelatoOps,
         uint96 _softCap,
         uint48 _fundraiserStartAt,
         uint48 _fundraiserEndAt,
         uint48 _votingPeriod,
         uint48 _terminationWindow,
+        uint48 _automatedTerminationWindow,
         MilestoneInterval[] calldata _milestones
     ) public initializer {
         // NOTE: Parameter validation was already done for us by the Factory, so it's safe to use "as is" and save gas
@@ -259,11 +279,13 @@ contract InvestmentPool is
 
         acceptedToken = _acceptedToken;
         creator = _creator;
+        gelatoOps = _gelatoOps;
         softCap = _softCap;
         fundraiserStartAt = _fundraiserStartAt;
         fundraiserEndAt = _fundraiserEndAt;
         votingPeriod = _votingPeriod;
         terminationWindow = _terminationWindow;
+        automatedTerminationWindow = _automatedTerminationWindow;
         milestoneCount = _milestones.length;
         currentMilestone = 0;
 
@@ -282,6 +304,9 @@ contract InvestmentPool is
                 totalStreamingDuration +
                 (_milestones[i].endDate - _milestones[i].startDate);
         }
+
+        // Register gelato's automation task
+        startGelatoTask();
     }
 
     /** @notice Allows to invest a specified amount of funds
@@ -384,7 +409,7 @@ contract InvestmentPool is
         @param _milestoneId Milestone index to terminate the stream for
      */
     function terminateMilestoneStreamFinal(uint256 _milestoneId)
-        external
+        public
         canTerminateMilestoneFinal(_milestoneId)
     {
         (uint256 timestamp, int96 flowRate, , ) = cfaV1Lib.cfa.getFlow(
@@ -564,5 +589,40 @@ contract InvestmentPool is
 
         // By the Superfluid's rules, must return valid context, otherwise - app is jailed.
         return ctx;
+    }
+
+    // //////////////////////////////////////////////////////////////
+    // GELATO AUTOMATION FOR TERMINATION
+    // //////////////////////////////////////////////////////////////
+
+    /// @dev This function is called by Gelato network to check if automated termination is needed.
+    /// @return canExec : whether Gelato should execute the task.
+    /// @return execPayload :  data that executors should use for the execution.
+    function gelatoChecker()
+        external
+        view
+        returns (bool canExec, bytes memory execPayload)
+    {
+        uint256 currentMilestoneIndex = _getCurrentMilestoneIndex();
+
+        // Check if gelato can terminate stream of current milestone
+        canExec = canAutomatedStreamTerminationBePerformed(
+            currentMilestoneIndex
+        );
+
+        execPayload = abi.encodeWithSelector(
+            this.terminateMilestoneStreamFinal.selector,
+            currentMilestoneIndex
+        );
+    }
+
+    function startGelatoTask() public {
+        // Register task to run it automatically
+        gelatoOps.createTask(
+            address(this),
+            this.terminateMilestoneStreamFinal.selector,
+            address(this),
+            abi.encodeWithSelector(this.gelatoChecker.selector)
+        );
     }
 }
