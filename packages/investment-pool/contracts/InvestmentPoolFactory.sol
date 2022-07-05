@@ -66,7 +66,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         // Perhaps clones can be used here for super cheap deployments
         else {
             revert(
-                "[IPF]: upgradeability types other than NON_UPGRADEABLE are not yet supported"
+                "[IPF]: only NON_UPGRADABLE is supported"
             );
         }
 
@@ -108,9 +108,11 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
     }
 
     function _assertPoolInitArguments(
+        // solhint-disable-next-line no-unused-vars
         ISuperfluid _host,
         ISuperToken _superToken,
         address _creator,
+        // solhint-disable-next-line no-unused-vars
         uint96 _softCap,
         uint96 _fundraiserStartAt,
         uint96 _fundraiserEndAt,
@@ -167,6 +169,12 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
             );
         }
     }
+    
+    function _getNow() internal view virtual returns (uint256) {
+        // TODO: ISuperfluid host can provide time with .getNow(), investigate that
+        // solhint-disable-next-line not-rely-on-time
+        return block.timestamp;
+    }
 
     function _validateMilestoneInterval(
         IInvestmentPool.MilestoneInterval memory milestone
@@ -174,11 +182,5 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         return
             milestone.endDate > milestone.startDate &&
             (milestone.endDate - milestone.startDate >= MILESTONE_MIN_DURATION);
-    }
-
-    function _getNow() internal view virtual returns (uint256) {
-        // TODO: ISuperfluid host can provide time with .getNow(), investigate that
-        // solhint-disable-next-line not-rely-on-time
-        return block.timestamp;
     }
 }

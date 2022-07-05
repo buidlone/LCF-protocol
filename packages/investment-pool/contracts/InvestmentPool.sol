@@ -22,16 +22,11 @@ contract InvestmentPool is
     Context,
     Initializable
 {
-    event Cancel();
-    event Invest(address indexed caller, uint256 amount);
-    event Unpledge(address indexed caller, uint256 amount);
-    event Claim(uint256 milestoneId);
-    event Refund(address indexed caller, uint256 amount);
-
+    using CFAv1Library for CFAv1Library.InitData;
+    
     bytes32 public constant CFA_ID =
         keccak256("org.superfluid-finance.agreements.ConstantFlowAgreement.v1");
-
-    using CFAv1Library for CFAv1Library.InitData;
+    
     /* WARNING: NEVER RE-ORDER VARIABLES! Always double-check that new
        variables are added APPEND-ONLY. Re-ordering variables can
        permanently BREAK the deployed proxy contract. */
@@ -75,6 +70,12 @@ contract InvestmentPool is
     mapping(uint256 => Milestone) public milestones;
     uint256 public currentMilestone;
     uint256 public maxUnlockedMilestone;
+
+    event Cancel();
+    event Invest(address indexed caller, uint256 amount);
+    event Unpledge(address indexed caller, uint256 amount);
+    event Claim(uint256 milestoneId);
+    event Refund(address indexed caller, uint256 amount);
 
     // //////////////////////////////////////////////////////////////
     // Superfluid ERRORS for callbacks

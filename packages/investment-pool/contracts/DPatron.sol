@@ -16,6 +16,7 @@ contract DPatron is
     ERC20Permit,
     ERC20Votes
 {
+    // solhint-disable-next-line no-empty-blocks
     constructor() ERC20("dPatron", "DPP") ERC20Permit("dPatron") {}
 
     function pause() public onlyOwner {
