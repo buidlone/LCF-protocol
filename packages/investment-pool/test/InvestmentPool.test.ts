@@ -2073,10 +2073,26 @@ describe("Investment Pool", async () => {
 
         // Call gelatoChecker and return value (not the transaction)
         const { canExec } = await investment.callStatic.gelatoChecker();
-
         assert.equal(canExec, true);
       });
+      it("[IP][6.1.4] Non gelato address should not be able to terminate streem", async () => {
+        await expect(
+          investment
+            .connect(foreignActor)
+            .gelatoTerminateMilestoneStreamFinal(0)
+        ).to.be.revertedWith("[IP]: not gelato ops");
+      });
+      //   it("[IP][6.1.5] Gelato should not be able to terminate streem if not in auto termination window", async () => {
+      //     await expect(
+      //       investment
+      //         .connect(ethers.provider.getSigner(gelatoOpsMock.address))
+      //         .gelatoTerminateMilestoneStreamFinal(0)
+      //     ).to.be.revertedWith(
+      //       "[IP]: gelato cannot terminate stream for this milestone"
+      //     );
+      //   });
     });
+
     // TODO: Test termination by 3P system (patricians, plebs, pirates) in case we wouldn't stop it in time, what happens then?
   });
 

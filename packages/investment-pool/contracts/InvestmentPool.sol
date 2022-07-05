@@ -12,7 +12,7 @@ import {SuperAppBase} from "@superfluid-finance/ethereum-contracts/contracts/app
 // Openzepelin imports
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
-
+import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
 import {IGelatoOps} from "./interfaces/IGelatoOps.sol";
 
@@ -23,10 +23,10 @@ contract InvestmentPool is
     Initializable
 {
     using CFAv1Library for CFAv1Library.InitData;
-    
+
     bytes32 public constant CFA_ID =
         keccak256("org.superfluid-finance.agreements.ConstantFlowAgreement.v1");
-    
+
     /* WARNING: NEVER RE-ORDER VARIABLES! Always double-check that new
        variables are added APPEND-ONLY. Re-ordering variables can
        permanently BREAK the deployed proxy contract. */
@@ -40,6 +40,8 @@ contract InvestmentPool is
     address public creator;
 
     IGelatoOps public gelatoOps;
+
+    address payable public gelato;
 
     // TODO: validate that uint96 for soft cap is enough
     uint96 public softCap;
@@ -153,6 +155,13 @@ contract InvestmentPool is
         _;
     }
 
+    /** @notice Ensures that the message sender is the gelato ops contract
+     */
+    modifier onlyGelatoOps() {
+        require(_msgSender() == address(gelatoOps), "[IP]: not gelato ops");
+        _;
+    }
+
     modifier milestoneUnlocked(uint256 index) {
         require(
             index <= _getMaxUnlockedMilestone(),
@@ -170,6 +179,14 @@ contract InvestmentPool is
         require(
             canTerminateMilestoneStreamFinal(index),
             "[IP]: cannot terminate stream for this milestone"
+        );
+        _;
+    }
+
+    modifier canGelatoTerminateMilestoneFinal(uint index) {
+        require(
+            canGelatoTerminateMilestoneStreamFinal(index),
+            "[IP]: gelato cannot terminate stream for this milestone"
         );
         _;
     }
@@ -243,7 +260,7 @@ contract InvestmentPool is
             milestone.endDate + votingPeriod - terminationWindow <= _getNow();
     }
 
-    function canAutomatedStreamTerminationBePerformed(uint256 _milestoneId)
+    function canGelatoTerminateMilestoneStreamFinal(uint256 _milestoneId)
         public
         view
         returns (bool)
@@ -280,6 +297,7 @@ contract InvestmentPool is
         acceptedToken = _acceptedToken;
         creator = _creator;
         gelatoOps = _gelatoOps;
+        gelato = gelatoOps.gelato();
         softCap = _softCap;
         fundraiserStartAt = _fundraiserStartAt;
         fundraiserEndAt = _fundraiserEndAt;
@@ -606,23 +624,48 @@ contract InvestmentPool is
         uint256 currentMilestoneIndex = _getCurrentMilestoneIndex();
 
         // Check if gelato can terminate stream of current milestone
-        canExec = canAutomatedStreamTerminationBePerformed(
-            currentMilestoneIndex
-        );
+        canExec = canGelatoTerminateMilestoneStreamFinal(currentMilestoneIndex);
 
         execPayload = abi.encodeWithSelector(
-            this.terminateMilestoneStreamFinal.selector,
+            this.gelatoTerminateMilestoneStreamFinal.selector,
             currentMilestoneIndex
         );
     }
 
     function startGelatoTask() public {
         // Register task to run it automatically
-        gelatoOps.createTask(
+        gelatoOps.createTaskNoPrepayment(
             address(this),
-            this.terminateMilestoneStreamFinal.selector,
+            this.gelatoTerminateMilestoneStreamFinal.selector,
             address(this),
-            abi.encodeWithSelector(this.gelatoChecker.selector)
+            abi.encodeWithSelector(this.gelatoChecker.selector),
+            0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE
         );
+    }
+
+    function gelatoTerminateMilestoneStreamFinal(uint256 _milestoneId)
+        public
+        onlyGelatoOps
+        canGelatoTerminateMilestoneFinal(_milestoneId)
+    {
+        terminateMilestoneStreamFinal(_milestoneId);
+
+        uint256 fee;
+        address feeToken;
+
+        (fee, feeToken) = gelatoOps.getFeeDetails();
+
+        _gelatoTransfer(fee, feeToken);
+    }
+
+    function _gelatoTransfer(uint256 _amount, address _paymentToken) internal {
+        if (_paymentToken == 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE) {
+            // If ETH address
+            (bool success, ) = gelato.call{value: _amount}("");
+            require(success, "[IP] _gelatoTransfer: ETH transfer failed");
+        } else {
+            // Else it is ERC20 token
+            SafeERC20.safeTransfer(IERC20(_paymentToken), gelato, _amount);
+        }
     }
 }
