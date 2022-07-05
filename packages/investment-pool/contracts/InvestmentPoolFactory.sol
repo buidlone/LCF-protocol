@@ -11,6 +11,7 @@ import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 
 import {IInvestmentPool, IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
 import {IInvestmentPoolFactory} from "./interfaces/IInvestmentPoolFactory.sol";
+import {IGelatoOps} from "./interfaces/IGelatoOps.sol";
 
 import {InvestmentPool} from "./InvestmentPool.sol";
 
@@ -25,18 +26,17 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
     // TODO: Arbitrary choice, set this later to something that makes sense
     uint32 public constant MAX_MILESTONE_COUNT = 10;
 
-    address public immutable GELATO_OPS;
-
     /* WARNING: NEVER RE-ORDER VARIABLES! Always double-check that new
        variables are added APPEND-ONLY. Re-ordering variables can
        permanently BREAK the deployed proxy contract. */
 
     ISuperfluid public host;
+    IGelatoOps public gelatoOps;
 
-    constructor(ISuperfluid _host, address _gelatoOps) {
+    constructor(ISuperfluid _host, IGelatoOps _gelatoOps) {
         assert(address(_host) != address(0));
         host = _host;
-        GELATO_OPS = _gelatoOps;
+        gelatoOps = _gelatoOps;
     }
 
     function createInvestmentPool(
@@ -74,7 +74,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
             host,
             _acceptedToken,
             _msgSender(),
-            GELATO_OPS,
+            gelatoOps,
             _softCap,
             _fundraiserStartAt,
             _fundraiserEndAt,

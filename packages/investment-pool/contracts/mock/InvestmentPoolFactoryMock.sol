@@ -5,6 +5,7 @@ pragma solidity ^0.8.9;
 
 import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {IInitializableInvestmentPool} from "../interfaces/IInvestmentPool.sol";
+import {IGelatoOps} from "../interfaces/IGelatoOps.sol";
 
 import {InvestmentPoolFactory} from "../InvestmentPoolFactory.sol";
 import {InvestmentPoolMock} from "./InvestmentPoolMock.sol";
@@ -12,7 +13,8 @@ import {InvestmentPoolMock} from "./InvestmentPoolMock.sol";
 contract InvestmentPoolFactoryMock is InvestmentPoolFactory {
     uint256 timestamp = 0;
 
-    constructor(ISuperfluid _host, address _gelatoOps)
+    // solhint-disable-next-line no-empty-blocks
+    constructor(ISuperfluid _host, IGelatoOps _gelatoOps)
         InvestmentPoolFactory(_host, _gelatoOps)
     {}
 

@@ -16,8 +16,6 @@ import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.s
 import {IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
 import {IGelatoOps} from "./interfaces/IGelatoOps.sol";
 
-import "hardhat/console.sol";
-
 contract InvestmentPool is
     IInitializableInvestmentPool,
     SuperAppBase,
@@ -46,7 +44,7 @@ contract InvestmentPool is
 
     address public creator;
 
-    address public gelatoOps;
+    IGelatoOps public gelatoOps;
 
     // TODO: validate that uint96 for soft cap is enough
     uint96 public softCap;
@@ -261,7 +259,7 @@ contract InvestmentPool is
         ISuperfluid _host,
         ISuperToken _acceptedToken,
         address _creator,
-        address _gelatoOps,
+        IGelatoOps _gelatoOps,
         uint96 _softCap,
         uint48 _fundraiserStartAt,
         uint48 _fundraiserEndAt,
@@ -619,7 +617,7 @@ contract InvestmentPool is
 
     function startGelatoTask() public {
         // Register task to run it automatically
-        IGelatoOps(gelatoOps).createTask(
+        gelatoOps.createTask(
             address(this),
             this.terminateMilestoneStreamFinal.selector,
             address(this),
