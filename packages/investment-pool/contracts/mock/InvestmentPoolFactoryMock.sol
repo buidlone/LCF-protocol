@@ -11,14 +11,12 @@ import {InvestmentPoolFactory} from "../InvestmentPoolFactory.sol";
 import {InvestmentPoolMock} from "./InvestmentPoolMock.sol";
 
 contract InvestmentPoolFactoryMock is InvestmentPoolFactory {
-    
     uint256 public timestamp = 0;
 
     // solhint-disable-next-line no-empty-blocks
     constructor(ISuperfluid _host, IGelatoOps _gelatoOps)
         InvestmentPoolFactory(_host, _gelatoOps)
     {}
-
 
     function setTimestamp(uint256 _timestamp) public {
         timestamp = _timestamp;

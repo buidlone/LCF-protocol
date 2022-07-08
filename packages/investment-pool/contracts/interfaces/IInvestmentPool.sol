@@ -48,7 +48,7 @@ interface IInvestmentPool is ISuperApp {
         view
         returns (bool);
 
-    function canAutomatedStreamTerminationBePerformed(uint256 _milestoneId)
+    function canGelatoTerminateMilestoneStreamFinal(uint256 _milestoneId)
         external
         view
         returns (bool);
@@ -57,6 +57,10 @@ interface IInvestmentPool is ISuperApp {
         external
         view
         returns (bool canExec, bytes memory execPayload);
+
+    function startGelatoTask() external;
+
+    function gelatoTerminateMilestoneStreamFinal(uint256 _milestoneId) external;
 }
 
 interface IInitializableInvestmentPool is IInvestmentPool {
