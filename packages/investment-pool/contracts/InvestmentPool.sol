@@ -658,6 +658,8 @@ contract InvestmentPool is
         _gelatoTransfer(fee, feeToken);
     }
 
+    // TODO: Ensure that this wouldn't clash with our logic
+    // Introduce limits and checks to prevent gelato from taking too much
     function _gelatoTransfer(uint256 _amount, address _paymentToken) internal {
         if (_paymentToken == 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE) {
             // If ETH address

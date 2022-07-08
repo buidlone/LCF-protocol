@@ -2075,14 +2075,14 @@ describe("Investment Pool", async () => {
         const { canExec } = await investment.callStatic.gelatoChecker();
         assert.equal(canExec, true);
       });
-      it("[IP][6.1.4] Non gelato address should not be able to terminate streem", async () => {
+      it("[IP][6.1.4] Non gelato address should not be able to terminate stream", async () => {
         await expect(
           investment
             .connect(foreignActor)
             .gelatoTerminateMilestoneStreamFinal(0)
         ).to.be.revertedWith("[IP]: not gelato ops");
       });
-      //   it("[IP][6.1.5] Gelato should not be able to terminate streem if not in auto termination window", async () => {
+      //   it("[IP][6.1.5] Gelato should not be able to terminate stream if not in auto termination window", async () => {
       //     await expect(
       //       investment
       //         .connect(ethers.provider.getSigner(gelatoOpsMock.address))
