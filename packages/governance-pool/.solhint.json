@@ -1,0 +1,17 @@
+{
+  "extends": "solhint:recommended",
+  "rules": {
+    "compiler-version": ["error", "^0.8.9"],
+    "func-visibility": ["warn", { "ignoreConstructors": true }],
+    "reason-string": ["warn", {"maxLength": 64}],
+    "const-name-snakecase": ["error"],
+    "contract-name-camelcase": ["error"],
+    "event-name-camelcase": ["error"],
+    "func-name-mixedcase": ["error"],
+    "use-forbidden-name": ["error"],
+    "var-name-mixedcase": ["error"],
+    "ordering": ["warn"],
+    "imports-on-top": ["error"],
+    "max-states-count": ["off"]
+  }
+}
