@@ -9,25 +9,88 @@ import "@openzeppelin/contracts/utils/Context.sol";
 import "./VotingToken.sol";
 import {IGovernancePool} from "./interfaces/IGovernancePool.sol";
 
-import "hardhat/console.sol";
+contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
+    enum InvestmentPoolStatus {
+        Unavailable,
+        ActiveVoting,
+        VotedAgainst
+    }
 
-contract GovernacePool is ERC1155Holder, Context, IGovernancePool {
     // ERC1155 contract where all voting tokens are stored
-    VotingToken public immutable votingToken;
+    VotingToken public immutable VOTING_TOKEN;
+    address public immutable INVESTMENT_POOL_FACTORY_ADDRESS;
 
-    constructor(VotingToken _votingToken) {
-        votingToken = _votingToken;
+    // TODO: check if uint8 is a good choice here
+    uint8 public constant VOTES_PERCENTAGE_TRESHOLD = 51;
+
+    // mapping from investment pool id => status
+    mapping(uint256 => InvestmentPoolStatus) public investmentPoolStatus;
+    // mapping from investor address => investment pool address => voting tokens asmount
+    mapping(address => mapping(uint256 => uint256)) public votesAmount;
+
+    constructor(VotingToken _votingToken, address _investmentPoolFactory) {
+        VOTING_TOKEN = _votingToken;
+        INVESTMENT_POOL_FACTORY_ADDRESS = _investmentPoolFactory;
+    }
+
+    modifier onUnavailableInvestmentPool(address _investmentPool) {
+        require(
+            isInvestmentPoolUnavailable(_investmentPool),
+            "[GP]: investment pool is unavailable"
+        );
+        _;
+    }
+
+    modifier onActiveInvestmentPool(address _investmentPool) {
+        require(isInvestmentPoolActive(_investmentPool), "[GP]: voting is not active anymore");
+        _;
+    }
+
+    modifier onVotedAgainstInvestmentPool(address _investmentPool) {
+        require(
+            isInvestmentPoolVotingFinished(_investmentPool),
+            "[GP]: voting has finished as investors voted against"
+        );
+        _;
+    }
+
+    modifier onlyInvestmentPoolFactory() {
+        require(
+            _msgSender() == INVESTMENT_POOL_FACTORY_ADDRESS,
+            "[GP]: not and investment pool factory"
+        );
+        _;
+    }
+
+    function isInvestmentPoolUnavailable(address _investmentPool) public view returns (bool) {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        return
+            investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.Unavailable
+                ? true
+                : false;
+    }
+
+    function isInvestmentPoolActive(address _investmentPool) public view returns (bool) {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        return
+            investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.ActiveVoting
+                ? true
+                : false;
+    }
+
+    function isInvestmentPoolVotingFinished(address _investmentPool) public view returns (bool) {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        return
+            investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.VotedAgainst
+                ? true
+                : false;
     }
 
     /** @notice Get id value for ERC1155 voting token from it's address
         @param _investmentPool investment pool address
         @return investment pool id
      */
-    function getInvestmentPoolId(address _investmentPool)
-        public
-        pure
-        returns (uint256)
-    {
+    function getInvestmentPoolId(address _investmentPool) public pure returns (uint256) {
         return uint256(uint160(_investmentPool));
     }
 
@@ -35,65 +98,153 @@ contract GovernacePool is ERC1155Holder, Context, IGovernancePool {
         @param _investmentPool investment pool address
         @return total supply of tokens minted
      */
-    function getVotingTokensSupply(address _investmentPool)
-        public
-        view
-        returns (uint256)
-    {
-        return votingToken.totalSupply(getInvestmentPoolId(_investmentPool));
+    function getVotingTokensSupply(address _investmentPool) public view returns (uint256) {
+        return VOTING_TOKEN.totalSupply(getInvestmentPoolId(_investmentPool));
     }
 
     /** @notice Get balance of voting tokens for specified investor
         @param _investmentPool investment pool address
-        @param _investor address of the investor
+        @param _account address of the account to check
         @return balance of tokens owned
      */
-    function getVotingTokenBalance(address _investmentPool, address _investor)
+    function getVotingTokenBalance(address _investmentPool, address _account)
         public
         view
         returns (uint256)
     {
-        return
-            votingToken.balanceOf(
-                _investor,
-                getInvestmentPoolId(_investmentPool)
-            );
+        return VOTING_TOKEN.balanceOf(_account, getInvestmentPoolId(_investmentPool));
+    }
+
+    /** @notice Calculate the votes against to the total tokens supply percentage
+        @param _investmentPool investment pool address
+        @param _votesAgainst amount of token which will be used to calculate its percentage.
+        @return the percentage without any decimal places (e.g. 10; 62; 97)
+     */
+    function votesAgainstPercentageCount(address _investmentPool, uint256 _votesAgainst)
+        public
+        view
+        returns (uint8)
+    {
+        uint256 totalSupply = getVotingTokensSupply(_investmentPool);
+
+        require(
+            totalSupply >= _votesAgainst,
+            "[GP]: total supply of tokens needs to be higher than votes against"
+        );
+
+        uint8 percentage = uint8((_votesAgainst * 100) / totalSupply);
+        return percentage;
+    }
+
+    /** @notice Check if investor votes amount will reach the treshold needed for terminating the project
+        @param _investmentPool investment pool address
+        @param _investorVotesCount amount of tokens investor will send to the governance pool
+        @return if treshold will be reached or not
+     */
+    function willInvestorReachTreshold(address _investmentPool, uint256 _investorVotesCount)
+        public
+        view
+        returns (bool)
+    {
+        uint256 votesCountAgainst = getVotingTokenBalance(_investmentPool, address(this));
+
+        // Calculate new percentage with investors votes
+        uint256 newCountVotesAgainst = votesCountAgainst + _investorVotesCount;
+        uint8 newPercentageAgainst = votesAgainstPercentageCount(
+            _investmentPool,
+            newCountVotesAgainst
+        );
+
+        // Check if investors money will reach treshold percent or more
+        if (newPercentageAgainst >= VOTES_PERCENTAGE_TRESHOLD) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    // TODO: call investment pool function to end the project as voters decided to terminate the stream
+    function _endProject(address _investmentPool) private {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        investmentPoolStatus[investmentPoolId] = InvestmentPoolStatus.VotedAgainst;
+    }
+
+    /** @notice Function will only be called once for every investment pool
+                at the contructor stage from the IP factory. 
+        @param _investmentPool investment pool address, which will be added to the active IPs mapping
+     */
+    function allowInvestmentPoolToMint(address _investmentPool)
+        external
+        onlyInvestmentPoolFactory
+        onUnavailableInvestmentPool(_investmentPool)
+    {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        investmentPoolStatus[investmentPoolId] = InvestmentPoolStatus.ActiveVoting;
     }
 
     /** @notice Mint new tokens for specified investment pool
-        @param _investmentPool investment pool address
+        @param _investor account address for which voting tokens will be minted
         @param _amount tokens amount to mint
      */
-    // TODO: make function only available for investment pool
-    function mintVotingTokens(address _investmentPool, uint256 _amount) public {
-        votingToken.mint(
+    function mintVotingTokens(address _investor, uint256 _amount)
+        public
+        onActiveInvestmentPool(_msgSender())
+    {
+        uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
+        VOTING_TOKEN.mint(_investor, investmentPoolId, _amount, "");
+    }
+
+    /** @notice Function transfers investor votes tokens to the smart contract
+        @param _investmentPool investment pool address
+        @param _amount tokens amount investor wants to vote with
+     */
+    function voteAgainst(address _investmentPool, uint256 _amount) external {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        uint256 investorVotingTokenBalance = getVotingTokenBalance(_investmentPool, _msgSender());
+
+        require(_amount > 0, "[GP]: amount needs to be greater than 0");
+        require(investorVotingTokenBalance > 0, "[GP]: don't have any voting tokens");
+        require(
+            _amount <= investorVotingTokenBalance,
+            "[GP]: amount can't be greater than voting token balance"
+        );
+        votesAmount[_msgSender()][investmentPoolId] = _amount;
+
+        if (willInvestorReachTreshold(_investmentPool, _amount)) {
+            _endProject(_investmentPool);
+        }
+
+        VOTING_TOKEN.setApprovalForAll(address(this), true);
+
+        VOTING_TOKEN.safeTransferFrom(_msgSender(), address(this), investmentPoolId, _amount, "");
+    }
+
+    /** @notice Investors can retract votes tokens from the smart contract if voting is still active
+        @param _investmentPool investment pool address
+        @param _retractAmount tokens amount investor wants retract from votes
+     */
+    function retractVotes(address _investmentPool, uint256 _retractAmount)
+        external
+        onActiveInvestmentPool(_investmentPool)
+    {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        uint256 investorVotesAmount = votesAmount[_msgSender()][investmentPoolId];
+
+        require(_retractAmount > 0, "[GP]: retract amount neeeds to be greater than 0");
+        require(investorVotesAmount > 0, "[GP]: did't vote against the project");
+        require(
+            _retractAmount <= investorVotesAmount,
+            "[GP]: retract amount can't be greater than voting token balance"
+        );
+
+        votesAmount[_msgSender()][investmentPoolId] -= _retractAmount;
+
+        VOTING_TOKEN.safeTransferFrom(
+            address(this),
             _msgSender(),
-            getInvestmentPoolId(_investmentPool),
-            _amount,
+            investmentPoolId,
+            _retractAmount,
             ""
         );
     }
-
-    // function voteAgainst(address _investmentPool) public payable {
-    //     uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-    //     uint256 investorVotingTokenBalance = getVotingTokenBalance(
-    //         _investmentPool,
-    //         _msgSender()
-    //     );
-
-    //     require(
-    //         investorVotingTokenBalance > 0,
-    //         "[GP]: don't have any voting tokens"
-    //     );
-
-    //     votingToken.setApprovalForAll(address(this), true);
-
-    //     votingToken.safeTransferFrom(
-    //         _msgSender(),
-    //         address(this),
-    //         investmentPoolId,
-    //         investorVotingTokenBalance,
-    //         ""
-    //     );
-    // }
 }
