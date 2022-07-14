@@ -11,9 +11,9 @@ import {IGovernancePool} from "./interfaces/IGovernancePool.sol";
 
 contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     event FinishVoting(address investmentPool);
-    event AllowToMint(address investmentPool);
+    event ActivateVoting(address investmentPool);
     event VoteAgainstProject(address investmentPool, address investor, uint256 amount);
-    event RetractVotesAgainst(address investmentPool, address investor, uint256 amount);
+    event RetractVotes(address investmentPool, address investor, uint256 amount);
 
     // ERC1155 contract where all voting tokens are stored
     VotingToken public immutable VOTING_TOKEN;
@@ -62,6 +62,80 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
             "[GP]: not an investment pool factory"
         );
         _;
+    }
+
+    /** @notice Function will only be called once for every investment pool
+                at the contructor stage from the IP factory. 
+        @param _investmentPool investment pool address, which will be added to the active IPs mapping
+     */
+    function activateInvestmentPool(address _investmentPool)
+        external
+        onlyInvestmentPoolFactory
+        onUnavailableInvestmentPool(_investmentPool)
+    {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        investmentPoolStatus[investmentPoolId] = InvestmentPoolStatus.ActiveVoting;
+
+        emit ActivateVoting(_investmentPool);
+    }
+
+    /** @notice Function transfers investor votes tokens to the smart contract
+        @param _investmentPool investment pool address
+        @param _amount tokens amount investor wants to vote with
+        @dev Before calling this function investor needs to approve spender with setApprovalForAll()
+     */
+    function voteAgainst(address _investmentPool, uint256 _amount) external {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        uint256 investorVotingTokenBalance = getVotingTokenBalance(_investmentPool, _msgSender());
+
+        require(_amount > 0, "[GP]: amount needs to be greater than 0");
+        require(investorVotingTokenBalance > 0, "[GP]: don't have any voting tokens");
+        require(
+            _amount <= investorVotingTokenBalance,
+            "[GP]: amount can't be greater than voting tokens balance"
+        );
+        votesAmount[_msgSender()][investmentPoolId] += _amount;
+        bool tresholdWillBeReached = willInvestorReachTreshold(_investmentPool, _amount);
+
+        // Transfer the voting tokens from investor to the governance pool
+        VOTING_TOKEN.safeTransferFrom(_msgSender(), address(this), investmentPoolId, _amount, "");
+
+        emit VoteAgainstProject(_investmentPool, _msgSender(), _amount);
+
+        if (tresholdWillBeReached) {
+            _endProject(_investmentPool);
+        }
+    }
+
+    /** @notice Investors can retract votes tokens from the smart contract if voting is still active
+        @param _investmentPool investment pool address
+        @param _retractAmount tokens amount investor wants retract from votes
+     */
+    function retractVotes(address _investmentPool, uint256 _retractAmount)
+        external
+        onActiveInvestmentPool(_investmentPool)
+    {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        uint256 investorVotesAmount = votesAmount[_msgSender()][investmentPoolId];
+
+        require(_retractAmount > 0, "[GP]: retract amount neeeds to be greater than 0");
+        require(investorVotesAmount > 0, "[GP]: did't vote against the project");
+        require(
+            _retractAmount <= investorVotesAmount,
+            "[GP]: retract amount can't be greater than voting token balance"
+        );
+
+        votesAmount[_msgSender()][investmentPoolId] = investorVotesAmount - _retractAmount;
+
+        VOTING_TOKEN.safeTransferFrom(
+            address(this),
+            _msgSender(),
+            investmentPoolId,
+            _retractAmount,
+            ""
+        );
+
+        emit RetractVotes(_investmentPool, _msgSender(), _retractAmount);
     }
 
     function isInvestmentPoolUnavailable(address _investmentPool) public view returns (bool) {
@@ -166,29 +240,6 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         }
     }
 
-    function _endProject(address _investmentPool) private {
-        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        investmentPoolStatus[investmentPoolId] = InvestmentPoolStatus.VotedAgainst;
-        // TODO: call investment pool function to end the project as voters decided to terminate the stream
-
-        emit FinishVoting(_investmentPool);
-    }
-
-    /** @notice Function will only be called once for every investment pool
-                at the contructor stage from the IP factory. 
-        @param _investmentPool investment pool address, which will be added to the active IPs mapping
-     */
-    function allowInvestmentPoolToMint(address _investmentPool)
-        external
-        onlyInvestmentPoolFactory
-        onUnavailableInvestmentPool(_investmentPool)
-    {
-        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        investmentPoolStatus[investmentPoolId] = InvestmentPoolStatus.ActiveVoting;
-
-        emit AllowToMint(_investmentPool);
-    }
-
     /** @notice Mint new tokens for specified investment pool. Is called by investment pool contract
         @param _investor account address for which voting tokens will be minted
         @param _amount tokens amount to mint
@@ -201,62 +252,11 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         VOTING_TOKEN.mint(_investor, investmentPoolId, _amount, "");
     }
 
-    /** @notice Function transfers investor votes tokens to the smart contract
-        @param _investmentPool investment pool address
-        @param _amount tokens amount investor wants to vote with
-        @dev Before calling this function investor needs to approve spender with setApprovalForAll()
-     */
-    function voteAgainst(address _investmentPool, uint256 _amount) external {
+    function _endProject(address _investmentPool) private {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        uint256 investorVotingTokenBalance = getVotingTokenBalance(_investmentPool, _msgSender());
+        investmentPoolStatus[investmentPoolId] = InvestmentPoolStatus.VotedAgainst;
+        // TODO: call investment pool function to end the project as voters decided to terminate the stream
 
-        require(_amount > 0, "[GP]: amount needs to be greater than 0");
-        require(investorVotingTokenBalance > 0, "[GP]: don't have any voting tokens");
-        require(
-            _amount <= investorVotingTokenBalance,
-            "[GP]: amount can't be greater than voting tokens balance"
-        );
-        votesAmount[_msgSender()][investmentPoolId] += _amount;
-        bool tresholdWillBeReached = willInvestorReachTreshold(_investmentPool, _amount);
-
-        // Transfer the voting tokens from investor to the governance pool
-        VOTING_TOKEN.safeTransferFrom(_msgSender(), address(this), investmentPoolId, _amount, "");
-
-        emit VoteAgainstProject(_investmentPool, _msgSender(), _amount);
-
-        if (tresholdWillBeReached) {
-            _endProject(_investmentPool);
-        }
-    }
-
-    /** @notice Investors can retract votes tokens from the smart contract if voting is still active
-        @param _investmentPool investment pool address
-        @param _retractAmount tokens amount investor wants retract from votes
-     */
-    function retractVotes(address _investmentPool, uint256 _retractAmount)
-        external
-        onActiveInvestmentPool(_investmentPool)
-    {
-        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        uint256 investorVotesAmount = votesAmount[_msgSender()][investmentPoolId];
-
-        require(_retractAmount > 0, "[GP]: retract amount neeeds to be greater than 0");
-        require(investorVotesAmount > 0, "[GP]: did't vote against the project");
-        require(
-            _retractAmount <= investorVotesAmount,
-            "[GP]: retract amount can't be greater than voting token balance"
-        );
-
-        votesAmount[_msgSender()][investmentPoolId] = investorVotesAmount - _retractAmount;
-
-        VOTING_TOKEN.safeTransferFrom(
-            address(this),
-            _msgSender(),
-            investmentPoolId,
-            _retractAmount,
-            ""
-        );
-
-        emit RetractVotesAgainst(_investmentPool, _msgSender(), _retractAmount);
+        emit FinishVoting(_investmentPool);
     }
 }

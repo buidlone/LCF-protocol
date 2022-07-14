@@ -100,7 +100,7 @@ describe("Governance Pool", async () => {
             it("[GP][2.1.2] Should update status for investment pool state after giving access for minting", async () => {
                 await governancePool
                     .connect(fakeInvestmentPoolFactory)
-                    .allowInvestmentPoolToMint(fakeInvestmentPool1.address);
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
 
                 const status = await getInvestmentPoolStatus(fakeInvestmentPool1.address);
                 assert.equal(status, 1);
@@ -112,28 +112,28 @@ describe("Governance Pool", async () => {
                 await expect(
                     governancePool
                         .connect(fakeInvestmentPoolFactory)
-                        .allowInvestmentPoolToMint(fakeInvestmentPool1.address)
+                        .activateInvestmentPool(fakeInvestmentPool1.address)
                 )
-                    .to.emit(governancePool, "AllowToMint")
+                    .to.emit(governancePool, "ActivateVoting")
                     .withArgs(fakeInvestmentPool1.address);
             });
             it("[GP][2.2.2] Not everyone should be able to give access for minting", async () => {
                 await expect(
                     governancePool
                         .connect(foreignActor)
-                        .allowInvestmentPoolToMint(fakeInvestmentPool1.address)
+                        .activateInvestmentPool(fakeInvestmentPool1.address)
                 ).to.be.revertedWith("[GP]: not an investment pool factory");
             });
 
             it("[GP][2.2.3] Only unavailable investment pools should be able to get access for minting", async () => {
                 await governancePool
                     .connect(fakeInvestmentPoolFactory)
-                    .allowInvestmentPoolToMint(fakeInvestmentPool1.address);
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
 
                 await expect(
                     governancePool
                         .connect(fakeInvestmentPoolFactory)
-                        .allowInvestmentPoolToMint(fakeInvestmentPool1.address)
+                        .activateInvestmentPool(fakeInvestmentPool1.address)
                 ).to.be.revertedWith(
                     "[GP]: investment pool is assigned with another status than unavailable"
                 );
@@ -198,7 +198,7 @@ describe("Governance Pool", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
                 await governancePool
                     .connect(fakeInvestmentPoolFactory)
-                    .allowInvestmentPoolToMint(fakeInvestmentPool1.address);
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
 
                 await governancePool
                     .connect(fakeInvestmentPool1)
@@ -221,7 +221,7 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(fakeInvestmentPoolFactory)
-                    .allowInvestmentPoolToMint(fakeInvestmentPool1.address);
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
 
                 await governancePool
                     .connect(fakeInvestmentPool1)
@@ -251,7 +251,7 @@ describe("Governance Pool", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
                 await governancePool
                     .connect(fakeInvestmentPoolFactory)
-                    .allowInvestmentPoolToMint(fakeInvestmentPool1.address);
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
 
                 await expect(
                     governancePool
@@ -326,7 +326,7 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(fakeInvestmentPoolFactory)
-                    .allowInvestmentPoolToMint(fakeInvestmentPool1.address);
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
 
                 await governancePool
                     .connect(fakeInvestmentPool1)
@@ -348,7 +348,7 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(fakeInvestmentPoolFactory)
-                    .allowInvestmentPoolToMint(fakeInvestmentPool1.address);
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
 
                 await governancePool
                     .connect(fakeInvestmentPool1)
@@ -380,7 +380,7 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(fakeInvestmentPoolFactory)
-                    .allowInvestmentPoolToMint(fakeInvestmentPool1.address);
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
 
                 await governancePool
                     .connect(fakeInvestmentPool1)
@@ -401,7 +401,7 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(fakeInvestmentPoolFactory)
-                    .allowInvestmentPoolToMint(fakeInvestmentPool1.address);
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
 
                 await governancePool
                     .connect(fakeInvestmentPool1)
@@ -434,7 +434,7 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(fakeInvestmentPoolFactory)
-                    .allowInvestmentPoolToMint(fakeInvestmentPool1.address);
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
 
                 await governancePool
                     .connect(fakeInvestmentPool1)
@@ -465,7 +465,7 @@ describe("Governance Pool", async () => {
 
             //     await governancePool
             //         .connect(fakeInvestmentPoolFactory)
-            //         .allowInvestmentPoolToMint(fakeInvestmentPool1.address);
+            //         .activateInvestmentPool(fakeInvestmentPool1.address);
 
             //     await governancePool
             //         .connect(fakeInvestmentPool1)
@@ -495,7 +495,7 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(fakeInvestmentPoolFactory)
-                    .allowInvestmentPoolToMint(fakeInvestmentPool1.address);
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
 
                 await governancePool
                     .connect(fakeInvestmentPool1)
@@ -526,7 +526,7 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(fakeInvestmentPoolFactory)
-                    .allowInvestmentPoolToMint(fakeInvestmentPool1.address);
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
 
                 await governancePool
                     .connect(fakeInvestmentPool1)
@@ -572,7 +572,7 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(fakeInvestmentPoolFactory)
-                    .allowInvestmentPoolToMint(fakeInvestmentPool1.address);
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
 
                 await governancePool
                     .connect(fakeInvestmentPool1)
@@ -590,7 +590,7 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(fakeInvestmentPoolFactory)
-                    .allowInvestmentPoolToMint(fakeInvestmentPool1.address);
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
 
                 await governancePool
                     .connect(fakeInvestmentPool1)
@@ -608,7 +608,7 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(fakeInvestmentPoolFactory)
-                    .allowInvestmentPoolToMint(fakeInvestmentPool1.address);
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
 
                 await governancePool
                     .connect(fakeInvestmentPool1)

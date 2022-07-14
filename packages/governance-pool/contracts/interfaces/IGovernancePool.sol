@@ -10,6 +10,12 @@ interface IGovernancePool {
         VotedAgainst
     }
 
+    function activateInvestmentPool(address _investmentPool) external;
+
+    function voteAgainst(address _investmentPool, uint256 _amount) external;
+
+    function retractVotes(address _investmentPool, uint256 _retractAmount) external;
+
     function isInvestmentPoolUnavailable(address _investmentPool) external view returns (bool);
 
     function isInvestmentPoolVotingActive(address _investmentPool) external view returns (bool);
@@ -35,11 +41,5 @@ interface IGovernancePool {
         view
         returns (bool);
 
-    function allowInvestmentPoolToMint(address _investmentPool) external;
-
     function mintVotingTokens(address _investor, uint256 _amount) external;
-
-    function voteAgainst(address _investmentPool, uint256 _amount) external;
-
-    function retractVotes(address _investmentPool, uint256 _retractAmount) external;
 }
