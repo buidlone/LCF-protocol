@@ -10,11 +10,10 @@ import "./VotingToken.sol";
 import {IGovernancePool} from "./interfaces/IGovernancePool.sol";
 
 contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
-    enum InvestmentPoolStatus {
-        Unavailable,
-        ActiveVoting,
-        VotedAgainst
-    }
+    event FinishVoting(address investmentPool);
+    event AllowToMint(address investmentPool);
+    event VoteAgainstProject(address investmentPool, address investor, uint256 amount);
+    event RetractVotesAgainst(address investmentPool, address investor, uint256 amount);
 
     // ERC1155 contract where all voting tokens are stored
     VotingToken public immutable VOTING_TOKEN;
@@ -36,20 +35,23 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     modifier onUnavailableInvestmentPool(address _investmentPool) {
         require(
             isInvestmentPoolUnavailable(_investmentPool),
-            "[GP]: investment pool is unavailable"
+            "[GP]: investment pool is assigned with another status than unavailable"
         );
         _;
     }
 
     modifier onActiveInvestmentPool(address _investmentPool) {
-        require(isInvestmentPoolActive(_investmentPool), "[GP]: voting is not active anymore");
+        require(
+            isInvestmentPoolVotingActive(_investmentPool),
+            "[GP]: investment pool is assigned with another status than active voting"
+        );
         _;
     }
 
     modifier onVotedAgainstInvestmentPool(address _investmentPool) {
         require(
             isInvestmentPoolVotingFinished(_investmentPool),
-            "[GP]: voting has finished as investors voted against"
+            "[GP]: investment pool is assigned with another status than voted against"
         );
         _;
     }
@@ -57,7 +59,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     modifier onlyInvestmentPoolFactory() {
         require(
             _msgSender() == INVESTMENT_POOL_FACTORY_ADDRESS,
-            "[GP]: not and investment pool factory"
+            "[GP]: not an investment pool factory"
         );
         _;
     }
@@ -70,7 +72,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
                 : false;
     }
 
-    function isInvestmentPoolActive(address _investmentPool) public view returns (bool) {
+    function isInvestmentPoolVotingActive(address _investmentPool) public view returns (bool) {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         return
             investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.ActiveVoting
@@ -127,6 +129,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     {
         uint256 totalSupply = getVotingTokensSupply(_investmentPool);
 
+        require(totalSupply > 0, "[GP]: total tokens supply is zero");
         require(
             totalSupply >= _votesAgainst,
             "[GP]: total supply of tokens needs to be higher than votes against"
@@ -163,10 +166,12 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         }
     }
 
-    // TODO: call investment pool function to end the project as voters decided to terminate the stream
     function _endProject(address _investmentPool) private {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         investmentPoolStatus[investmentPoolId] = InvestmentPoolStatus.VotedAgainst;
+        // TODO: call investment pool function to end the project as voters decided to terminate the stream
+
+        emit FinishVoting(_investmentPool);
     }
 
     /** @notice Function will only be called once for every investment pool
@@ -180,9 +185,11 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         investmentPoolStatus[investmentPoolId] = InvestmentPoolStatus.ActiveVoting;
+
+        emit AllowToMint(_investmentPool);
     }
 
-    /** @notice Mint new tokens for specified investment pool
+    /** @notice Mint new tokens for specified investment pool. Is called by investment pool contract
         @param _investor account address for which voting tokens will be minted
         @param _amount tokens amount to mint
      */
@@ -197,6 +204,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     /** @notice Function transfers investor votes tokens to the smart contract
         @param _investmentPool investment pool address
         @param _amount tokens amount investor wants to vote with
+        @dev Before calling this function investor needs to approve spender with setApprovalForAll()
      */
     function voteAgainst(address _investmentPool, uint256 _amount) external {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
@@ -206,17 +214,19 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         require(investorVotingTokenBalance > 0, "[GP]: don't have any voting tokens");
         require(
             _amount <= investorVotingTokenBalance,
-            "[GP]: amount can't be greater than voting token balance"
+            "[GP]: amount can't be greater than voting tokens balance"
         );
-        votesAmount[_msgSender()][investmentPoolId] = _amount;
+        votesAmount[_msgSender()][investmentPoolId] += _amount;
+        bool tresholdWillBeReached = willInvestorReachTreshold(_investmentPool, _amount);
 
-        if (willInvestorReachTreshold(_investmentPool, _amount)) {
+        // Transfer the voting tokens from investor to the governance pool
+        VOTING_TOKEN.safeTransferFrom(_msgSender(), address(this), investmentPoolId, _amount, "");
+
+        emit VoteAgainstProject(_investmentPool, _msgSender(), _amount);
+
+        if (tresholdWillBeReached) {
             _endProject(_investmentPool);
         }
-
-        VOTING_TOKEN.setApprovalForAll(address(this), true);
-
-        VOTING_TOKEN.safeTransferFrom(_msgSender(), address(this), investmentPoolId, _amount, "");
     }
 
     /** @notice Investors can retract votes tokens from the smart contract if voting is still active
@@ -237,7 +247,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
             "[GP]: retract amount can't be greater than voting token balance"
         );
 
-        votesAmount[_msgSender()][investmentPoolId] -= _retractAmount;
+        votesAmount[_msgSender()][investmentPoolId] = investorVotesAmount - _retractAmount;
 
         VOTING_TOKEN.safeTransferFrom(
             address(this),
@@ -246,5 +256,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
             _retractAmount,
             ""
         );
+
+        emit RetractVotesAgainst(_investmentPool, _msgSender(), _retractAmount);
     }
 }

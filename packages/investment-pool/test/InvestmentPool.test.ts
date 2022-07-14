@@ -1764,7 +1764,7 @@ describe("Investment Pool", async () => {
         await investment.setTimestamp(0);
         await traveler.advanceBlockAndSetTime(timeStamp);
 
-        await expect(investment.terminateMilestoneStreamFinal(0)).to.not.be
+        await expect(investment.terminateMilestoneStreamFinal(0)).not.to.be
           .reverted;
 
         const milestone = await investment.milestones(0);
@@ -1983,7 +1983,7 @@ describe("Investment Pool", async () => {
           investment
             .connect(foreignActor) // Anyone can terminate it, no access rights needed
             .terminateMilestoneStreamFinal(0)
-        ).to.not.be.reverted;
+        ).not.to.be.reverted;
 
         const creatorBalance = BigNumber.from(
           await fUSDTx.balanceOf({

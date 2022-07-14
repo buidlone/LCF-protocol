@@ -4,9 +4,15 @@
 pragma solidity ^0.8.9;
 
 interface IGovernancePool {
+    enum InvestmentPoolStatus {
+        Unavailable,
+        ActiveVoting,
+        VotedAgainst
+    }
+
     function isInvestmentPoolUnavailable(address _investmentPool) external view returns (bool);
 
-    function isInvestmentPoolActive(address _investmentPool) external view returns (bool);
+    function isInvestmentPoolVotingActive(address _investmentPool) external view returns (bool);
 
     function isInvestmentPoolVotingFinished(address _investmentPool) external view returns (bool);
 
