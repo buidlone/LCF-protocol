@@ -1,5 +1,5 @@
 {
-  "name": "@dpatroncom/governance-pool",
+  "name": "@buidlone/governance-pool",
   "scripts": {
     "start": "npx hardhat run --network localhost scripts/deploy.ts",
     "build": "npx hardhat compile",
