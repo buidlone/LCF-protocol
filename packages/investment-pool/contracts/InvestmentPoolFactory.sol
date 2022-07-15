@@ -1,4 +1,4 @@
-// @ DPATRON 2022
+// @ buidl.one 2022
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.9;
@@ -65,9 +65,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         // Other supported types will just deploy a proxy to an existing logic contract
         // Perhaps clones can be used here for super cheap deployments
         else {
-            revert(
-                "[IPF]: only NON_UPGRADABLE is supported"
-            );
+            revert("[IPF]: only NON_UPGRADABLE is supported");
         }
 
         invPool.initialize(
@@ -169,7 +167,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
             );
         }
     }
-    
+
     function _getNow() internal view virtual returns (uint256) {
         // TODO: ISuperfluid host can provide time with .getNow(), investigate that
         // solhint-disable-next-line not-rely-on-time
