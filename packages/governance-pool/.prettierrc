@@ -3,7 +3,7 @@
     {
       "files": "*.sol",
       "options": {
-        "printWidth": 100,
+        "printWidth": 99,
         "tabWidth": 4,
         "useTabs": false,
         "singleQuote": false,
@@ -14,7 +14,7 @@
     {
       "files": "*.ts",
       "options": {
-        "printWidth": 100,
+        "printWidth": 99,
         "tabWidth": 4,
         "useTabs": false,
         "singleQuote": false,

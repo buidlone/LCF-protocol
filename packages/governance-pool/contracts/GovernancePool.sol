@@ -10,11 +10,6 @@ import "./VotingToken.sol";
 import {IGovernancePool} from "./interfaces/IGovernancePool.sol";
 
 contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
-    event FinishVoting(address investmentPool);
-    event ActivateVoting(address investmentPool);
-    event VoteAgainstProject(address investmentPool, address investor, uint256 amount);
-    event RetractVotes(address investmentPool, address investor, uint256 amount);
-
     // ERC1155 contract where all voting tokens are stored
     VotingToken public immutable VOTING_TOKEN;
     address public immutable INVESTMENT_POOL_FACTORY_ADDRESS;
@@ -26,6 +21,15 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     mapping(uint256 => InvestmentPoolStatus) public investmentPoolStatus;
     // mapping from investor address => investment pool address => voting tokens asmount
     mapping(address => mapping(uint256 => uint256)) public votesAmount;
+
+    event FinishVoting(address indexed investmentPool);
+    event ActivateVoting(address indexed investmentPool);
+    event VoteAgainstProject(
+        address indexed investmentPool,
+        address indexed investor,
+        uint256 amount
+    );
+    event RetractVotes(address indexed investmentPool, address indexed investor, uint256 amount);
 
     constructor(VotingToken _votingToken, address _investmentPoolFactory) {
         VOTING_TOKEN = _votingToken;
@@ -84,7 +88,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         @param _amount tokens amount investor wants to vote with
         @dev Before calling this function investor needs to approve spender with setApprovalForAll()
      */
-    function voteAgainst(address _investmentPool, uint256 _amount) external {
+    function voteAgainst(address _investmentPool, uint256 _amount)
+        external
+        onActiveInvestmentPool(_investmentPool)
+    {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         uint256 investorVotingTokenBalance = getVotingTokenBalance(_investmentPool, _msgSender());
 
@@ -122,7 +129,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         require(investorVotesAmount > 0, "[GP]: did't vote against the project");
         require(
             _retractAmount <= investorVotesAmount,
-            "[GP]: retract amount can't be greater than voting token balance"
+            "[GP]: retract amount can't be greater than delegated for voting"
         );
 
         votesAmount[_msgSender()][investmentPoolId] = investorVotesAmount - _retractAmount;
@@ -136,6 +143,18 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         );
 
         emit RetractVotes(_investmentPool, _msgSender(), _retractAmount);
+    }
+
+    /** @notice Mint new tokens for specified investment pool. Is called by investment pool contract
+        @param _investor account address for which voting tokens will be minted
+        @param _amount tokens amount to mint
+     */
+    function mintVotingTokens(address _investor, uint256 _amount)
+        public
+        onActiveInvestmentPool(_msgSender())
+    {
+        uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
+        VOTING_TOKEN.mint(_investor, investmentPoolId, _amount, "");
     }
 
     function isInvestmentPoolUnavailable(address _investmentPool) public view returns (bool) {
@@ -160,14 +179,6 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
             investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.VotedAgainst
                 ? true
                 : false;
-    }
-
-    /** @notice Get id value for ERC1155 voting token from it's address
-        @param _investmentPool investment pool address
-        @return investment pool id
-     */
-    function getInvestmentPoolId(address _investmentPool) public pure returns (uint256) {
-        return uint256(uint160(_investmentPool));
     }
 
     /** @notice Get tokens supply for investment pool token
@@ -240,16 +251,12 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         }
     }
 
-    /** @notice Mint new tokens for specified investment pool. Is called by investment pool contract
-        @param _investor account address for which voting tokens will be minted
-        @param _amount tokens amount to mint
+    /** @notice Get id value for ERC1155 voting token from it's address
+        @param _investmentPool investment pool address
+        @return investment pool id
      */
-    function mintVotingTokens(address _investor, uint256 _amount)
-        public
-        onActiveInvestmentPool(_msgSender())
-    {
-        uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
-        VOTING_TOKEN.mint(_investor, investmentPoolId, _amount, "");
+    function getInvestmentPoolId(address _investmentPool) public pure returns (uint256) {
+        return uint256(uint160(_investmentPool));
     }
 
     function _endProject(address _investmentPool) private {

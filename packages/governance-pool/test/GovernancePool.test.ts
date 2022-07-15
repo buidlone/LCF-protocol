@@ -41,8 +41,6 @@ describe("Governance Pool", async () => {
 
         // Transfer ownership to governance pool
         await votingToken.transferOwnership(governancePool.address);
-
-        const address = await governancePool.INVESTMENT_POOL_FACTORY_ADDRESS();
     };
 
     before(async () => {
@@ -286,11 +284,11 @@ describe("Governance Pool", async () => {
                     "[GP]: investment pool is assigned with another status than active voting"
                 );
             });
-            it("[GP][4.2.4] Investors should not be able to mint tokens", async () => {
+            it("[GP][4.2.4] Investor should not be able to mint tokens", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
 
                 // Simulate the state with mock function
-                await governancePool.updateInvestmentPoolStatusToVotedAgainst(
+                await governancePool.updateInvestmentPoolStatusToActiveVoting(
                     fakeInvestmentPool1.address
                 );
 
@@ -456,39 +454,43 @@ describe("Governance Pool", async () => {
 
                 assert.equal(votesAgainst.toString(), votesAmount.toString());
             });
-            // it("[GP][7.1.2] Should transfer voting tokens from investor to governance pool", async () => {
-            //     const tokensToMint = ethers.utils.parseEther("1");
-            //     const votesAgainst = ethers.utils.parseEther("0.4");
-            //     const investmentPoolId = await governancePool.getInvestmentPoolId(
-            //         fakeInvestmentPool1.address
-            //     );
+            it("[GP][7.1.2] Should transfer voting tokens from investor to governance pool", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+                const votesAgainst = ethers.utils.parseEther("0.4");
+                const votesLeft = tokensToMint.sub(votesAgainst);
 
-            //     await governancePool
-            //         .connect(fakeInvestmentPoolFactory)
-            //         .activateInvestmentPool(fakeInvestmentPool1.address);
+                await governancePool
+                    .connect(fakeInvestmentPoolFactory)
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
 
-            //     await governancePool
-            //         .connect(fakeInvestmentPool1)
-            //         .mintVotingTokens(investorA.address, tokensToMint);
+                await governancePool
+                    .connect(fakeInvestmentPool1)
+                    .mintVotingTokens(investorA.address, tokensToMint);
 
-            //     // Approve the governance pool contract to spend investor's tokens
-            //     await votingToken
-            //         .connect(investorA)
-            //         .setApprovalForAll(governancePool.address, true);
+                // Approve the governance pool contract to spend investor's tokens
+                await votingToken
+                    .connect(investorA)
+                    .setApprovalForAll(governancePool.address, true);
 
-            //     await expect(
-            //         governancePool
-            //             .connect(investorA)
-            //             .voteAgainst(fakeInvestmentPool1.address, votesAgainst)
-            //     ).to.emit(votingToken, "TransferSingle");
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .voteAgainst(fakeInvestmentPool1.address, votesAgainst)
+                ).to.emit(votingToken, "TransferSingle");
 
-            //     const governancePoolBalance = await governancePool.getVotingTokenBalance(
-            //         fakeInvestmentPool1.address,
-            //         fakeInvestmentPool1.address
-            //     );
+                const governancePoolBalance = await governancePool.getVotingTokenBalance(
+                    fakeInvestmentPool1.address,
+                    governancePool.address
+                );
 
-            //     assert.equal(governancePoolBalance.toString(), votesAgainst.toString());
-            // });
+                const investorBalance = await governancePool.getVotingTokenBalance(
+                    fakeInvestmentPool1.address,
+                    investorA.address
+                );
+
+                assert.equal(governancePoolBalance.toString(), votesAgainst.toString());
+                assert.equal(investorBalance.toString(), votesLeft.toString());
+            });
             it("[GP][7.1.3] Should update investment pool status if treshold was reached", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
                 const votesAgainst = ethers.utils.parseEther("0.6");
@@ -552,59 +554,9 @@ describe("Governance Pool", async () => {
             });
         });
         describe("7.2 Interactions", () => {
-            it("[GP][7.2.1] Voting with 0 amount should revert", async () => {
-                await expect(
-                    governancePool.connect(investorA).voteAgainst(fakeInvestmentPool1.address, 0)
-                ).to.be.revertedWith("[GP]: amount needs to be greater than 0");
-            });
-            it("[GP][7.2.2] Should revert if investor does not have any voting tokens", async () => {
-                const tokensToMint = ethers.utils.parseEther("1");
-
-                await expect(
-                    governancePool
-                        .connect(investorA)
-                        .voteAgainst(fakeInvestmentPool1.address, tokensToMint)
-                ).to.be.revertedWith("[GP]: don't have any voting tokens");
-            });
-            it("[GP][7.2.3] Should not be able to vote with more tokens than investor has", async () => {
-                const tokensToMint = ethers.utils.parseEther("1");
-                const votesAgainst = ethers.utils.parseEther("1.5");
-
-                await governancePool
-                    .connect(fakeInvestmentPoolFactory)
-                    .activateInvestmentPool(fakeInvestmentPool1.address);
-
-                await governancePool
-                    .connect(fakeInvestmentPool1)
-                    .mintVotingTokens(investorA.address, tokensToMint);
-
-                await expect(
-                    governancePool
-                        .connect(investorA)
-                        .voteAgainst(fakeInvestmentPool1.address, votesAgainst)
-                ).to.be.revertedWith("[GP]: amount can't be greater than voting tokens balance");
-            });
-            it("[GP][7.2.4] Should not be able to vote if governance pool is not approved to spend tokens", async () => {
+            it("[GP][7.2.1] Should be able to vote for investment pool with active voting", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
                 const votesAgainst = ethers.utils.parseEther("0.4");
-
-                await governancePool
-                    .connect(fakeInvestmentPoolFactory)
-                    .activateInvestmentPool(fakeInvestmentPool1.address);
-
-                await governancePool
-                    .connect(fakeInvestmentPool1)
-                    .mintVotingTokens(investorA.address, tokensToMint);
-
-                await expect(
-                    governancePool
-                        .connect(investorA)
-                        .voteAgainst(fakeInvestmentPool1.address, votesAgainst)
-                ).to.be.revertedWith("ERC1155: caller is not owner nor approved");
-            });
-            it("[GP][7.2.5] Should be able to vote", async () => {
-                const tokensToMint = ethers.utils.parseEther("1");
-                const votesAgainst = ethers.utils.parseEther("0.8");
 
                 await governancePool
                     .connect(fakeInvestmentPoolFactory)
@@ -625,58 +577,295 @@ describe("Governance Pool", async () => {
                         .voteAgainst(fakeInvestmentPool1.address, votesAgainst)
                 ).not.to.be.reverted;
             });
+            it("[GP][7.2.2] Should not be able to vote for unavailable investment pool", async () => {
+                const votesAgainst = ethers.utils.parseEther("1");
+
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .voteAgainst(fakeInvestmentPool1.address, votesAgainst)
+                ).to.be.revertedWith(
+                    "[GP]: investment pool is assigned with another status than active voting"
+                );
+            });
+            it("[GP][7.2.3] Should not be able to vote for investment pool which reached votes treshold", async () => {
+                const votesAgainst = ethers.utils.parseEther("1");
+
+                // Simulate the state with mock function
+                await governancePool.updateInvestmentPoolStatusToVotedAgainst(
+                    fakeInvestmentPool1.address
+                );
+
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .voteAgainst(fakeInvestmentPool1.address, votesAgainst)
+                ).to.be.revertedWith(
+                    "[GP]: investment pool is assigned with another status than active voting"
+                );
+            });
+            it("[GP][7.2.4] Voting with 0 amount should revert", async () => {
+                await governancePool
+                    .connect(fakeInvestmentPoolFactory)
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
+
+                await expect(
+                    governancePool.connect(investorA).voteAgainst(fakeInvestmentPool1.address, 0)
+                ).to.be.revertedWith("[GP]: amount needs to be greater than 0");
+            });
+            it("[GP][7.2.5] Should revert if investor does not have any voting tokens", async () => {
+                const votesAgainst = ethers.utils.parseEther("1");
+
+                await governancePool
+                    .connect(fakeInvestmentPoolFactory)
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
+
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .voteAgainst(fakeInvestmentPool1.address, votesAgainst)
+                ).to.be.revertedWith("[GP]: don't have any voting tokens");
+            });
+            it("[GP][7.2.6] Should not be able to vote with more tokens than investor has", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+                const votesAgainst = ethers.utils.parseEther("1.5");
+
+                await governancePool
+                    .connect(fakeInvestmentPoolFactory)
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
+
+                await governancePool
+                    .connect(fakeInvestmentPool1)
+                    .mintVotingTokens(investorA.address, tokensToMint);
+
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .voteAgainst(fakeInvestmentPool1.address, votesAgainst)
+                ).to.be.revertedWith("[GP]: amount can't be greater than voting tokens balance");
+            });
+            it("[GP][7.2.7] Should not be able to vote if governance pool is not approved to spend tokens", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+                const votesAgainst = ethers.utils.parseEther("0.4");
+
+                await governancePool
+                    .connect(fakeInvestmentPoolFactory)
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
+
+                await governancePool
+                    .connect(fakeInvestmentPool1)
+                    .mintVotingTokens(investorA.address, tokensToMint);
+
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .voteAgainst(fakeInvestmentPool1.address, votesAgainst)
+                ).to.be.revertedWith("ERC1155: caller is not owner nor approved");
+            });
         });
     });
 
     describe("8. Retracting votes", () => {
-        // beforeEach(async () => {
-        //     await deployContracts();
-        // });
-        // describe("8.1 Public state", () => {
-        //     it("[GP][8.1.1] ", async () => {});
-        // });
-        // describe("8.2 Interactions", () => {
-        //     it("[GP][8.2.1] ", async () => {});
-        // });
+        beforeEach(async () => {
+            await deployContracts();
+        });
+        describe("8.1 Public state", () => {
+            it("[GP][8.1.1] Should update votes amount for investor", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+                const votesAgainst = ethers.utils.parseEther("0.4");
+                const votesToRetract = ethers.utils.parseEther("0.1");
+                const votesLeft = votesAgainst.sub(votesToRetract);
+
+                const investmentPoolId = await governancePool.getInvestmentPoolId(
+                    fakeInvestmentPool1.address
+                );
+
+                await governancePool
+                    .connect(fakeInvestmentPoolFactory)
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
+
+                await governancePool
+                    .connect(fakeInvestmentPool1)
+                    .mintVotingTokens(investorA.address, tokensToMint);
+
+                // Approve the governance pool contract to spend investor's tokens
+                await votingToken
+                    .connect(investorA)
+                    .setApprovalForAll(governancePool.address, true);
+
+                await governancePool
+                    .connect(investorA)
+                    .voteAgainst(fakeInvestmentPool1.address, votesAgainst);
+
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .retractVotes(fakeInvestmentPool1.address, votesToRetract)
+                )
+                    .to.emit(governancePool, "RetractVotes")
+                    .withArgs(fakeInvestmentPool1.address, investorA.address, votesToRetract);
+
+                const votesAmount = await governancePool.votesAmount(
+                    investorA.address,
+                    investmentPoolId
+                );
+
+                assert.equal(votesLeft.toString(), votesAmount.toString());
+            });
+            it("[GP][8.1.2] Should transfer voting tokens from governance pool to investor", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+                const votesAgainst = ethers.utils.parseEther("0.4");
+                const votesToRetract = ethers.utils.parseEther("0.1");
+                const votesLeftInPool = votesAgainst.sub(votesToRetract);
+                const votesLeftForInvestor = tokensToMint.sub(votesAgainst).add(votesToRetract);
+
+                await governancePool
+                    .connect(fakeInvestmentPoolFactory)
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
+
+                await governancePool
+                    .connect(fakeInvestmentPool1)
+                    .mintVotingTokens(investorA.address, tokensToMint);
+
+                // Approve the governance pool contract to spend investor's tokens
+                await votingToken
+                    .connect(investorA)
+                    .setApprovalForAll(governancePool.address, true);
+
+                await governancePool
+                    .connect(investorA)
+                    .voteAgainst(fakeInvestmentPool1.address, votesAgainst);
+
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .retractVotes(fakeInvestmentPool1.address, votesToRetract)
+                )
+                    .to.emit(governancePool, "RetractVotes")
+                    .withArgs(fakeInvestmentPool1.address, investorA.address, votesToRetract);
+
+                const governancePoolBalance = await governancePool.getVotingTokenBalance(
+                    fakeInvestmentPool1.address,
+                    governancePool.address
+                );
+
+                const investorBalance = await governancePool.getVotingTokenBalance(
+                    fakeInvestmentPool1.address,
+                    investorA.address
+                );
+
+                assert.equal(governancePoolBalance.toString(), votesLeftInPool.toString());
+                assert.equal(investorBalance.toString(), votesLeftForInvestor.toString());
+            });
+        });
+        describe("8.2 Interactions", () => {
+            it("[GP][8.2.1] Should be able to retract votes from investment pool with active voting", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+                const votesAgainst = ethers.utils.parseEther("0.4");
+                const votesToRetract = ethers.utils.parseEther("0.1");
+
+                await governancePool
+                    .connect(fakeInvestmentPoolFactory)
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
+
+                await governancePool
+                    .connect(fakeInvestmentPool1)
+                    .mintVotingTokens(investorA.address, tokensToMint);
+
+                // Approve the governance pool contract to spend investor's tokens
+                await votingToken
+                    .connect(investorA)
+                    .setApprovalForAll(governancePool.address, true);
+
+                await governancePool
+                    .connect(investorA)
+                    .voteAgainst(fakeInvestmentPool1.address, votesAgainst);
+
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .retractVotes(fakeInvestmentPool1.address, votesToRetract)
+                ).not.to.be.reverted;
+            });
+            it("[GP][8.2.2] Should not be able to retract votes from unavailable investment pool", async () => {
+                const votesToRetract = ethers.utils.parseEther("1");
+
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .retractVotes(fakeInvestmentPool1.address, votesToRetract)
+                ).to.be.revertedWith(
+                    "[GP]: investment pool is assigned with another status than active voting"
+                );
+            });
+            it("[GP][8.2.3] Should not be able to retract votes from investment pool which reached votes treshold", async () => {
+                const votesToRetract = ethers.utils.parseEther("1");
+
+                // Simulate the state with mock function
+                await governancePool.updateInvestmentPoolStatusToVotedAgainst(
+                    fakeInvestmentPool1.address
+                );
+
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .retractVotes(fakeInvestmentPool1.address, votesToRetract)
+                ).to.be.revertedWith(
+                    "[GP]: investment pool is assigned with another status than active voting"
+                );
+            });
+            it("[GP][8.2.4] Retracting 0 amount of votes should revert", async () => {
+                await governancePool
+                    .connect(fakeInvestmentPoolFactory)
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
+
+                await expect(
+                    governancePool.connect(investorA).retractVotes(fakeInvestmentPool1.address, 0)
+                ).to.be.revertedWith("[GP]: retract amount neeeds to be greater than 0");
+            });
+            it("[GP][8.2.5] Should revert if investor did not vote against the project", async () => {
+                const votesToRetract = ethers.utils.parseEther("1");
+
+                await governancePool
+                    .connect(fakeInvestmentPoolFactory)
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
+
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .retractVotes(fakeInvestmentPool1.address, votesToRetract)
+                ).to.be.revertedWith("[GP]: did't vote against the project");
+            });
+            it("[GP][8.2.6] Should not be able to retract more voting tokens than investor has delegated for voting", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+                const votesAgainst = ethers.utils.parseEther("0.4");
+                const votesToRetract = ethers.utils.parseEther("0.5");
+
+                await governancePool
+                    .connect(fakeInvestmentPoolFactory)
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
+
+                await governancePool
+                    .connect(fakeInvestmentPool1)
+                    .mintVotingTokens(investorA.address, tokensToMint);
+
+                // Approve the governance pool contract to spend investor's tokens
+                await votingToken
+                    .connect(investorA)
+                    .setApprovalForAll(governancePool.address, true);
+
+                await governancePool
+                    .connect(investorA)
+                    .voteAgainst(fakeInvestmentPool1.address, votesAgainst);
+
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .retractVotes(fakeInvestmentPool1.address, votesToRetract)
+                ).to.be.revertedWith(
+                    "[GP]: retract amount can't be greater than delegated for voting"
+                );
+            });
+        });
     });
-
-    //     it("[GP][1.1.4] Should correctly calculate percentage of votes against the project", async () => {
-    //         const tokensToMint = ethers.utils.parseEther("1");
-    //         const fakeVotesAgainst = ethers.utils.parseEther("2");
-    //         const tokensToVoteWith = ethers.utils.parseEther("0.4");
-
-    //         await expect(
-    //             governancePool
-    //                 .connect(investorA)
-    //                 .mintVotingTokens(
-    //                     fakeInvestmentPool1.address,
-    //                     investorA.address,
-    //                     tokensToMint
-    //                 )
-    //         ).not.to.be.reverted;
-
-    //         await expect(
-    //             governancePool
-    //                 .connect(investorA)
-    //                 .votesAgainstPercentageCount(fakeInvestmentPool1.address, fakeVotesAgainst)
-    //         ).to.be.revertedWith(
-    //             "[GP]: total supply of tokens needs to be higher than votes against"
-    //         );
-
-    //         const percentage = await governancePool
-    //             .connect(investorA)
-    //             .votesAgainstPercentageCount(fakeInvestmentPool1.address, tokensToVoteWith);
-
-    //         const expectedPercentage = "40";
-
-    //         assert.equal(percentage.toString(), expectedPercentage);
-    //     });
-
-    // describe("1.2 Public state", () => {
-    //     it("[GP][1.2.] Should have assigned the correct voting token contract", async () => {
-    //         const getAssignedVotingToken = await governancePool.votingToken();
-
-    //         assert.equal(getAssignedVotingToken, votingToken.address);
-    //     });
-    // });
 });
