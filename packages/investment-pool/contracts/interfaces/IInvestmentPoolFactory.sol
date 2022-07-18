@@ -1,4 +1,4 @@
-// @ DPATRON 2022
+// @ buidl.one 2022
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.9;
@@ -13,15 +13,17 @@ interface IInvestmentPoolFactory {
     enum Upgradability {
         // So far, only non-upgradeable deployments are supported (no-proxy)
         NON_UPGRADABLE,
-
         // Not supported yet
         UUPS_PROXY,
-
         // Not supported yet
         CLONE_PROXY
     }
 
-    event Created(address indexed creator, address indexed pool, Upgradability upgradability);
+    event Created(
+        address indexed creator,
+        address indexed pool,
+        Upgradability upgradability
+    );
 
     function createInvestmentPool(
         ISuperToken _acceptedToken,
