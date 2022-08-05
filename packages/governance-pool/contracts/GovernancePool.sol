@@ -9,18 +9,22 @@ import "@openzeppelin/contracts/utils/Context.sol";
 import "./VotingToken.sol";
 import {IGovernancePool} from "./interfaces/IGovernancePool.sol";
 
+//temp
+import "hardhat/console.sol";
+
 contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     // ERC1155 contract where all voting tokens are stored
     VotingToken public immutable VOTING_TOKEN;
     address public immutable INVESTMENT_POOL_FACTORY_ADDRESS;
-
-    // TODO: check if uint8 is a good choice here
     uint8 public constant VOTES_PERCENTAGE_TRESHOLD = 51;
+    uint8 public constant MAX_INVESTMENTS_FOR_INVESTOR_PER_POOL = 10;
 
     // mapping from investment pool id => status
     mapping(uint256 => InvestmentPoolStatus) public investmentPoolStatus;
-    // mapping from investor address => investment pool address => voting tokens asmount
+    // mapping from investor address => investment pool id => voting tokens asmount
     mapping(address => mapping(uint256 => uint256)) public votesAmount;
+    // mapping from investor address => investment pool id => list of structs with unlock time and amount;
+    mapping(address => mapping(uint256 => TokensLocked[])) public tokensLocked;
 
     event FinishVoting(address indexed investmentPool);
     event ActivateVoting(address indexed investmentPool);
@@ -30,6 +34,11 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         uint256 amount
     );
     event RetractVotes(address indexed investmentPool, address indexed investor, uint256 amount);
+    event UnlockVotingTokens(
+        address indexed investmentPool,
+        address indexed investor,
+        uint256 amount
+    );
 
     constructor(VotingToken _votingToken, address _investmentPoolFactory) {
         VOTING_TOKEN = _votingToken;
@@ -81,6 +90,57 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         investmentPoolStatus[investmentPoolId] = InvestmentPoolStatus.ActiveVoting;
 
         emit ActivateVoting(_investmentPool);
+    }
+
+    /** @notice Mint new tokens for specified investment pool. Is called by investment pool contract
+        @param _investor account address for which voting tokens will be minted
+        @param _amount tokens amount to mint
+     */
+    function mintVotingTokens(
+        address _investor,
+        uint256 _amount,
+        uint256 _unlockTime
+    ) external onActiveInvestmentPool(_msgSender()) {
+        uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
+
+        tokensLocked[_investor][investmentPoolId].push(TokensLocked(_unlockTime, _amount, false));
+        VOTING_TOKEN.mint(address(this), investmentPoolId, _amount, "");
+    }
+
+    /** @notice Transfer voting tokens if lock period ended
+        @param _investmentPool investment pool address, which will be added to the active IPs mapping
+     */
+    function unlockVotingTokens(address _investmentPool)
+        external
+        onActiveInvestmentPool(_investmentPool)
+    {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+
+        TokensLocked[] storage lockedTokens = tokensLocked[_msgSender()][investmentPoolId];
+        uint8 investmentsCount = uint8(lockedTokens.length);
+
+        require(investmentsCount > 0, "[GP]: haven't invested in this project");
+
+        for (uint8 i = 0; i < investmentsCount; i++) {
+            TokensLocked storage votingTokens = lockedTokens[i];
+            if (!votingTokens.claimed && votingTokens.unlockTime <= block.timestamp) {
+                uint256 amount = votingTokens.amount;
+
+                // Update state of this part of tokens to claimed
+                votingTokens.claimed = true;
+
+                // Transfer the voting tokens from the governance pool to investor
+                VOTING_TOKEN.safeTransferFrom(
+                    address(this),
+                    _msgSender(),
+                    investmentPoolId,
+                    amount,
+                    ""
+                );
+
+                emit UnlockVotingTokens(_investmentPool, _msgSender(), amount);
+            }
+        }
     }
 
     /** @notice Function transfers investor votes tokens to the smart contract
@@ -145,63 +205,6 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         emit RetractVotes(_investmentPool, _msgSender(), _retractAmount);
     }
 
-    /** @notice Mint new tokens for specified investment pool. Is called by investment pool contract
-        @param _investor account address for which voting tokens will be minted
-        @param _amount tokens amount to mint
-     */
-    function mintVotingTokens(address _investor, uint256 _amount)
-        public
-        onActiveInvestmentPool(_msgSender())
-    {
-        uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
-        VOTING_TOKEN.mint(_investor, investmentPoolId, _amount, "");
-    }
-
-    function isInvestmentPoolUnavailable(address _investmentPool) public view returns (bool) {
-        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        return
-            investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.Unavailable
-                ? true
-                : false;
-    }
-
-    function isInvestmentPoolVotingActive(address _investmentPool) public view returns (bool) {
-        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        return
-            investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.ActiveVoting
-                ? true
-                : false;
-    }
-
-    function isInvestmentPoolVotingFinished(address _investmentPool) public view returns (bool) {
-        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        return
-            investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.VotedAgainst
-                ? true
-                : false;
-    }
-
-    /** @notice Get tokens supply for investment pool token
-        @param _investmentPool investment pool address
-        @return total supply of tokens minted
-     */
-    function getVotingTokensSupply(address _investmentPool) public view returns (uint256) {
-        return VOTING_TOKEN.totalSupply(getInvestmentPoolId(_investmentPool));
-    }
-
-    /** @notice Get balance of voting tokens for specified investor
-        @param _investmentPool investment pool address
-        @param _account address of the account to check
-        @return balance of tokens owned
-     */
-    function getVotingTokenBalance(address _investmentPool, address _account)
-        public
-        view
-        returns (uint256)
-    {
-        return VOTING_TOKEN.balanceOf(_account, getInvestmentPoolId(_investmentPool));
-    }
-
     /** @notice Calculate the votes against to the total tokens supply percentage
         @param _investmentPool investment pool address
         @param _votesAgainst amount of token which will be used to calculate its percentage.
@@ -249,6 +252,51 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         } else {
             return false;
         }
+    }
+
+    function isInvestmentPoolUnavailable(address _investmentPool) public view returns (bool) {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        return
+            investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.Unavailable
+                ? true
+                : false;
+    }
+
+    function isInvestmentPoolVotingActive(address _investmentPool) public view returns (bool) {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        return
+            investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.ActiveVoting
+                ? true
+                : false;
+    }
+
+    function isInvestmentPoolVotingFinished(address _investmentPool) public view returns (bool) {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        return
+            investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.VotedAgainst
+                ? true
+                : false;
+    }
+
+    /** @notice Get tokens supply for investment pool token
+        @param _investmentPool investment pool address
+        @return total supply of tokens minted
+     */
+    function getVotingTokensSupply(address _investmentPool) public view returns (uint256) {
+        return VOTING_TOKEN.totalSupply(getInvestmentPoolId(_investmentPool));
+    }
+
+    /** @notice Get balance of voting tokens for specified investor
+        @param _investmentPool investment pool address
+        @param _account address of the account to check
+        @return balance of tokens owned
+     */
+    function getVotingTokenBalance(address _investmentPool, address _account)
+        public
+        view
+        returns (uint256)
+    {
+        return VOTING_TOKEN.balanceOf(_account, getInvestmentPoolId(_investmentPool));
     }
 
     /** @notice Get id value for ERC1155 voting token from it's address
