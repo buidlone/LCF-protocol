@@ -8,9 +8,12 @@ import {IGovernancePool} from "../interfaces/IGovernancePool.sol";
 import "../VotingToken.sol";
 
 contract GovernancePoolMock is GovernancePool {
-    constructor(VotingToken _votingToken, address _investmentPoolFactory)
-        GovernancePool(_votingToken, _investmentPoolFactory)
-    {}
+    constructor(
+        VotingToken _votingToken,
+        address _investmentPoolFactory,
+        uint8 _treshold,
+        uint8 _maxInvestments
+    ) GovernancePool(_votingToken, _investmentPoolFactory, _treshold, _maxInvestments) {}
 
     function updateInvestmentPoolStatusToUnavailable(address _investmentPool) public {
         uint256 id = getInvestmentPoolId(_investmentPool);

@@ -35,7 +35,9 @@ describe("Governance Pool", async () => {
         );
         governancePool = await governancePoolFactory.deploy(
             votingToken.address,
-            fakeInvestmentPoolFactory.address
+            fakeInvestmentPoolFactory.address,
+            51, // Votes treshold
+            10 // Max investments for investor per investment pool
         );
         await governancePool.deployed();
 
@@ -72,7 +74,9 @@ describe("Governance Pool", async () => {
                 );
                 governancePool = await governancePoolFactory.deploy(
                     votingToken.address,
-                    fakeInvestmentPoolFactory.address
+                    fakeInvestmentPoolFactory.address,
+                    51, // Votes treshold
+                    10 // Max investments for investor per investment pool
                 );
                 await governancePool.deployed();
 
@@ -652,9 +656,6 @@ describe("Governance Pool", async () => {
 
             it("[GP][7.2.7] Should only transfer tokens which are not claimed yet", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
-                const investmentPoolId = await governancePool.getInvestmentPoolId(
-                    fakeInvestmentPool1.address
-                );
 
                 await governancePool
                     .connect(fakeInvestmentPoolFactory)
@@ -693,6 +694,31 @@ describe("Governance Pool", async () => {
                 )
                     .to.emit(governancePool, "UnlockVotingTokens")
                     .withArgs(fakeInvestmentPool1.address, investorA.address, 0, tokensToMint);
+            });
+
+            it("[GP][7.2.8] Should revert if no tokens are available for claiming", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+
+                await governancePool
+                    .connect(fakeInvestmentPoolFactory)
+                    .activateInvestmentPool(fakeInvestmentPool1.address);
+
+                await governancePool
+                    .connect(fakeInvestmentPool1)
+                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+
+                // Simulate that part of the total investment has already been claimed
+                await governancePool
+                    .connect(investorA)
+                    .setTokensClaimedStatus(fakeInvestmentPool1.address, 0, true);
+
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .unlockVotingTokens(fakeInvestmentPool1.address)
+                ).to.be.revertedWith(
+                    "[GP]: no tokens have passed unlock time or you have already claimed them"
+                );
             });
         });
     });

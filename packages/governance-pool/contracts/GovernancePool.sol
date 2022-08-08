@@ -13,9 +13,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     // ERC1155 contract where all voting tokens are stored
     VotingToken public immutable VOTING_TOKEN;
     address public immutable INVESTMENT_POOL_FACTORY_ADDRESS;
-    uint8 public constant VOTES_PERCENTAGE_TRESHOLD = 51;
-    // TODO should be passed by investment pool factory?
-    uint8 public constant MAX_INVESTMENTS_FOR_INVESTOR_PER_POOL = 10;
+    uint8 public immutable VOTES_PERCENTAGE_TRESHOLD;
+    uint8 public immutable MAX_INVESTMENTS_FOR_INVESTOR_PER_POOL;
 
     // mapping from investment pool id => status
     mapping(uint256 => InvestmentPoolStatus) public investmentPoolStatus;
@@ -41,9 +40,16 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     event RetractVotes(address indexed investmentPool, address indexed investor, uint256 amount);
     event FinishVoting(address indexed investmentPool);
 
-    constructor(VotingToken _votingToken, address _investmentPoolFactory) {
+    constructor(
+        VotingToken _votingToken,
+        address _investmentPoolFactory,
+        uint8 _treshold,
+        uint8 _maxInvestments
+    ) {
         VOTING_TOKEN = _votingToken;
         INVESTMENT_POOL_FACTORY_ADDRESS = _investmentPoolFactory;
+        VOTES_PERCENTAGE_TRESHOLD = _treshold;
+        MAX_INVESTMENTS_FOR_INVESTOR_PER_POOL = _maxInvestments;
     }
 
     modifier onUnavailableInvestmentPool(address _investmentPool) {
@@ -117,8 +123,9 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         onActiveInvestmentPool(_investmentPool)
     {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        TokensLocked[] memory lockedTokens = tokensLocked[_msgSender()][investmentPoolId];
+        uint256 owedTokens = 0;
 
+        TokensLocked[] memory lockedTokens = tokensLocked[_msgSender()][investmentPoolId];
         // Check how many investments did investor make into specified project
         uint8 investmentsCount = uint8(lockedTokens.length);
         require(investmentsCount > 0, "[GP]: haven't invested in this project");
@@ -128,21 +135,25 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
 
             // Transfer only tokens that haven't been claimed and unlock time was reached
             if (!votingTokens.claimed && votingTokens.unlockTime <= block.timestamp) {
-                uint256 amount = votingTokens.amount;
-
                 tokensLocked[_msgSender()][investmentPoolId][i].claimed = true;
 
-                // Transfer the voting tokens from the governance pool to investor
-                VOTING_TOKEN.safeTransferFrom(
-                    address(this),
-                    _msgSender(),
-                    investmentPoolId,
-                    amount,
-                    ""
-                );
-
+                uint256 amount = votingTokens.amount;
+                owedTokens += amount;
                 emit UnlockVotingTokens(_investmentPool, _msgSender(), i, amount);
             }
+        }
+
+        if (owedTokens > 0) {
+            // Transfer the voting tokens from the governance pool to investor
+            VOTING_TOKEN.safeTransferFrom(
+                address(this),
+                _msgSender(),
+                investmentPoolId,
+                owedTokens,
+                ""
+            );
+        } else {
+            revert("[GP]: no tokens have passed unlock time or you have already claimed them");
         }
     }
 
@@ -260,6 +271,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         );
 
         // Check if investors money will reach treshold percent or more
+        // Percentages is going to be rounded down. That means no matter how high decimals are, they will be ignored.
         if (newPercentageAgainst >= VOTES_PERCENTAGE_TRESHOLD) {
             return true;
         } else {
