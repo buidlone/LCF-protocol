@@ -9,36 +9,37 @@ import "@openzeppelin/contracts/utils/Context.sol";
 import "./VotingToken.sol";
 import {IGovernancePool} from "./interfaces/IGovernancePool.sol";
 
-//temp
-import "hardhat/console.sol";
-
 contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     // ERC1155 contract where all voting tokens are stored
     VotingToken public immutable VOTING_TOKEN;
     address public immutable INVESTMENT_POOL_FACTORY_ADDRESS;
     uint8 public constant VOTES_PERCENTAGE_TRESHOLD = 51;
+    // TODO should be passed by investment pool factory?
     uint8 public constant MAX_INVESTMENTS_FOR_INVESTOR_PER_POOL = 10;
 
     // mapping from investment pool id => status
     mapping(uint256 => InvestmentPoolStatus) public investmentPoolStatus;
     // mapping from investor address => investment pool id => voting tokens asmount
     mapping(address => mapping(uint256 => uint256)) public votesAmount;
-    // mapping from investor address => investment pool id => list of structs with unlock time and amount;
+    // mapping from investor address => investment pool id => list of structs with unlock time and amount
     mapping(address => mapping(uint256 => TokensLocked[])) public tokensLocked;
+    // mapping from investment pool id => total votes amount
+    mapping(uint256 => uint256) public totalVotesAmount; // total contract balance is not only votes it holds but investors tokens which will be unlocked in the future
 
-    event FinishVoting(address indexed investmentPool);
     event ActivateVoting(address indexed investmentPool);
+    event UnlockVotingTokens(
+        address indexed investmentPool,
+        address indexed investor,
+        uint8 indexed listId,
+        uint256 amount
+    );
     event VoteAgainstProject(
         address indexed investmentPool,
         address indexed investor,
         uint256 amount
     );
     event RetractVotes(address indexed investmentPool, address indexed investor, uint256 amount);
-    event UnlockVotingTokens(
-        address indexed investmentPool,
-        address indexed investor,
-        uint256 amount
-    );
+    event FinishVoting(address indexed investmentPool);
 
     constructor(VotingToken _votingToken, address _investmentPoolFactory) {
         VOTING_TOKEN = _votingToken;
@@ -87,8 +88,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         onUnavailableInvestmentPool(_investmentPool)
     {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        investmentPoolStatus[investmentPoolId] = InvestmentPoolStatus.ActiveVoting;
 
+        investmentPoolStatus[investmentPoolId] = InvestmentPoolStatus.ActiveVoting;
         emit ActivateVoting(_investmentPool);
     }
 
@@ -103,6 +104,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     ) external onActiveInvestmentPool(_msgSender()) {
         uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
 
+        // Push new locked tokens info to mapping and mint them. Tokens will be held by governance pool until unlock time.
         tokensLocked[_investor][investmentPoolId].push(TokensLocked(_unlockTime, _amount, false));
         VOTING_TOKEN.mint(address(this), investmentPoolId, _amount, "");
     }
@@ -115,19 +117,20 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         onActiveInvestmentPool(_investmentPool)
     {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        TokensLocked[] memory lockedTokens = tokensLocked[_msgSender()][investmentPoolId];
 
-        TokensLocked[] storage lockedTokens = tokensLocked[_msgSender()][investmentPoolId];
+        // Check how many investments did investor make into specified project
         uint8 investmentsCount = uint8(lockedTokens.length);
-
         require(investmentsCount > 0, "[GP]: haven't invested in this project");
 
         for (uint8 i = 0; i < investmentsCount; i++) {
-            TokensLocked storage votingTokens = lockedTokens[i];
+            TokensLocked memory votingTokens = lockedTokens[i];
+
+            // Transfer only tokens that haven't been claimed and unlock time was reached
             if (!votingTokens.claimed && votingTokens.unlockTime <= block.timestamp) {
                 uint256 amount = votingTokens.amount;
 
-                // Update state of this part of tokens to claimed
-                votingTokens.claimed = true;
+                tokensLocked[_msgSender()][investmentPoolId][i].claimed = true;
 
                 // Transfer the voting tokens from the governance pool to investor
                 VOTING_TOKEN.safeTransferFrom(
@@ -138,7 +141,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
                     ""
                 );
 
-                emit UnlockVotingTokens(_investmentPool, _msgSender(), amount);
+                emit UnlockVotingTokens(_investmentPool, _msgSender(), i, amount);
             }
         }
     }
@@ -161,14 +164,20 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
             _amount <= investorVotingTokenBalance,
             "[GP]: amount can't be greater than voting tokens balance"
         );
-        votesAmount[_msgSender()][investmentPoolId] += _amount;
+
+        // Check if new votes amount specified by investor will reach 51%
         bool tresholdWillBeReached = willInvestorReachTreshold(_investmentPool, _amount);
+
+        // Update votes mappings
+        votesAmount[_msgSender()][investmentPoolId] += _amount;
+        totalVotesAmount[investmentPoolId] += _amount;
 
         // Transfer the voting tokens from investor to the governance pool
         VOTING_TOKEN.safeTransferFrom(_msgSender(), address(this), investmentPoolId, _amount, "");
 
         emit VoteAgainstProject(_investmentPool, _msgSender(), _amount);
 
+        // If treshold is reached, it means that project needs to be ended
         if (tresholdWillBeReached) {
             _endProject(_investmentPool);
         }
@@ -192,7 +201,9 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
             "[GP]: retract amount can't be greater than delegated for voting"
         );
 
+        // Update votes mappings
         votesAmount[_msgSender()][investmentPoolId] = investorVotesAmount - _retractAmount;
+        totalVotesAmount[investmentPoolId] -= _retractAmount;
 
         VOTING_TOKEN.safeTransferFrom(
             address(this),
@@ -237,7 +248,9 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         view
         returns (bool)
     {
-        uint256 votesCountAgainst = getVotingTokenBalance(_investmentPool, address(this));
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+
+        uint256 votesCountAgainst = totalVotesAmount[investmentPoolId];
 
         // Calculate new percentage with investors votes
         uint256 newCountVotesAgainst = votesCountAgainst + _investorVotesCount;

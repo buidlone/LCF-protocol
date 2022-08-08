@@ -26,4 +26,13 @@ contract GovernancePoolMock is GovernancePool {
         uint256 id = getInvestmentPoolId(_investmentPool);
         investmentPoolStatus[id] = IGovernancePool.InvestmentPoolStatus.VotedAgainst;
     }
+
+    function setTokensClaimedStatus(
+        address _investmentPool,
+        uint256 _listId,
+        bool _isClaimed
+    ) public {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        tokensLocked[_msgSender()][investmentPoolId][_listId].claimed = _isClaimed;
+    }
 }
