@@ -49,6 +49,7 @@
     "@chainlink/contracts": "^0.4.1",
     "@decentral.ee/web3-helpers": "^0.5.3",
     "@openzeppelin/contracts": "^4.6.0",
+    "@openzeppelin/contracts-upgradeable": "^4.7.2",
     "@superfluid-finance/ethereum-contracts": "^1.2.2",
     "@superfluid-finance/js-sdk": "0.6.1",
     "@superfluid-finance/sdk-core": "^0.4.2",
