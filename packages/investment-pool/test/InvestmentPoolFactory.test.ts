@@ -126,8 +126,9 @@ describe("Investment Pool Factory", async () => {
 
   describe("1. Investment creation", () => {
     describe("1.1 Interactions", () => {
-      it("[IPF][1.1.1] Can create an investment", async function () {
-        const softCap = ethers.utils.parseEther("1500");
+      const softCap: BigNumber = ethers.utils.parseEther("1500");
+
+      it("[IPF][1.1.1] Can create a NO-PROXY investment", async () => {
         const milestoneStartDate = BigNumber.from(
           new Date("2022/09/01").getTime() / 1000
         );
@@ -148,7 +149,7 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NON-UPGRADEABLE
+            0, // NO-PROXY
             [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
           );
 
@@ -227,7 +228,6 @@ describe("Investment Pool Factory", async () => {
         );
       });
       it("[IPF][1.1.2] Reverts creation if fundraiser campaign ends before it starts", async () => {
-        const softCap = ethers.utils.parseEther("1500");
         const milestoneStartDate = BigNumber.from(
           new Date("2022/10/01").getTime() / 1000
         );
@@ -248,14 +248,13 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NON-UPGRADEABLE
+            0, // NO-PROXY
             [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
           )
         ).to.be.reverted;
       });
 
       it("[IPF][1.1.3] Reverts creation if milestone ends before it starts", async () => {
-        const softCap = ethers.utils.parseEther("1500");
         // Milestone ends before it starts
         const milestoneStartDate = BigNumber.from(
           new Date("2022/09/10").getTime() / 1000
@@ -276,14 +275,13 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NON-UPGRADEABLE
+            0, // NO-PROXY
             [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
           )
         ).to.be.reverted;
       });
 
       it("[IPF][1.1.4] Reverts creation if milestone is shorter than 30 days", async () => {
-        const softCap = ethers.utils.parseEther("1500");
         const milestoneStartDate = BigNumber.from(
           new Date("2022/09/01").getTime() / 1000
         );
@@ -303,14 +301,13 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NON-UPGRADEABLE
+            0, // NO-PROXY
             [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
           )
         ).to.be.reverted;
       });
 
       it("[IPF][1.1.5] Reverts creation if fundraiser period is longer than 90 days", async () => {
-        const softCap = ethers.utils.parseEther("1500");
         const milestoneStartDate = BigNumber.from(
           new Date("2023/09/01").getTime() / 1000
         );
@@ -330,14 +327,13 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NON-UPGRADEABLE
+            0, // NO-PROXY
             [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
           )
         ).to.be.reverted;
       });
 
       it("[IPF][1.1.6] Fundraiser interval cannot be retrospective", async () => {
-        const softCap = ethers.utils.parseEther("1500");
         const milestoneStartDate = BigNumber.from(
           new Date("2022/09/01").getTime() / 1000
         );
@@ -363,7 +359,7 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NON-UPGRADEABLE
+            0, // NO-PROXY
             [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
           )
         ).to.be.reverted;
@@ -372,7 +368,6 @@ describe("Investment Pool Factory", async () => {
       it("[IPF][1.1.7] Milestone interval cannot be retrospective", async () => {
         // Note, it's implicitly enforced by the requirements
         // on fundraiser campaign dates, but this test is here to prevent accidental code changes
-        const softCap = ethers.utils.parseEther("1500");
         const milestoneStartDate = BigNumber.from(
           new Date("2022/09/01").getTime() / 1000
         );
@@ -398,14 +393,13 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NON-UPGRADEABLE
+            0, // NO-PROXY
             [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
           )
         ).to.be.reverted;
       });
 
       it("[IPF][1.1.8] Respects milestone count limit", async () => {
-        const softCap = ethers.utils.parseEther("1500");
         const milestoneStartDate = BigNumber.from(
           new Date("2022/09/01").getTime() / 1000
         );
@@ -430,7 +424,7 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NON-UPGRADEABLE
+            0, // NO-PROXY
             generateGaplessMilestones(
               milestoneStartDate,
               milestoneDuration,
@@ -442,7 +436,6 @@ describe("Investment Pool Factory", async () => {
       });
 
       it("[IPF][1.1.9] Can create multiple milestones", async () => {
-        const softCap = ethers.utils.parseEther("1500");
         const milestoneStartDate = BigNumber.from(
           new Date("2022/09/01").getTime() / 1000
         );
@@ -475,14 +468,13 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NON-UPGRADEABLE
+            0, // NO-PROXY
             milestones
           )
         ).to.not.be.reverted;
       });
 
       it("[IPF][1.1.10] Ensures minimal voting period and milestone spacing", async () => {
-        const softCap = ethers.utils.parseEther("1500");
         const milestoneStartDate = BigNumber.from(
           new Date("2022/09/01").getTime() / 1000
         );
@@ -514,10 +506,110 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NON-UPGRADEABLE
+            0, // NO-PROXY
             milestones
           )
         ).to.be.reverted;
+      });
+
+      it("[IPF][1.1.11] Can create a CLONE-PROXY investment", async () => {
+        const milestoneStartDate = BigNumber.from(
+          new Date("2022/09/01").getTime() / 1000
+        );
+        const milestoneEndDate = BigNumber.from(
+          new Date("2022/10/01").getTime() / 1000
+        );
+        const campaignStartDate = BigNumber.from(
+          new Date("2022/07/01").getTime() / 1000
+        );
+        const campaignEndDate = BigNumber.from(
+          new Date("2022/08/01").getTime() / 1000
+        );
+
+        const creationRes = await investmentPoolFactory
+          .connect(creator)
+          .createInvestmentPool(
+            fUSDTx.address,
+            softCap,
+            campaignStartDate,
+            campaignEndDate,
+            1, // CLONE-PROXY
+            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
+          );
+
+        const creationEvent = (await creationRes.wait(1)).events?.find(
+          (e) => e.event === "Created"
+        );
+
+        assert.isDefined(creationEvent, "Didn't emit creation event");
+
+        await expect(creationRes).to.emit(gelatoOpsMock, "RegisterGelatoTask");
+
+        const poolAddress = creationEvent?.args?.pool;
+
+        const contractFactory = await ethers.getContractFactory(
+          "InvestmentPoolMock",
+          dPatronAdmin
+        );
+
+        const pool = contractFactory.attach(poolAddress);
+
+        const creatorAddress = await pool.creator();
+        const invested = await pool.totalInvestedAmount();
+        const fundraiserStartAt = await pool.fundraiserStartAt();
+        const fundraiserEndAt = await pool.fundraiserEndAt();
+        const poolSoftCap = await pool.softCap();
+        const milestoneCount = await pool.milestoneCount();
+        const milestone = await pool.milestones(0);
+
+        // Verify the campaign variables
+        assert.equal(creatorAddress, creator.address, "Wrong creator address");
+        assert.deepEqual(poolSoftCap, softCap, "Wrong soft cap");
+        assert.deepEqual(
+          invested,
+          BigNumber.from(0),
+          "Should not have any investments yet"
+        );
+        assert.deepEqual(
+          BigNumber.from(fundraiserStartAt),
+          campaignStartDate,
+          "Wrong campaign start date"
+        );
+        assert.deepEqual(
+          BigNumber.from(fundraiserEndAt),
+          campaignEndDate,
+          "Wrong campaign end date"
+        );
+        assert.deepEqual(
+          milestoneCount,
+          BigNumber.from(1),
+          "Should have a single milestone"
+        );
+        assert.deepEqual(
+          BigNumber.from(milestone.startDate),
+          milestoneStartDate,
+          "Wrong milestone start date"
+        );
+        assert.deepEqual(
+          BigNumber.from(milestone.endDate),
+          milestoneEndDate,
+          "Wrong milestone end date"
+        );
+        assert.equal(
+          milestone.paid,
+          false,
+          "Milestone should not be paid initially"
+        );
+        assert.equal(
+          milestone.streamOngoing,
+          false,
+          "Stream should not be ongoing from the start"
+        );
+        assert.deepEqual(
+          milestone.paidAmount,
+          BigNumber.from(0),
+          "Should have paid 0 in funds upon creation"
+        );
       });
     });
   });

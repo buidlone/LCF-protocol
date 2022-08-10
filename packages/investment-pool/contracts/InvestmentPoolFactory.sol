@@ -33,14 +33,14 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
        variables are added APPEND-ONLY. Re-ordering variables can
        permanently BREAK the deployed proxy contract. */
 
-    ISuperfluid public immutable host;
-    IGelatoOps public immutable gelatoOps;
-    address private investmentPoolImplementation;
+    ISuperfluid public immutable HOST;
+    IGelatoOps public immutable GELATO_OPS;
+    address internal investmentPoolImplementation;
 
     constructor(ISuperfluid _host, IGelatoOps _gelatoOps) {
         assert(address(_host) != address(0));
-        host = _host;
-        gelatoOps = _gelatoOps;
+        HOST = _host;
+        GELATO_OPS = _gelatoOps;
 
         // Create Investment Pool logic contract
         investmentPoolImplementation = address(_deployLogic());
@@ -56,7 +56,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
     ) external returns (IInvestmentPool) {
         IInitializableInvestmentPool invPool;
         _assertPoolInitArguments(
-            host,
+            HOST,
             _acceptedToken,
             _msgSender(),
             _softCap,
@@ -69,18 +69,16 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         if (_proxyType == ProxyType.NO_PROXY) {
             invPool = _deployLogic();
         } else if (_proxyType == ProxyType.CLONE_PROXY) {
-            invPool = IInitializableInvestmentPool(
-                investmentPoolImplementation.clone()
-            );
+            invPool = _deployClone();
         } else {
             revert("[IPF]: only NO_PROXY and CLONE_PROXY are supported");
         }
 
         invPool.initialize(
-            host,
+            HOST,
             _acceptedToken,
             _msgSender(),
-            gelatoOps,
+            GELATO_OPS,
             _softCap,
             _fundraiserStartAt,
             _fundraiserEndAt,
@@ -98,7 +96,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
             SuperAppDefinitions.AFTER_AGREEMENT_CREATED_NOOP |
             SuperAppDefinitions.AFTER_AGREEMENT_UPDATED_NOOP;
 
-        host.registerAppByFactory(invPool, configWord);
+        HOST.registerAppByFactory(invPool, configWord);
 
         emit Created(_msgSender(), address(invPool), _proxyType);
 
@@ -111,6 +109,16 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         returns (IInitializableInvestmentPool pool)
     {
         pool = new InvestmentPool();
+    }
+
+    function _deployClone()
+        internal
+        virtual
+        returns (IInitializableInvestmentPool pool)
+    {
+        pool = IInitializableInvestmentPool(
+            investmentPoolImplementation.clone()
+        );
     }
 
     function _assertPoolInitArguments(
@@ -173,7 +181,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
     }
 
     function _getNow() internal view virtual returns (uint256) {
-        // TODO: ISuperfluid host can provide time with .getNow(), investigate that
+        // TODO: ISuperfluid HOST can provide time with .getNow(), investigate that
         // solhint-disable-next-line not-rely-on-time
         return block.timestamp;
     }

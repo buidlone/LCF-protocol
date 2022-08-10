@@ -11,12 +11,10 @@ interface IInvestmentPoolFactory {
      * @dev ProxyType modes
      */
     enum ProxyType {
-        // So far, only non-upgradeable deployments are supported (no-proxy)
         NO_PROXY,
+        CLONE_PROXY,
         // Not supported yet
-        UUPS_PROXY,
-        // Not supported yet
-        CLONE_PROXY
+        UUPS_PROXY
     }
 
     event Created(

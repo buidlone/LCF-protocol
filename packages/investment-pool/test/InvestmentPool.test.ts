@@ -206,7 +206,7 @@ describe("Investment Pool", async () => {
         softCap,
         campaignStartDate,
         campaignEndDate,
-        0, // NON-UPGRADEABLE
+        1, // CLONE-PROXY
         [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
       );
 
