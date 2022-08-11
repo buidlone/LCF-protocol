@@ -112,12 +112,16 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     /** @notice Mint new tokens for specified investment pool. Is called by investment pool contract
         @param _investor account address for which voting tokens will be minted
         @param _amount tokens amount to mint
+        @param _unlockTime time until newly minted tokens will be locked in governance pool.
+                No checks for time are applied. It can be in the past, which means tokens are unlock instantly
      */
     function mintVotingTokens(
         address _investor,
         uint256 _amount,
         uint256 _unlockTime
     ) external onActiveInvestmentPool(_msgSender()) {
+        /// @dev reverts using custom error
+        if (_amount == 0) revert GovernancePool__amountIsZero();
         uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
 
         // Push new locked tokens info to mapping and mint them. Tokens will be held by governance pool until unlock time.
@@ -133,14 +137,12 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         onActiveInvestmentPool(_investmentPool)
     {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        uint256 owedTokens = 0;
-
         TokensLocked[] memory lockedTokens = tokensLocked[_msgSender()][investmentPoolId];
         uint8 investmentsCount = uint8(lockedTokens.length);
 
-        // Check how many investments did investor make into specified project
         /// @dev reverts using custom error
         if (investmentsCount == 0) revert GovernancePool__noIvestmentsMade();
+        uint256 owedTokens = 0;
 
         for (uint8 i = 0; i < investmentsCount; i++) {
             TokensLocked memory votingTokens = lockedTokens[i];
@@ -179,17 +181,19 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         external
         onActiveInvestmentPool(_investmentPool)
     {
-        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        /// @dev reverts using custom error
+        if (_amount == 0) revert GovernancePool__amountIsZero();
         uint256 investorVotingTokenBalance = getVotingTokenBalance(_investmentPool, _msgSender());
 
         /// @dev reverts using custom error
-        if (_amount == 0) revert GovernancePool__amountIsZero();
         if (investorVotingTokenBalance == 0) revert GovernancePool__noVotingTokensOwned();
         if (_amount > investorVotingTokenBalance)
             revert GovernancePool__amountIsGreaterThanVotingTokensBalance(
                 _amount,
                 investorVotingTokenBalance
             );
+
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
 
         // Check if new votes amount specified by investor will reach 51%
         bool tresholdWillBeReached = willInvestorReachTreshold(_investmentPool, _amount);
@@ -217,11 +221,12 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         external
         onActiveInvestmentPool(_investmentPool)
     {
+        /// @dev reverts using custom error
+        if (_retractAmount == 0) revert GovernancePool__amountIsZero();
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         uint256 investorVotesAmount = votesAmount[_msgSender()][investmentPoolId];
 
         /// @dev reverts using custom error
-        if (_retractAmount == 0) revert GovernancePool__amountIsZero();
         if (investorVotesAmount == 0) revert GovernancePool__noVotesAgainstProject();
         if (_retractAmount > investorVotesAmount)
             revert GovernancePool__amountIsGreaterThanDelegatedVotes(
