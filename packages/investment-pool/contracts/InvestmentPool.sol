@@ -11,16 +11,17 @@ import {SuperAppBase} from "@superfluid-finance/ethereum-contracts/contracts/app
 
 // Openzepelin imports
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
-// import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+
 import {IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
 import {IGelatoOps} from "./interfaces/IGelatoOps.sol";
 
 contract InvestmentPool is
     IInitializableInvestmentPool,
     SuperAppBase,
-    OwnableUpgradeable
+    Context,
+    Initializable
 {
     using CFAv1Library for CFAv1Library.InitData;
 
@@ -287,7 +288,6 @@ contract InvestmentPool is
         MilestoneInterval[] calldata _milestones
     ) public initializer {
         // NOTE: Parameter validation was already done for us by the Factory, so it's safe to use "as is" and save gas
-        __Ownable_init();
 
         // Resolve the agreement address and initialize the lib
         cfaV1Lib = CFAv1Library.InitData(
