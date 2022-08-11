@@ -9,6 +9,20 @@ import "@openzeppelin/contracts/utils/Context.sol";
 import "./VotingToken.sol";
 import {IGovernancePool} from "./interfaces/IGovernancePool.sol";
 
+error GovernancePool__statusIsNotUnavailable();
+error GovernancePool__statusIsNotActiveVoting();
+error GovernancePool__statusIsNotVotedAgainst();
+error GovernancePool__notInvestmentPoolFactory();
+error GovernancePool__noIvestmentsMade();
+error GovernancePool__amountIsZero();
+error GovernancePool__noVotingTokensOwned();
+error GovernancePool__amountIsGreaterThanVotingTokensBalance(uint256 amount, uint256 balance);
+error GovernancePool__noVotesAgainstProject();
+error GovernancePool__amountIsGreaterThanDelegatedVotes(uint256 amount, uint256 votes);
+error GovernancePool__totalSupplyIsZero();
+error GovernancePool__totalSupplyIsSmallerThanVotesAgainst(uint256 totalSupply, uint256 votes);
+error GovernancePool__noVotingTokensAvailableForClaim();
+
 contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     // ERC1155 contract where all voting tokens are stored
     VotingToken public immutable VOTING_TOKEN;
@@ -53,34 +67,30 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     }
 
     modifier onUnavailableInvestmentPool(address _investmentPool) {
-        require(
-            isInvestmentPoolUnavailable(_investmentPool),
-            "[GP]: investment pool is assigned with another status than unavailable"
-        );
+        /// @dev reverts using custom error
+        if (!isInvestmentPoolUnavailable(_investmentPool))
+            revert GovernancePool__statusIsNotUnavailable();
         _;
     }
 
     modifier onActiveInvestmentPool(address _investmentPool) {
-        require(
-            isInvestmentPoolVotingActive(_investmentPool),
-            "[GP]: investment pool is assigned with another status than active voting"
-        );
+        /// @dev reverts using custom error
+        if (!isInvestmentPoolVotingActive(_investmentPool))
+            revert GovernancePool__statusIsNotActiveVoting();
         _;
     }
 
     modifier onVotedAgainstInvestmentPool(address _investmentPool) {
-        require(
-            isInvestmentPoolVotingFinished(_investmentPool),
-            "[GP]: investment pool is assigned with another status than voted against"
-        );
+        /// @dev reverts using custom error
+        if (!isInvestmentPoolVotingFinished(_investmentPool))
+            revert GovernancePool__statusIsNotVotedAgainst();
         _;
     }
 
     modifier onlyInvestmentPoolFactory() {
-        require(
-            _msgSender() == INVESTMENT_POOL_FACTORY_ADDRESS,
-            "[GP]: not an investment pool factory"
-        );
+        /// @dev reverts using custom error
+        if (_msgSender() != INVESTMENT_POOL_FACTORY_ADDRESS)
+            revert GovernancePool__notInvestmentPoolFactory();
         _;
     }
 
@@ -126,9 +136,11 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         uint256 owedTokens = 0;
 
         TokensLocked[] memory lockedTokens = tokensLocked[_msgSender()][investmentPoolId];
-        // Check how many investments did investor make into specified project
         uint8 investmentsCount = uint8(lockedTokens.length);
-        require(investmentsCount > 0, "[GP]: haven't invested in this project");
+
+        // Check how many investments did investor make into specified project
+        /// @dev reverts using custom error
+        if (investmentsCount == 0) revert GovernancePool__noIvestmentsMade();
 
         for (uint8 i = 0; i < investmentsCount; i++) {
             TokensLocked memory votingTokens = lockedTokens[i];
@@ -153,7 +165,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
                 ""
             );
         } else {
-            revert("[GP]: no tokens have passed unlock time or you have already claimed them");
+            /// @dev reverts using custom error
+            revert GovernancePool__noVotingTokensAvailableForClaim();
         }
     }
 
@@ -169,12 +182,14 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         uint256 investorVotingTokenBalance = getVotingTokenBalance(_investmentPool, _msgSender());
 
-        require(_amount > 0, "[GP]: amount needs to be greater than 0");
-        require(investorVotingTokenBalance > 0, "[GP]: don't have any voting tokens");
-        require(
-            _amount <= investorVotingTokenBalance,
-            "[GP]: amount can't be greater than voting tokens balance"
-        );
+        /// @dev reverts using custom error
+        if (_amount == 0) revert GovernancePool__amountIsZero();
+        if (investorVotingTokenBalance == 0) revert GovernancePool__noVotingTokensOwned();
+        if (_amount > investorVotingTokenBalance)
+            revert GovernancePool__amountIsGreaterThanVotingTokensBalance(
+                _amount,
+                investorVotingTokenBalance
+            );
 
         // Check if new votes amount specified by investor will reach 51%
         bool tresholdWillBeReached = willInvestorReachTreshold(_investmentPool, _amount);
@@ -205,12 +220,14 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         uint256 investorVotesAmount = votesAmount[_msgSender()][investmentPoolId];
 
-        require(_retractAmount > 0, "[GP]: retract amount neeeds to be greater than 0");
-        require(investorVotesAmount > 0, "[GP]: did't vote against the project");
-        require(
-            _retractAmount <= investorVotesAmount,
-            "[GP]: retract amount can't be greater than delegated for voting"
-        );
+        /// @dev reverts using custom error
+        if (_retractAmount == 0) revert GovernancePool__amountIsZero();
+        if (investorVotesAmount == 0) revert GovernancePool__noVotesAgainstProject();
+        if (_retractAmount > investorVotesAmount)
+            revert GovernancePool__amountIsGreaterThanDelegatedVotes(
+                _retractAmount,
+                investorVotesAmount
+            );
 
         // Update votes mappings
         votesAmount[_msgSender()][investmentPoolId] = investorVotesAmount - _retractAmount;
@@ -239,11 +256,13 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     {
         uint256 totalSupply = getVotingTokensSupply(_investmentPool);
 
-        require(totalSupply > 0, "[GP]: total tokens supply is zero");
-        require(
-            totalSupply >= _votesAgainst,
-            "[GP]: total supply of tokens needs to be higher than votes against"
-        );
+        /// @dev reverts using custom error
+        if (totalSupply == 0) revert GovernancePool__totalSupplyIsZero();
+        if (totalSupply < _votesAgainst)
+            revert GovernancePool__totalSupplyIsSmallerThanVotesAgainst(
+                totalSupply,
+                _votesAgainst
+            );
 
         uint8 percentage = uint8((_votesAgainst * 100) / totalSupply);
         return percentage;

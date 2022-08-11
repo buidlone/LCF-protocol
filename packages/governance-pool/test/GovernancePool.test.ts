@@ -127,7 +127,10 @@ describe("Governance Pool", async () => {
                     governancePool
                         .connect(foreignActor)
                         .activateInvestmentPool(fakeInvestmentPool1.address)
-                ).to.be.revertedWith("[GP]: not an investment pool factory");
+                ).to.be.revertedWithCustomError(
+                    governancePool,
+                    "GovernancePool__notInvestmentPoolFactory"
+                );
             });
 
             it("[GP][2.2.3] Only unavailable investment pools should be able to get access for minting", async () => {
@@ -139,8 +142,9 @@ describe("Governance Pool", async () => {
                     governancePool
                         .connect(fakeInvestmentPoolFactory)
                         .activateInvestmentPool(fakeInvestmentPool1.address)
-                ).to.be.revertedWith(
-                    "[GP]: investment pool is assigned with another status than unavailable"
+                ).to.be.revertedWithCustomError(
+                    governancePool,
+                    "GovernancePool__statusIsNotUnavailable"
                 );
             });
         });
@@ -315,8 +319,9 @@ describe("Governance Pool", async () => {
                     governancePool
                         .connect(fakeInvestmentPool1)
                         .mintVotingTokens(investorA.address, tokensToMint, 0)
-                ).to.be.revertedWith(
-                    "[GP]: investment pool is assigned with another status than active voting"
+                ).to.be.revertedWithCustomError(
+                    governancePool,
+                    "GovernancePool__statusIsNotActiveVoting"
                 );
             });
 
@@ -330,8 +335,9 @@ describe("Governance Pool", async () => {
                     governancePool
                         .connect(fakeInvestmentPool1)
                         .mintVotingTokens(investorA.address, tokensToMint, 0)
-                ).to.be.revertedWith(
-                    "[GP]: investment pool is assigned with another status than active voting"
+                ).to.be.revertedWithCustomError(
+                    governancePool,
+                    "GovernancePool__statusIsNotActiveVoting"
                 );
             });
 
@@ -345,8 +351,9 @@ describe("Governance Pool", async () => {
                     governancePool
                         .connect(investorA)
                         .mintVotingTokens(investorA.address, tokensToMint, 0)
-                ).to.be.revertedWith(
-                    "[GP]: investment pool is assigned with another status than active voting"
+                ).to.be.revertedWithCustomError(
+                    governancePool,
+                    "GovernancePool__statusIsNotActiveVoting"
                 );
             });
         });
@@ -366,7 +373,10 @@ describe("Governance Pool", async () => {
                         fakeInvestmentPool1.address,
                         tokensToMint
                     )
-                ).to.be.revertedWith("[GP]: total tokens supply is zero");
+                ).to.be.revertedWithCustomError(
+                    governancePool,
+                    "GovernancePool__totalSupplyIsZero"
+                );
             });
 
             it("[GP][5.1.2] Should revert if amount for votes against are higher than total supply", async () => {
@@ -381,14 +391,21 @@ describe("Governance Pool", async () => {
                     .connect(fakeInvestmentPool1)
                     .mintVotingTokens(investorA.address, tokensToMint, 0);
 
+                const totalSupply = await governancePool.getVotingTokensSupply(
+                    fakeInvestmentPool1.address
+                );
+
                 await expect(
                     governancePool.votesAgainstPercentageCount(
                         fakeInvestmentPool1.address,
                         votesAgainst
                     )
-                ).to.be.revertedWith(
-                    "[GP]: total supply of tokens needs to be higher than votes against"
-                );
+                )
+                    .to.be.revertedWithCustomError(
+                        governancePool,
+                        "GovernancePool__totalSupplyIsSmallerThanVotesAgainst"
+                    )
+                    .withArgs(totalSupply, votesAgainst);
             });
 
             it("[GP][5.1.3] Should correctly calculate the percentage", async () => {
@@ -529,8 +546,9 @@ describe("Governance Pool", async () => {
                     governancePool
                         .connect(investorA)
                         .unlockVotingTokens(fakeInvestmentPool1.address)
-                ).to.be.revertedWith(
-                    "[GP]: investment pool is assigned with another status than active voting"
+                ).to.be.revertedWithCustomError(
+                    governancePool,
+                    "GovernancePool__statusIsNotActiveVoting"
                 );
             });
 
@@ -544,8 +562,9 @@ describe("Governance Pool", async () => {
                     governancePool
                         .connect(investorA)
                         .unlockVotingTokens(fakeInvestmentPool1.address)
-                ).to.be.revertedWith(
-                    "[GP]: investment pool is assigned with another status than active voting"
+                ).to.be.revertedWithCustomError(
+                    governancePool,
+                    "GovernancePool__statusIsNotActiveVoting"
                 );
             });
 
@@ -558,7 +577,10 @@ describe("Governance Pool", async () => {
                     governancePool
                         .connect(investorA)
                         .unlockVotingTokens(fakeInvestmentPool1.address)
-                ).to.be.revertedWith("[GP]: haven't invested in this project");
+                ).to.be.revertedWithCustomError(
+                    governancePool,
+                    "GovernancePool__noIvestmentsMade"
+                );
             });
 
             it("[GP][7.2.5] Should transfer locked tokens to the investor", async () => {
@@ -691,8 +713,9 @@ describe("Governance Pool", async () => {
                     governancePool
                         .connect(investorA)
                         .unlockVotingTokens(fakeInvestmentPool1.address)
-                ).to.be.revertedWith(
-                    "[GP]: no tokens have passed unlock time or you have already claimed them"
+                ).to.be.revertedWithCustomError(
+                    governancePool,
+                    "GovernancePool__noVotingTokensAvailableForClaim"
                 );
             });
         });
@@ -785,8 +808,7 @@ describe("Governance Pool", async () => {
                         .voteAgainst(fakeInvestmentPool1.address, votesAgainst)
                 )
                     .to.emit(governancePool, "VoteAgainstProject")
-                    .withArgs(fakeInvestmentPool1.address, investorA.address, votesAgainst)
-                    .not.to.emit(governancePool, "FinishVoting");
+                    .withArgs(fakeInvestmentPool1.address, investorA.address, votesAgainst);
 
                 const status = await getInvestmentPoolStatus(fakeInvestmentPool1.address);
 
@@ -830,8 +852,9 @@ describe("Governance Pool", async () => {
                     governancePool
                         .connect(investorA)
                         .voteAgainst(fakeInvestmentPool1.address, votesAgainst)
-                ).to.be.revertedWith(
-                    "[GP]: investment pool is assigned with another status than active voting"
+                ).to.be.revertedWithCustomError(
+                    governancePool,
+                    "GovernancePool__statusIsNotActiveVoting"
                 );
             });
 
@@ -847,8 +870,9 @@ describe("Governance Pool", async () => {
                     governancePool
                         .connect(investorA)
                         .voteAgainst(fakeInvestmentPool1.address, votesAgainst)
-                ).to.be.revertedWith(
-                    "[GP]: investment pool is assigned with another status than active voting"
+                ).to.be.revertedWithCustomError(
+                    governancePool,
+                    "GovernancePool__statusIsNotActiveVoting"
                 );
             });
 
@@ -859,7 +883,7 @@ describe("Governance Pool", async () => {
 
                 await expect(
                     governancePool.connect(investorA).voteAgainst(fakeInvestmentPool1.address, 0)
-                ).to.be.revertedWith("[GP]: amount needs to be greater than 0");
+                ).to.be.revertedWithCustomError(governancePool, "GovernancePool__amountIsZero");
             });
 
             it("[GP][8.2.5] Should revert if investor does not have any voting tokens", async () => {
@@ -873,7 +897,10 @@ describe("Governance Pool", async () => {
                     governancePool
                         .connect(investorA)
                         .voteAgainst(fakeInvestmentPool1.address, votesAgainst)
-                ).to.be.revertedWith("[GP]: don't have any voting tokens");
+                ).to.be.revertedWithCustomError(
+                    governancePool,
+                    "GovernancePool__noVotingTokensOwned"
+                );
             });
 
             it("[GP][8.2.6] Should not be able to vote with more tokens than investor has", async () => {
@@ -892,11 +919,21 @@ describe("Governance Pool", async () => {
                     .connect(investorA)
                     .unlockVotingTokens(fakeInvestmentPool1.address);
 
+                const tokenBalance = await governancePool.getVotingTokenBalance(
+                    fakeInvestmentPool1.address,
+                    investorA.address
+                );
+
                 await expect(
                     governancePool
                         .connect(investorA)
                         .voteAgainst(fakeInvestmentPool1.address, votesAgainst)
-                ).to.be.revertedWith("[GP]: amount can't be greater than voting tokens balance");
+                )
+                    .to.be.revertedWithCustomError(
+                        governancePool,
+                        "GovernancePool__amountIsGreaterThanVotingTokensBalance"
+                    )
+                    .withArgs(votesAgainst, tokenBalance);
             });
 
             it("[GP][8.2.7] Should transfer voting tokens from investor to governance pool", async () => {
@@ -1070,8 +1107,9 @@ describe("Governance Pool", async () => {
                     governancePool
                         .connect(investorA)
                         .retractVotes(fakeInvestmentPool1.address, votesToRetract)
-                ).to.be.revertedWith(
-                    "[GP]: investment pool is assigned with another status than active voting"
+                ).to.be.revertedWithCustomError(
+                    governancePool,
+                    "GovernancePool__statusIsNotActiveVoting"
                 );
             });
 
@@ -1087,8 +1125,9 @@ describe("Governance Pool", async () => {
                     governancePool
                         .connect(investorA)
                         .retractVotes(fakeInvestmentPool1.address, votesToRetract)
-                ).to.be.revertedWith(
-                    "[GP]: investment pool is assigned with another status than active voting"
+                ).to.be.revertedWithCustomError(
+                    governancePool,
+                    "GovernancePool__statusIsNotActiveVoting"
                 );
             });
 
@@ -1099,7 +1138,7 @@ describe("Governance Pool", async () => {
 
                 await expect(
                     governancePool.connect(investorA).retractVotes(fakeInvestmentPool1.address, 0)
-                ).to.be.revertedWith("[GP]: retract amount neeeds to be greater than 0");
+                ).to.be.revertedWithCustomError(governancePool, "GovernancePool__amountIsZero");
             });
 
             it("[GP][9.2.5] Should revert if investor did not vote against the project", async () => {
@@ -1113,13 +1152,19 @@ describe("Governance Pool", async () => {
                     governancePool
                         .connect(investorA)
                         .retractVotes(fakeInvestmentPool1.address, votesToRetract)
-                ).to.be.revertedWith("[GP]: did't vote against the project");
+                ).to.be.revertedWithCustomError(
+                    governancePool,
+                    "GovernancePool__noVotesAgainstProject"
+                );
             });
 
             it("[GP][9.2.6] Should not be able to retract more voting tokens than investor has delegated for voting", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
                 const votesAgainst = ethers.utils.parseEther("0.4");
                 const votesToRetract = ethers.utils.parseEther("0.5");
+                const investmentPoolId = await governancePool.getInvestmentPoolId(
+                    fakeInvestmentPool1.address
+                );
 
                 await governancePool
                     .connect(fakeInvestmentPoolFactory)
@@ -1142,13 +1187,21 @@ describe("Governance Pool", async () => {
                     .connect(investorA)
                     .voteAgainst(fakeInvestmentPool1.address, votesAgainst);
 
+                const delegatedVotes = await governancePool.votesAmount(
+                    investorA.address,
+                    investmentPoolId
+                );
+
                 await expect(
                     governancePool
                         .connect(investorA)
                         .retractVotes(fakeInvestmentPool1.address, votesToRetract)
-                ).to.be.revertedWith(
-                    "[GP]: retract amount can't be greater than delegated for voting"
-                );
+                )
+                    .to.be.revertedWithCustomError(
+                        governancePool,
+                        "GovernancePool__amountIsGreaterThanDelegatedVotes"
+                    )
+                    .withArgs(votesToRetract, delegatedVotes);
             });
 
             it("[GP][9.2.7] Should transfer voting tokens from governance pool to investor", async () => {
