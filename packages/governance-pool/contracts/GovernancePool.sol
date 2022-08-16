@@ -22,7 +22,9 @@ error GovernancePool__amountIsGreaterThanDelegatedVotes(uint256 amount, uint256 
 error GovernancePool__totalSupplyIsZero();
 error GovernancePool__totalSupplyIsSmallerThanVotesAgainst(uint256 totalSupply, uint256 votes);
 error GovernancePool__noVotingTokensAvailableForClaim();
+error GovernancePool__tresholdNumberIsGreaterThan100();
 
+/// @title Governance Pool contract.
 contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     // ERC1155 contract where all voting tokens are stored
     VotingToken public immutable VOTING_TOKEN;
@@ -54,12 +56,21 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     event RetractVotes(address indexed investmentPool, address indexed investor, uint256 amount);
     event FinishVoting(address indexed investmentPool);
 
+    /** @notice Create new governance pool contract.
+     *  @dev Is called by DEPLOYER.
+     *  @param _votingToken address of ERC1155 token, which will be used for voting.
+     *  @param _investmentPoolFactory address of investment pool factory, which will deploy all investment pools.
+     *  @param _treshold number as percentage for votes treshold. Max value is 100.
+     *  @param _maxInvestments number of how many investments can one investor make for one investment pool.
+     *  @dev Reverts if _treshold is greater than 100 (%).
+     */
     constructor(
         VotingToken _votingToken,
         address _investmentPoolFactory,
         uint8 _treshold,
         uint8 _maxInvestments
     ) {
+        if (_treshold > 100) revert GovernancePool__tresholdNumberIsGreaterThan100();
         VOTING_TOKEN = _votingToken;
         INVESTMENT_POOL_FACTORY_ADDRESS = _investmentPoolFactory;
         VOTES_PERCENTAGE_TRESHOLD = _treshold;
@@ -67,36 +78,35 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     }
 
     modifier onUnavailableInvestmentPool(address _investmentPool) {
-        /// @dev reverts using custom error
-        if (!isInvestmentPoolUnavailable(_investmentPool))
+        if (!isInvestmentPoolUnavailable(_investmentPool)) {
             revert GovernancePool__statusIsNotUnavailable();
+        }
         _;
     }
 
     modifier onActiveInvestmentPool(address _investmentPool) {
-        /// @dev reverts using custom error
         if (!isInvestmentPoolVotingActive(_investmentPool))
             revert GovernancePool__statusIsNotActiveVoting();
         _;
     }
 
     modifier onVotedAgainstInvestmentPool(address _investmentPool) {
-        /// @dev reverts using custom error
         if (!isInvestmentPoolVotingFinished(_investmentPool))
             revert GovernancePool__statusIsNotVotedAgainst();
         _;
     }
 
     modifier onlyInvestmentPoolFactory() {
-        /// @dev reverts using custom error
         if (_msgSender() != INVESTMENT_POOL_FACTORY_ADDRESS)
             revert GovernancePool__notInvestmentPoolFactory();
         _;
     }
 
-    /** @notice Function will only be called once for every investment pool
-                at the contructor stage from the IP factory. 
-        @param _investmentPool investment pool address, which will be added to the active IPs mapping
+    /** @notice Activate voting process for given investment pool. It will only be called once for every investment pool at the creation stage stage.
+     *  @dev Is called by INVESTMENT POOL FACTORY.
+     *  @dev Emits ActiveVoting event with investment pool address.
+     *  @param _investmentPool investment pool address, which will be added to the active IPs mapping.
+     *  @dev Reverts if sender ir not investment pool factory, if status is not unavailable.
      */
     function activateInvestmentPool(address _investmentPool)
         external
@@ -109,18 +119,19 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         emit ActivateVoting(_investmentPool);
     }
 
-    /** @notice Mint new tokens for specified investment pool. Is called by investment pool contract
-        @param _investor account address for which voting tokens will be minted
-        @param _amount tokens amount to mint
-        @param _unlockTime time until newly minted tokens will be locked in governance pool.
-                No checks for time are applied. It can be in the past, which means tokens are unlock instantly
+    /** @notice Mint new tokens for specified investment pool. Tokens are held by governance pool contract until unlock time is reached.
+     *  @dev Is called by INVESTMENT POOL.
+     *  @dev Reverts if status is not active voting, amount to mint is zero.
+     *  @dev Voting Token contract emits TransferSingle event.
+     *  @param _investor account address for which voting tokens will be minted.
+     *  @param _amount tokens amount to mint.
+     *  @param _unlockTime time until newly minted tokens will be locked in governance pool. No checks for time are applied. It can be in the past, which means tokens are unlock instantly.
      */
     function mintVotingTokens(
         address _investor,
         uint256 _amount,
         uint256 _unlockTime
     ) external onActiveInvestmentPool(_msgSender()) {
-        /// @dev reverts using custom error
         if (_amount == 0) revert GovernancePool__amountIsZero();
         uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
 
@@ -129,8 +140,11 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         VOTING_TOKEN.mint(address(this), investmentPoolId, _amount, "");
     }
 
-    /** @notice Transfer voting tokens if lock period ended
-        @param _investmentPool investment pool address, which will be added to the active IPs mapping
+    /** @notice Transfer voting tokens if lock period ended.
+     *  @dev Is called by INVESTOR.
+     *  @dev Reverts if status is not active voting, if investor has zero investments, if all tokens are still locked.
+     *  @dev Emits UnlockVotingTokens event with investment pool address, sender, id, amount. Voting Token contract emits TransferSingle event.
+     *  @param _investmentPool investment pool address. Investor tries to unlock tokens for this investment pool.
      */
     function unlockVotingTokens(address _investmentPool)
         external
@@ -140,7 +154,6 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         TokensLocked[] memory lockedTokens = tokensLocked[_msgSender()][investmentPoolId];
         uint8 investmentsCount = uint8(lockedTokens.length);
 
-        /// @dev reverts using custom error
         if (investmentsCount == 0) revert GovernancePool__noIvestmentsMade();
         uint256 owedTokens = 0;
 
@@ -167,25 +180,25 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
                 ""
             );
         } else {
-            /// @dev reverts using custom error
             revert GovernancePool__noVotingTokensAvailableForClaim();
         }
     }
 
-    /** @notice Function transfers investor votes tokens to the smart contract
-        @param _investmentPool investment pool address
-        @param _amount tokens amount investor wants to vote with
-        @dev Before calling this function investor needs to approve spender with setApprovalForAll()
+    /** @notice Vote against the project by transfering investor vote tokens to the governance pool contract.
+     *  @notice Before calling this function investor needs to approve spender with 'votingToken.setApprovalForAll(governancePoolAddress, true)'.
+     *  @dev Is called by INVESTOR.
+     *  @dev Reverts if status is not active voting, if amount is zero, if investor doesn't own any tokens, if amount is greater than token balance.
+     *  @dev Emits VoteAgainstProject with investment pool address, sender, amount. If treshold reached emit FinishVoting with investment pool address.Voting Token contract emits TransferSingle event.
+     *  @param _investmentPool investment pool address, to which investor transfers tokens by voting against it.
+     *  @param _amount tokens amount investor wants to vote with.
      */
     function voteAgainst(address _investmentPool, uint256 _amount)
         external
         onActiveInvestmentPool(_investmentPool)
     {
-        /// @dev reverts using custom error
         if (_amount == 0) revert GovernancePool__amountIsZero();
         uint256 investorVotingTokenBalance = getVotingTokenBalance(_investmentPool, _msgSender());
 
-        /// @dev reverts using custom error
         if (investorVotingTokenBalance == 0) revert GovernancePool__noVotingTokensOwned();
         if (_amount > investorVotingTokenBalance)
             revert GovernancePool__amountIsGreaterThanVotingTokensBalance(
@@ -213,20 +226,21 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         }
     }
 
-    /** @notice Investors can retract votes tokens from the smart contract if voting is still active
-        @param _investmentPool investment pool address
-        @param _retractAmount tokens amount investor wants retract from votes
+    /** @notice Retract votes (voting tokens) from the governance pool if voting is still active.
+     *  @dev Is called by INVESTOR.
+     *  @dev Reverts if amount is zero, if investor has 0 votes against project, if given amount is greater than delegated votes.
+     *  @dev Emits RetractVotes event with investment pool address, sender, amount. Voting Token contract emits TransferSingle event.
+     *  @param _investmentPool investment pool address, from which to retract votes.
+     *  @param _retractAmount tokens amount investor wants retract from delegated votes.
      */
     function retractVotes(address _investmentPool, uint256 _retractAmount)
         external
         onActiveInvestmentPool(_investmentPool)
     {
-        /// @dev reverts using custom error
         if (_retractAmount == 0) revert GovernancePool__amountIsZero();
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         uint256 investorVotesAmount = votesAmount[_msgSender()][investmentPoolId];
 
-        /// @dev reverts using custom error
         if (investorVotesAmount == 0) revert GovernancePool__noVotesAgainstProject();
         if (_retractAmount > investorVotesAmount)
             revert GovernancePool__amountIsGreaterThanDelegatedVotes(
@@ -250,9 +264,9 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     }
 
     /** @notice Calculate the votes against to the total tokens supply percentage
-        @param _investmentPool investment pool address
-        @param _votesAgainst amount of token which will be used to calculate its percentage.
-        @return the percentage without any decimal places (e.g. 10; 62; 97)
+     *  @param _investmentPool investment pool address
+     *  @param _votesAgainst amount of tokens, which will be used to calculate its percentage.
+     *  @return uint8 -> the percentage without any decimal places (e.g. 10; 62; 97)
      */
     function votesAgainstPercentageCount(address _investmentPool, uint256 _votesAgainst)
         public
@@ -261,7 +275,6 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     {
         uint256 totalSupply = getVotingTokensSupply(_investmentPool);
 
-        /// @dev reverts using custom error
         if (totalSupply == 0) revert GovernancePool__totalSupplyIsZero();
         if (totalSupply < _votesAgainst)
             revert GovernancePool__totalSupplyIsSmallerThanVotesAgainst(
@@ -274,9 +287,9 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     }
 
     /** @notice Check if investor votes amount will reach the treshold needed for terminating the project
-        @param _investmentPool investment pool address
-        @param _investorVotesCount amount of tokens investor will send to the governance pool
-        @return if treshold will be reached or not
+     *  @param _investmentPool investment pool address
+     *  @param _investorVotesCount amount of tokens investor votes with.
+     *  @return bool -> if treshold will be reached or not
      */
     function willInvestorReachTreshold(address _investmentPool, uint256 _investorVotesCount)
         public
@@ -328,17 +341,17 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     }
 
     /** @notice Get tokens supply for investment pool token
-        @param _investmentPool investment pool address
-        @return total supply of tokens minted
+     *  @param _investmentPool investment pool address
+     *  @return uint256 -> total supply of tokens minted
      */
     function getVotingTokensSupply(address _investmentPool) public view returns (uint256) {
         return VOTING_TOKEN.totalSupply(getInvestmentPoolId(_investmentPool));
     }
 
     /** @notice Get balance of voting tokens for specified investor
-        @param _investmentPool investment pool address
-        @param _account address of the account to check
-        @return balance of tokens owned
+     *  @param _investmentPool investment pool address
+     *  @param _account address of the account to check
+     *  @return uint256 -> balance of tokens owned
      */
     function getVotingTokenBalance(address _investmentPool, address _account)
         public
@@ -349,8 +362,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     }
 
     /** @notice Get id value for ERC1155 voting token from it's address
-        @param _investmentPool investment pool address
-        @return investment pool id
+     *  @param _investmentPool investment pool address
+     * @return uint256 -> investment pool id
      */
     function getInvestmentPoolId(address _investmentPool) public pure returns (uint256) {
         return uint256(uint160(_investmentPool));
