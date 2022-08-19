@@ -32,13 +32,13 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     uint8 public immutable VOTES_PERCENTAGE_TRESHOLD;
     uint8 public immutable MAX_INVESTMENTS_FOR_INVESTOR_PER_POOL;
 
-    // mapping from investment pool id => status
+    /// @notice mapping from investment pool id => status
     mapping(uint256 => InvestmentPoolStatus) public investmentPoolStatus;
-    // mapping from investor address => investment pool id => voting tokens asmount
+    /// @notice mapping from investor address => investment pool id => voting tokens asmount
     mapping(address => mapping(uint256 => uint256)) public votesAmount;
-    // mapping from investor address => investment pool id => list of structs with unlock time and amount
+    /// @notice mapping from investor address => investment pool id => list of structs with unlock time and amount
     mapping(address => mapping(uint256 => TokensLocked[])) public tokensLocked;
-    // mapping from investment pool id => total votes amount
+    /// @notice mapping from investment pool id => total votes amount
     mapping(uint256 => uint256) public totalVotesAmount; // total contract balance is not only votes it holds but investors tokens which will be unlocked in the future
 
     event ActivateVoting(address indexed investmentPool);

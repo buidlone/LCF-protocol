@@ -53,7 +53,7 @@ const config: HardhatUserConfig = {
         path: "./docs",
         clear: true,
         runOnCompile: true,
-        only: ["contracts/GovernancePool.sol"],
+        only: ["contracts/GovernancePool.sol", "contracts/VotingToken.sol"],
     },
 };
 
