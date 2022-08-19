@@ -192,6 +192,7 @@ describe("Investment Pool", async () => {
 
   beforeEach(async () => {
     softCap = ethers.utils.parseEther("1500");
+    const hardCap = ethers.utils.parseEther("15000");
     milestoneStartDate = BigNumber.from(
       new Date("2022/09/01").getTime() / 1000
     );
@@ -204,10 +205,14 @@ describe("Investment Pool", async () => {
       .createInvestmentPool(
         fUSDTx.address,
         softCap,
+        hardCap,
         campaignStartDate,
         campaignEndDate,
         0, // NON-UPGRADEABLE
-        [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
+        [{ startDate: milestoneStartDate, endDate: milestoneEndDate,
+           intervalSeedPortion: 50000,
+           intervalStreamingPortion: 950000
+        }]
       );
 
     investment = await getInvestmentFromTx(creationRes);
@@ -451,7 +456,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         await expect(
-          investment.connect(investorA).invest(investedAmount)
+          investment.connect(investorA).invest(investedAmount, false)
         ).to.be.revertedWith("[IP]: not in fundraiser period");
       });
 
@@ -478,12 +483,13 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
         const investedFunds = await investment.investedAmount(
-          investorA.address
+          investorA.address,
+          0
         );
 
         assert.deepEqual(
@@ -528,12 +534,12 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
         // Request them back
-        await expect(investment.connect(investorA).unpledge(investedAmount))
+        await expect(investment.connect(investorA).unpledge(0, investedAmount))
           .to.emit(investment, "Unpledge")
           .withArgs(investorA.address, investedAmount);
 
@@ -572,13 +578,13 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
         // Request half of the funds back
         await expect(
-          investment.connect(investorA).unpledge(investedAmount.div(2))
+          investment.connect(investorA).unpledge(0, investedAmount.div(2))
         )
           .to.emit(investment, "Unpledge")
           .withArgs(investorA.address, investedAmount.div(2));
@@ -594,7 +600,7 @@ describe("Investment Pool", async () => {
           "Investor's balance should get half of invested funds back"
         );
 
-        const investedLeft = await investment.investedAmount(investorA.address);
+        const investedLeft = await investment.investedAmount(investorA.address, 0);
 
         assert.deepEqual(
           investedLeft,
@@ -619,14 +625,14 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
         // Request them back, but 1 wei more, should revert
         await expect(
-          investment.connect(investorA).unpledge(investedAmount.add(1))
-        ).to.be.revertedWith("[IP]: amount > invested");
+          investment.connect(investorA).unpledge(0, investedAmount.add(1))
+        ).to.be.revertedWith("[IP]: cannot unpledge this investment");
       });
 
       it("[IP][2.2.6] Investors should be able to collectively raise the soft cap", async () => {
@@ -645,7 +651,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -659,7 +665,7 @@ describe("Investment Pool", async () => {
           .exec(investorB);
 
         // Invest money
-        await expect(investment.connect(investorB).invest(investedAmount))
+        await expect(investment.connect(investorB).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorB.address, investedAmount);
 
@@ -684,14 +690,14 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
         // Note, the case testing unpledging more than investment is tested separately,
         // here we'll test that unpledging 0 does not change the balance
         await expect(
-          investment.connect(foreignActor).unpledge(BigNumber.from(0))
+          investment.connect(foreignActor).unpledge(0, BigNumber.from(0))
         )
           .to.emit(investment, "Unpledge")
           .withArgs(foreignActor.address, BigNumber.from(0));
@@ -724,13 +730,13 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
         // Try to refund
         await expect(investment.connect(investorA).refund()).to.be.revertedWith(
-          "[IP]: is not a failed campaign"
+          "[IP]: refund is not available"
         );
       });
     });
@@ -823,7 +829,7 @@ describe("Investment Pool", async () => {
         );
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -864,7 +870,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -894,7 +900,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -904,7 +910,7 @@ describe("Investment Pool", async () => {
 
         // Try to unpledge
         await expect(
-          investment.connect(investorA).unpledge(investedAmount)
+          investment.connect(investorA).unpledge(0, investedAmount)
         ).to.be.revertedWith("[IP]: not in fundraiser period");
       });
     });
@@ -929,7 +935,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -962,7 +968,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -995,7 +1001,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -1028,7 +1034,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -1071,7 +1077,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -1079,8 +1085,8 @@ describe("Investment Pool", async () => {
         timeStamp = new Date("2022/08/15").getTime() / 1000;
         await investment.setTimestamp(timeStamp);
 
-        await expect(investment.unpledge(investedAmount)).to.be.revertedWith(
-          "[IP]: not in fundraiser period"
+        await expect(investment.unpledge(0, investedAmount)).to.be.revertedWith(
+          "[IP]: cannot unpledge this investment"
         );
       });
 
@@ -1101,7 +1107,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -1111,7 +1117,7 @@ describe("Investment Pool", async () => {
         await investment.setTimestamp(timeStamp);
 
         await expect(investment.refund()).to.be.revertedWith(
-          "[IP]: is not a failed campaign"
+          "[IP]: refund is not available"
         );
       });
 
@@ -1132,7 +1138,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -1162,7 +1168,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -1192,7 +1198,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -1226,12 +1232,11 @@ describe("Investment Pool", async () => {
           })
           .exec(investorA);
 
-        // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+          
+          // Invest money
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
-
-        const votingPeriod = BigNumber.from(await investment.votingPeriod());
 
         // NOTE: Time traveling to 2022/09/15 when the milestone is active
         timeStamp = new Date("2022/09/15").getTime() / 1000;
@@ -1242,12 +1247,17 @@ describe("Investment Pool", async () => {
           .to.emit(investment, "Claim")
           .withArgs(0);
 
-        // NOTE: even though we cannot get precise time with the traveler,
-        // the investment contract itself creates flowrate, and uses the timestamp that was passed to it
-        // So it's ok to make calculations using it
-        // Calculate the desired flowrate, should match the one from contract
-        const timeLeft = milestoneEndDate.add(votingPeriod).sub(timeStamp);
-        const flowRate = investedAmount.div(timeLeft);
+          // NOTE: even though we cannot get precise time with the traveler,
+          // the investment contract itself creates flowrate, and uses the timestamp that was passed to it
+          // So it's ok to make calculations using it
+          // Calculate the desired flowrate, should match the one from contract
+          const timeLeft = milestoneEndDate.sub(timeStamp);
+          
+        const milestoneInfo = await investment.milestones(0);
+
+        const seedAmount = milestoneInfo.paidAmount;
+          
+        const flowRate = investedAmount.sub(seedAmount).div(timeLeft);
 
         const flowInfo = await sf.cfaV1.getFlow({
           superToken: fUSDTx.address,
@@ -1282,7 +1292,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -1320,7 +1330,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -1375,7 +1385,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -1452,7 +1462,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -1471,14 +1481,8 @@ describe("Investment Pool", async () => {
           await investment.terminationWindow()
         );
 
-        const votingPeriod = await BigNumber.from(
-          await investmentPoolFactory.VOTING_PERIOD()
-        );
-
         // Let's make sure we are in the termination window
-        // It is sometime at the end of a voting period
         timeStamp = milestoneEndDate
-          .add(votingPeriod)
           .sub(terminationWindow.div(2))
           .toNumber();
         // NOTE: Here we we want explicitly the chain reported time
@@ -1548,7 +1552,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -1611,14 +1615,12 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/09/15 when the milestone is active
         timeStamp = new Date("2022/09/15").getTime() / 1000;
-
-        const votingPeriod = BigNumber.from(await investment.votingPeriod());
 
         // NOTE: Here we we want explicitly the chain reported time
         await investment.setTimestamp(0);
@@ -1672,7 +1674,6 @@ describe("Investment Pool", async () => {
         // Calculate the desired flowrate, should match the one from contract
         // Use the timestamp source from the flow info for precision
         const timeLeft = milestoneEndDate
-          .add(votingPeriod)
           .sub(flowInfo.timestamp.getTime() / 1000);
         const flowRate = investedAmount.sub(streamedSoFar).div(timeLeft);
 
@@ -1707,14 +1708,12 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/09/15 when the milestone is active
         timeStamp = new Date("2022/09/15").getTime() / 1000;
-
-        const votingPeriod = BigNumber.from(await investment.votingPeriod());
 
         // NOTE: Here we we want explicitly the chain reported time
         await investment.setTimestamp(0);
@@ -1755,9 +1754,7 @@ describe("Investment Pool", async () => {
         );
 
         // Let's make sure we are in the termination window
-        // It is sometime at the end of a voting period
         timeStamp = milestoneEndDate
-          .add(votingPeriod)
           .sub(terminationWindow.div(2))
           .toNumber();
 
@@ -1817,14 +1814,12 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
         // NOTE: Time traveling to 2022/09/15 when the milestone is active
         timeStamp = new Date("2022/09/15").getTime() / 1000;
-
-        const votingPeriod = BigNumber.from(await investment.votingPeriod());
 
         // NOTE: Here we we want explicitly the chain reported time
         await investment.setTimestamp(0);
@@ -1865,9 +1860,7 @@ describe("Investment Pool", async () => {
         );
 
         // Let's make sure we are in the termination window
-        // It is sometime at the end of a voting period
         timeStamp = milestoneEndDate
-          .add(votingPeriod)
           .sub(terminationWindow.div(2))
           .toNumber();
 
@@ -1946,7 +1939,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -1965,25 +1958,18 @@ describe("Investment Pool", async () => {
           await investment.terminationWindow()
         );
 
-        const votingPeriod = await BigNumber.from(
-          await investmentPoolFactory.VOTING_PERIOD()
-        );
-
         // Let's make sure we are in the termination window
-        // It is sometime at the end of a voting period
         timeStamp = milestoneEndDate
-          .add(votingPeriod)
           .sub(terminationWindow.div(2))
           .toNumber();
         // NOTE: Here we we want explicitly the chain reported time
         await investment.setTimestamp(0);
         await traveler.advanceBlockAndSetTime(timeStamp);
 
-        await expect(
+        await
           investment
             .connect(foreignActor) // Anyone can terminate it, no access rights needed
-            .terminateMilestoneStreamFinal(0)
-        ).to.not.be.reverted;
+            .terminateMilestoneStreamFinal(0);
 
         const creatorBalance = BigNumber.from(
           await fUSDTx.balanceOf({
@@ -2037,7 +2023,7 @@ describe("Investment Pool", async () => {
           .exec(investorA);
 
         // Invest money
-        await expect(investment.connect(investorA).invest(investedAmount))
+        await expect(investment.connect(investorA).invest(investedAmount, false))
           .to.emit(investment, "Invest")
           .withArgs(investorA.address, investedAmount);
 
@@ -2056,14 +2042,8 @@ describe("Investment Pool", async () => {
           await investment.automatedTerminationWindow()
         );
 
-        const votingPeriod = await BigNumber.from(
-          await investmentPoolFactory.VOTING_PERIOD()
-        );
-
         // Let's make sure we are in the automated termination window
-        // It is sometime at the end of a voting period
         timeStamp = milestoneEndDate
-          .add(votingPeriod)
           .sub(automatedTerminationWindow.div(2))
           .toNumber();
 

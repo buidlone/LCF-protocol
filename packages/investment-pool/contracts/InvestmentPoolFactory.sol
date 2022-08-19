@@ -23,6 +23,8 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
     uint public constant MILESTONE_MIN_DURATION = 30 days;
     uint public constant FUNDRAISER_MAX_DURATION = 90 days;
 
+    uint256 public constant PERCENTAGE_DIVIDER = 10 ** 6;
+
     // TODO: Arbitrary choice, set this later to something that makes sense
     uint32 public constant MAX_MILESTONE_COUNT = 10;
 
@@ -42,6 +44,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
     function createInvestmentPool(
         ISuperToken _acceptedToken,
         uint96 _softCap,
+        uint96 _hardCap,
         uint48 _fundraiserStartAt,
         uint48 _fundraiserEndAt,
         Upgradability _upgradability,
@@ -53,6 +56,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
             _acceptedToken,
             _msgSender(),
             _softCap,
+            _hardCap,
             _fundraiserStartAt,
             _fundraiserEndAt,
             _milestones
@@ -76,9 +80,9 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
             _msgSender(),
             gelatoOps,
             _softCap,
+            _hardCap,
             _fundraiserStartAt,
             _fundraiserEndAt,
-            VOTING_PERIOD,
             TERMINATION_WINDOW,
             AUTOMATED_TERMINATION_WINDOW,
             _milestones
@@ -114,6 +118,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         address _creator,
         // solhint-disable-next-line no-unused-vars
         uint96 _softCap,
+        uint96 _hardCap,
         uint96 _fundraiserStartAt,
         uint96 _fundraiserEndAt,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
@@ -156,6 +161,8 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
             "[IPF]: invalid milestone interval"
         );
 
+        uint totalPercentage = _milestones[0].intervalSeedPortion + _milestones[0].intervalStreamingPortion;
+
         // Starting at index 1, since the first milestone has been checked already
         for (uint32 i = 1; i < _milestones.length; ++i) {
             require(
@@ -163,11 +170,18 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
                 "[IPF]: invalid milestone interval"
             );
             require(
-                (_milestones[i - 1].endDate + VOTING_PERIOD) <=
+                _milestones[i - 1].endDate ==
                     _milestones[i].startDate,
-                "[IPF]: milestones must not overlap, including voting period"
+                "[IPF]: milestones be adjacent in time"
             );
+            // TODO: Percentage limit validation for milestones
+            // Meaning - limit max percentage of seeding, for each milestone
+
+            totalPercentage += _milestones[i].intervalSeedPortion + _milestones[i].intervalStreamingPortion;
         }
+
+        require(totalPercentage == PERCENTAGE_DIVIDER, "[IPF]: Percentages must add up");
+
     }
     
     function _getNow() internal view virtual returns (uint256) {
