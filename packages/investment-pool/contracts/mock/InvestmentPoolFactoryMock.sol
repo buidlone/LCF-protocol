@@ -18,8 +18,8 @@ contract InvestmentPoolFactoryMock is InvestmentPoolFactory {
     uint256 public timestamp = 0;
 
     // solhint-disable-next-line no-empty-blocks
-    constructor(ISuperfluid _host, IGelatoOps _gelatoOps)
-        InvestmentPoolFactory(_host, _gelatoOps)
+    constructor(ISuperfluid _host, IGelatoOps _gelatoOps, address _implementationContract)
+        InvestmentPoolFactory(_host, _gelatoOps, _implementationContract)
     {}
 
     function setTimestamp(uint256 _timestamp) public {
@@ -30,17 +30,6 @@ contract InvestmentPoolFactoryMock is InvestmentPoolFactory {
         // TODO: ISuperfluid host can provide time with .getNow(), investigate that
         // solhint-disable-next-line not-rely-on-time
         return timestamp == 0 ? block.timestamp : timestamp;
-    }
-
-    function _deployLogic()
-        internal
-        virtual
-        override
-        returns (IInitializableInvestmentPool pool)
-    {
-        InvestmentPoolMock p = new InvestmentPoolMock();
-        p.setTimestamp(timestamp);
-        return p;
     }
 
     function _deployClone()

@@ -3,7 +3,11 @@ import { Framework, WrapperSuperToken } from "@superfluid-finance/sdk-core";
 import { BigNumber } from "ethers";
 import { ethers, web3 } from "hardhat";
 import { assert, expect } from "chai";
-import { InvestmentPoolFactoryMock, GelatoOpsMock } from "../typechain";
+import {
+  InvestmentPoolFactoryMock,
+  InvestmentPoolMock,
+  GelatoOpsMock,
+} from "../typechain";
 
 const fTokenAbi = require("./abis/fTokenAbi");
 
@@ -19,11 +23,12 @@ let fUSDTx: WrapperSuperToken;
 
 let accounts: SignerWithAddress[];
 let admin: SignerWithAddress;
-let dPatronAdmin: SignerWithAddress;
+let buidl1Admin: SignerWithAddress;
 let creator: SignerWithAddress;
 
 let sf: Framework;
 let investmentPoolFactory: InvestmentPoolFactoryMock;
+let investmentPool: InvestmentPoolMock;
 let gelatoOpsMock: GelatoOpsMock;
 
 function generateGaplessMilestones(
@@ -55,7 +60,7 @@ describe("Investment Pool Factory", async () => {
     accounts = await ethers.getSigners();
 
     admin = accounts[0];
-    dPatronAdmin = accounts[1];
+    buidl1Admin = accounts[1];
     creator = accounts[2];
 
     // deploy the framework
@@ -91,7 +96,7 @@ describe("Investment Pool Factory", async () => {
     // Create and deploy Gelato Ops contract mock
     const GelatoOpsMock = await ethers.getContractFactory(
       "GelatoOpsMock",
-      dPatronAdmin
+      buidl1Admin
     );
     gelatoOpsMock = await GelatoOpsMock.deploy();
     await gelatoOpsMock.deployed();
@@ -104,23 +109,32 @@ describe("Investment Pool Factory", async () => {
   });
 
   beforeEach(async () => {
+    // Create investment pool implementation contract
+    const investmentPoolDep = await ethers.getContractFactory(
+      "InvestmentPoolMock",
+      buidl1Admin
+    );
+
+    investmentPool = await investmentPoolDep.deploy();
+    await investmentPool.deployed();
+
     // Create investment pool factory contract
     const investmentPoolDepFactory = await ethers.getContractFactory(
       "InvestmentPoolFactoryMock",
-      dPatronAdmin
+      buidl1Admin
     );
 
     investmentPoolFactory = await investmentPoolDepFactory.deploy(
       sf.settings.config.hostAddress,
-      gelatoOpsMock.address
+      gelatoOpsMock.address,
+      investmentPool.address
     );
-
     await investmentPoolFactory.deployed();
 
     // Enforce a starting timestamp to avoid time based bugs
     const time = new Date("2022/06/01").getTime() / 1000;
     await investmentPoolFactory
-      .connect(dPatronAdmin)
+      .connect(buidl1Admin)
       .setTimestamp(BigNumber.from(time));
   });
 
@@ -128,7 +142,7 @@ describe("Investment Pool Factory", async () => {
     describe("1.1 Interactions", () => {
       const softCap: BigNumber = ethers.utils.parseEther("1500");
 
-      it("[IPF][1.1.1] Can create a NO-PROXY investment", async () => {
+      it("[IPF][1.1.1] Can create a CLONE-PROXY investment", async () => {
         const milestoneStartDate = BigNumber.from(
           new Date("2022/09/01").getTime() / 1000
         );
@@ -149,7 +163,7 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NO-PROXY
+            0, // CLONE-PROXY
             [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
           );
 
@@ -165,7 +179,7 @@ describe("Investment Pool Factory", async () => {
 
         const contractFactory = await ethers.getContractFactory(
           "InvestmentPoolMock",
-          dPatronAdmin
+          buidl1Admin
         );
 
         const pool = contractFactory.attach(poolAddress);
@@ -248,7 +262,7 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NO-PROXY
+            0, // CLONE-PROXY
             [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
           )
         ).to.be.reverted;
@@ -275,7 +289,7 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NO-PROXY
+            0, // CLONE-PROXY
             [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
           )
         ).to.be.reverted;
@@ -301,7 +315,7 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NO-PROXY
+            0, // CLONE-PROXY
             [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
           )
         ).to.be.reverted;
@@ -327,7 +341,7 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NO-PROXY
+            0, // CLONE-PROXY
             [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
           )
         ).to.be.reverted;
@@ -350,7 +364,7 @@ describe("Investment Pool Factory", async () => {
         // Move forward in time to simulate retrospective creation for fundraiser
         const time = new Date("2022/08/15").getTime() / 1000;
         await investmentPoolFactory
-          .connect(dPatronAdmin)
+          .connect(buidl1Admin)
           .setTimestamp(BigNumber.from(time));
 
         await expect(
@@ -359,7 +373,7 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NO-PROXY
+            0, // CLONE-PROXY
             [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
           )
         ).to.be.reverted;
@@ -384,7 +398,7 @@ describe("Investment Pool Factory", async () => {
         // Move forward in time to simulate retrospective creation for milestone
         const time = new Date("2022/09/15").getTime() / 1000;
         await investmentPoolFactory
-          .connect(dPatronAdmin)
+          .connect(buidl1Admin)
           .setTimestamp(BigNumber.from(time));
 
         await expect(
@@ -393,7 +407,7 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NO-PROXY
+            0, // CLONE-PROXY
             [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
           )
         ).to.be.reverted;
@@ -424,7 +438,7 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NO-PROXY
+            0, // CLONE-PROXY
             generateGaplessMilestones(
               milestoneStartDate,
               milestoneDuration,
@@ -468,7 +482,7 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NO-PROXY
+            0, // CLONE-PROXY
             milestones
           )
         ).to.not.be.reverted;
@@ -506,110 +520,10 @@ describe("Investment Pool Factory", async () => {
             softCap,
             campaignStartDate,
             campaignEndDate,
-            0, // NO-PROXY
+            0, // CLONE-PROXY
             milestones
           )
         ).to.be.reverted;
-      });
-
-      it("[IPF][1.1.11] Can create a CLONE-PROXY investment", async () => {
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        const milestoneEndDate = BigNumber.from(
-          new Date("2022/10/01").getTime() / 1000
-        );
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        const creationRes = await investmentPoolFactory
-          .connect(creator)
-          .createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            1, // CLONE-PROXY
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
-          );
-
-        const creationEvent = (await creationRes.wait(1)).events?.find(
-          (e) => e.event === "Created"
-        );
-
-        assert.isDefined(creationEvent, "Didn't emit creation event");
-
-        await expect(creationRes).to.emit(gelatoOpsMock, "RegisterGelatoTask");
-
-        const poolAddress = creationEvent?.args?.pool;
-
-        const contractFactory = await ethers.getContractFactory(
-          "InvestmentPoolMock",
-          dPatronAdmin
-        );
-
-        const pool = contractFactory.attach(poolAddress);
-
-        const creatorAddress = await pool.creator();
-        const invested = await pool.totalInvestedAmount();
-        const fundraiserStartAt = await pool.fundraiserStartAt();
-        const fundraiserEndAt = await pool.fundraiserEndAt();
-        const poolSoftCap = await pool.softCap();
-        const milestoneCount = await pool.milestoneCount();
-        const milestone = await pool.milestones(0);
-
-        // Verify the campaign variables
-        assert.equal(creatorAddress, creator.address, "Wrong creator address");
-        assert.deepEqual(poolSoftCap, softCap, "Wrong soft cap");
-        assert.deepEqual(
-          invested,
-          BigNumber.from(0),
-          "Should not have any investments yet"
-        );
-        assert.deepEqual(
-          BigNumber.from(fundraiserStartAt),
-          campaignStartDate,
-          "Wrong campaign start date"
-        );
-        assert.deepEqual(
-          BigNumber.from(fundraiserEndAt),
-          campaignEndDate,
-          "Wrong campaign end date"
-        );
-        assert.deepEqual(
-          milestoneCount,
-          BigNumber.from(1),
-          "Should have a single milestone"
-        );
-        assert.deepEqual(
-          BigNumber.from(milestone.startDate),
-          milestoneStartDate,
-          "Wrong milestone start date"
-        );
-        assert.deepEqual(
-          BigNumber.from(milestone.endDate),
-          milestoneEndDate,
-          "Wrong milestone end date"
-        );
-        assert.equal(
-          milestone.paid,
-          false,
-          "Milestone should not be paid initially"
-        );
-        assert.equal(
-          milestone.streamOngoing,
-          false,
-          "Stream should not be ongoing from the start"
-        );
-        assert.deepEqual(
-          milestone.paidAmount,
-          BigNumber.from(0),
-          "Should have paid 0 in funds upon creation"
-        );
       });
     });
   });

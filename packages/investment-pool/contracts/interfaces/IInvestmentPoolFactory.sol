@@ -11,7 +11,6 @@ interface IInvestmentPoolFactory {
      * @dev ProxyType modes
      */
     enum ProxyType {
-        NO_PROXY,
         CLONE_PROXY,
         // Not supported yet
         UUPS_PROXY

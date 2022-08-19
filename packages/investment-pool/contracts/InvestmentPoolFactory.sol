@@ -12,8 +12,9 @@ import "@openzeppelin/contracts/proxy/Clones.sol";
 import {IInvestmentPool, IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
 import {IInvestmentPoolFactory} from "./interfaces/IInvestmentPoolFactory.sol";
 import {IGelatoOps} from "./interfaces/IGelatoOps.sol";
-
 import {InvestmentPool} from "./InvestmentPool.sol";
+
+error InvestmentPoolFactory__addressIsZero();
 
 contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
     // Assign all Clones library functions to addresses
@@ -37,13 +38,20 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
     IGelatoOps public immutable GELATO_OPS;
     address internal investmentPoolImplementation;
 
-    constructor(ISuperfluid _host, IGelatoOps _gelatoOps) {
+    constructor(
+        ISuperfluid _host,
+        IGelatoOps _gelatoOps,
+        address _implementationContract
+    ) {
         assert(address(_host) != address(0));
+        if (address(0) == _implementationContract)
+            revert InvestmentPoolFactory__addressIsZero();
+
         HOST = _host;
         GELATO_OPS = _gelatoOps;
 
-        // Create Investment Pool logic contract
-        investmentPoolImplementation = address(_deployLogic());
+        // Assign Investment Pool logic contract
+        investmentPoolImplementation = _implementationContract;
     }
 
     function createInvestmentPool(
@@ -65,13 +73,10 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
             _milestones
         );
 
-        // The only one available so far
-        if (_proxyType == ProxyType.NO_PROXY) {
-            invPool = _deployLogic();
-        } else if (_proxyType == ProxyType.CLONE_PROXY) {
+        if (_proxyType == ProxyType.CLONE_PROXY) {
             invPool = _deployClone();
         } else {
-            revert("[IPF]: only NO_PROXY and CLONE_PROXY are supported");
+            revert("[IPF]: only CLONE_PROXY is supported");
         }
 
         invPool.initialize(
@@ -101,14 +106,6 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         emit Created(_msgSender(), address(invPool), _proxyType);
 
         return invPool;
-    }
-
-    function _deployLogic()
-        internal
-        virtual
-        returns (IInitializableInvestmentPool pool)
-    {
-        pool = new InvestmentPool();
     }
 
     function _deployClone()
