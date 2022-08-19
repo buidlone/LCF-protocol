@@ -1,13 +1,14 @@
 import * as dotenv from "dotenv";
 import {HardhatUserConfig, task} from "hardhat/config";
+import "@nomicfoundation/hardhat-chai-matchers";
 import "@nomiclabs/hardhat-etherscan";
-import "@nomiclabs/hardhat-waffle";
 import "@nomiclabs/hardhat-ethers";
 import "@nomiclabs/hardhat-web3";
 import "@typechain/hardhat";
 import "hardhat-gas-reporter";
 import "solidity-coverage";
 import "hardhat-deploy";
+import "hardhat-docgen";
 
 dotenv.config();
 
@@ -47,6 +48,12 @@ const config: HardhatUserConfig = {
     },
     etherscan: {
         apiKey: process.env.ETHERSCAN_API_KEY,
+    },
+    docgen: {
+        path: "./docs",
+        clear: true,
+        runOnCompile: true,
+        only: ["contracts/GovernancePool.sol", "contracts/VotingToken.sol"],
     },
 };
 
