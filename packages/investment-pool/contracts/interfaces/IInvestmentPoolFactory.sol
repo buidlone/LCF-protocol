@@ -8,21 +8,18 @@ import {IInvestmentPool} from "./IInvestmentPool.sol";
 
 interface IInvestmentPoolFactory {
     /**
-     * @dev Upgradability modes
+     * @dev ProxyType modes
      */
-    enum Upgradability {
-        // So far, only non-upgradeable deployments are supported (no-proxy)
-        NON_UPGRADABLE,
+    enum ProxyType {
+        CLONE_PROXY,
         // Not supported yet
-        UUPS_PROXY,
-        // Not supported yet
-        CLONE_PROXY
+        UUPS_PROXY
     }
 
     event Created(
         address indexed creator,
         address indexed pool,
-        Upgradability upgradability
+        ProxyType proxyType
     );
 
     function createInvestmentPool(
@@ -30,7 +27,7 @@ interface IInvestmentPoolFactory {
         uint96 _softCap,
         uint48 _fundraiserStartAt,
         uint48 _fundraiserEndAt,
-        Upgradability _upgradability,
+        ProxyType _proxyType,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
     ) external returns (IInvestmentPool);
 }
