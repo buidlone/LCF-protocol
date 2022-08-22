@@ -12,26 +12,51 @@ interface IInvestmentPool is ISuperApp {
         uint48 startDate;
         // End date of the milestone period
         uint48 endDate;
+
+        // Describes the portion of the total funds(all milestones),
+        // assigned as a seed portion for this milestone
+        // 100% == 10 ** 18
+        uint256 intervalSeedPortion;
+
+        // Describes the portion of the total funds(all milestones),
+        // assigned as a streaming portion for this milestone
+        // 100% == 10 ** 18
+        uint256 intervalStreamingPortion;
     }
 
     struct Milestone {
         uint48 startDate;
         uint48 endDate;
         bool paid;
+        bool seedAmountPaid;
         bool streamOngoing;
         uint256 paidAmount;
+
+        // Describes the portion of the total funds(all milestones),
+        // assigned as a seed portion for this milestone
+        // 100% == 10 ** 18
+        uint256 intervalSeedPortion;
+
+        // Describes the portion of the total funds(all milestones),
+        // assigned as a streaming portion for this milestone
+        // 100% == 10 ** 18
+        uint256 intervalStreamingPortion;
         // TODO: More fields here for internal state tracking
     }
 
-    function invest(uint256 _amount) external;
+    function invest(uint256 _amount, bool _strict) external;
 
-    function unpledge(uint256 _amount) external;
+    function unpledge(uint256 _milestoneId, uint256 _amount) external;
 
     function refund() external;
 
     function claim(uint256 _milestoneId) external;
 
     function terminateMilestoneStreamFinal(uint256 _milestoneId) external;
+
+    function cancel() external;
+
+    function milestoneJump() external;
 
     function isFundraiserOngoingNow() external view returns (bool);
 
@@ -70,9 +95,9 @@ interface IInitializableInvestmentPool is IInvestmentPool {
         address _creator,
         IGelatoOps _gelatoOps,
         uint96 _softCap,
+        uint96 _hardCap,
         uint48 _fundraiserStartAt,
         uint48 _fundraiserEndAt,
-        uint48 _votingPeriod,
         uint48 _terminationWindow,
         uint48 _automatedTerminationWindow,
         MilestoneInterval[] calldata _milestones

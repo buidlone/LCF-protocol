@@ -31,23 +31,32 @@ let investmentPoolFactory: InvestmentPoolFactoryMock;
 let investmentPool: InvestmentPoolMock;
 let gelatoOpsMock: GelatoOpsMock;
 
+let percentageDivider = BigNumber.from("1000000");
+
 function generateGaplessMilestones(
   startTimeStamp: BigNumber,
   duration: BigNumber,
-  votingPeriod: BigNumber,
   amount: number
-): { startDate: BigNumber; endDate: BigNumber }[] {
-  const arr: { startDate: BigNumber; endDate: BigNumber }[] = [];
+): { startDate: BigNumber; endDate: BigNumber, intervalSeedPortion :BigNumber, intervalStreamingPortion: BigNumber }[] {
+  const arr = [];
   let prevTimestamp = startTimeStamp;
 
   for (let i = 0; i < amount; i++) {
     const endDate = prevTimestamp.add(duration);
-    arr.push({ startDate: prevTimestamp, endDate: endDate });
-
-    prevTimestamp = endDate.add(votingPeriod);
+    arr.push({
+      startDate: prevTimestamp,
+      endDate: endDate,
+      intervalSeedPortion: percentToIpBigNumber(10).div(amount),
+      intervalStreamingPortion: percentToIpBigNumber(90).div(amount)
+   });
+   prevTimestamp = endDate;
   }
 
   return arr;
+}
+
+function percentToIpBigNumber(percent: number) : BigNumber {
+  return percentageDivider.mul(percent).div(100);
 }
 
 const errorHandler = (err: any) => {
@@ -140,9 +149,10 @@ describe("Investment Pool Factory", async () => {
 
   describe("1. Investment creation", () => {
     describe("1.1 Interactions", () => {
-      const softCap: BigNumber = ethers.utils.parseEther("1500");
+      it("[IPF][1.1.1] Can create a CLONE_PROXY investment", async function () {
+        const softCap = ethers.utils.parseEther("1500");
+        const hardCap = ethers.utils.parseEther("15000");
 
-      it("[IPF][1.1.1] Can create a CLONE-PROXY investment", async () => {
         const milestoneStartDate = BigNumber.from(
           new Date("2022/09/01").getTime() / 1000
         );
@@ -161,10 +171,16 @@ describe("Investment Pool Factory", async () => {
           .createInvestmentPool(
             fUSDTx.address,
             softCap,
+            hardCap,
             campaignStartDate,
             campaignEndDate,
             0, // CLONE-PROXY
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
+            [{
+               startDate: milestoneStartDate,
+               endDate: milestoneEndDate,
+               intervalSeedPortion: percentToIpBigNumber(10),
+               intervalStreamingPortion: percentToIpBigNumber(90)
+            }]
           );
 
         const creationEvent = (await creationRes.wait(1)).events?.find(
@@ -242,6 +258,9 @@ describe("Investment Pool Factory", async () => {
         );
       });
       it("[IPF][1.1.2] Reverts creation if fundraiser campaign ends before it starts", async () => {
+        const softCap = ethers.utils.parseEther("1500");
+        const hardCap = ethers.utils.parseEther("15000");
+
         const milestoneStartDate = BigNumber.from(
           new Date("2022/10/01").getTime() / 1000
         );
@@ -260,15 +279,24 @@ describe("Investment Pool Factory", async () => {
           investmentPoolFactory.connect(creator).createInvestmentPool(
             fUSDTx.address,
             softCap,
+            hardCap,
             campaignStartDate,
             campaignEndDate,
             0, // CLONE-PROXY
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
+            [{
+              startDate: milestoneStartDate,
+              endDate: milestoneEndDate,
+              intervalSeedPortion: percentToIpBigNumber(10),
+              intervalStreamingPortion: percentToIpBigNumber(90)
+           }]
           )
         ).to.be.reverted;
       });
 
       it("[IPF][1.1.3] Reverts creation if milestone ends before it starts", async () => {
+        const softCap = ethers.utils.parseEther("1500");
+        const hardCap = ethers.utils.parseEther("15000");
+
         // Milestone ends before it starts
         const milestoneStartDate = BigNumber.from(
           new Date("2022/09/10").getTime() / 1000
@@ -287,15 +315,24 @@ describe("Investment Pool Factory", async () => {
           investmentPoolFactory.connect(creator).createInvestmentPool(
             fUSDTx.address,
             softCap,
+            hardCap,
             campaignStartDate,
             campaignEndDate,
             0, // CLONE-PROXY
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
+            [{
+              startDate: milestoneStartDate,
+              endDate: milestoneEndDate,
+              intervalSeedPortion: percentToIpBigNumber(10),
+              intervalStreamingPortion: percentToIpBigNumber(90)
+           }]
           )
         ).to.be.reverted;
       });
 
       it("[IPF][1.1.4] Reverts creation if milestone is shorter than 30 days", async () => {
+        const softCap = ethers.utils.parseEther("1500");
+        const hardCap = ethers.utils.parseEther("15000");
+
         const milestoneStartDate = BigNumber.from(
           new Date("2022/09/01").getTime() / 1000
         );
@@ -313,15 +350,24 @@ describe("Investment Pool Factory", async () => {
           investmentPoolFactory.connect(creator).createInvestmentPool(
             fUSDTx.address,
             softCap,
+            hardCap,
             campaignStartDate,
             campaignEndDate,
             0, // CLONE-PROXY
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
+            [{
+              startDate: milestoneStartDate,
+              endDate: milestoneEndDate,
+              intervalSeedPortion: percentToIpBigNumber(10),
+              intervalStreamingPortion: percentToIpBigNumber(90)
+           }]
           )
         ).to.be.reverted;
       });
 
       it("[IPF][1.1.5] Reverts creation if fundraiser period is longer than 90 days", async () => {
+        const softCap = ethers.utils.parseEther("1500");
+        const hardCap = ethers.utils.parseEther("15000");
+
         const milestoneStartDate = BigNumber.from(
           new Date("2023/09/01").getTime() / 1000
         );
@@ -339,15 +385,24 @@ describe("Investment Pool Factory", async () => {
           investmentPoolFactory.connect(creator).createInvestmentPool(
             fUSDTx.address,
             softCap,
+            hardCap,
             campaignStartDate,
             campaignEndDate,
             0, // CLONE-PROXY
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
+            [{
+              startDate: milestoneStartDate,
+              endDate: milestoneEndDate,
+              intervalSeedPortion: percentToIpBigNumber(10),
+              intervalStreamingPortion: percentToIpBigNumber(90)
+           }]
           )
         ).to.be.reverted;
       });
 
       it("[IPF][1.1.6] Fundraiser interval cannot be retrospective", async () => {
+        const softCap = ethers.utils.parseEther("1500");
+        const hardCap = ethers.utils.parseEther("15000");
+
         const milestoneStartDate = BigNumber.from(
           new Date("2022/09/01").getTime() / 1000
         );
@@ -371,10 +426,16 @@ describe("Investment Pool Factory", async () => {
           investmentPoolFactory.connect(creator).createInvestmentPool(
             fUSDTx.address,
             softCap,
+            hardCap,
             campaignStartDate,
             campaignEndDate,
             0, // CLONE-PROXY
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
+            [{
+              startDate: milestoneStartDate,
+              endDate: milestoneEndDate,
+              intervalSeedPortion: percentToIpBigNumber(10),
+              intervalStreamingPortion: percentToIpBigNumber(90)
+           }]
           )
         ).to.be.reverted;
       });
@@ -382,6 +443,9 @@ describe("Investment Pool Factory", async () => {
       it("[IPF][1.1.7] Milestone interval cannot be retrospective", async () => {
         // Note, it's implicitly enforced by the requirements
         // on fundraiser campaign dates, but this test is here to prevent accidental code changes
+        const softCap = ethers.utils.parseEther("1500");
+        const hardCap = ethers.utils.parseEther("15000");
+
         const milestoneStartDate = BigNumber.from(
           new Date("2022/09/01").getTime() / 1000
         );
@@ -405,15 +469,24 @@ describe("Investment Pool Factory", async () => {
           investmentPoolFactory.connect(creator).createInvestmentPool(
             fUSDTx.address,
             softCap,
+            hardCap,
             campaignStartDate,
             campaignEndDate,
             0, // CLONE-PROXY
-            [{ startDate: milestoneStartDate, endDate: milestoneEndDate }]
+            [{
+              startDate: milestoneStartDate,
+              endDate: milestoneEndDate,
+              intervalSeedPortion: percentToIpBigNumber(10),
+              intervalStreamingPortion: percentToIpBigNumber(90)
+           }]
           )
         ).to.be.reverted;
       });
 
       it("[IPF][1.1.8] Respects milestone count limit", async () => {
+        const softCap = ethers.utils.parseEther("1500");
+        const hardCap = ethers.utils.parseEther("15000");
+
         const milestoneStartDate = BigNumber.from(
           new Date("2022/09/01").getTime() / 1000
         );
@@ -436,13 +509,13 @@ describe("Investment Pool Factory", async () => {
           investmentPoolFactory.connect(creator).createInvestmentPool(
             fUSDTx.address,
             softCap,
+            hardCap,
             campaignStartDate,
             campaignEndDate,
             0, // CLONE-PROXY
             generateGaplessMilestones(
               milestoneStartDate,
               milestoneDuration,
-              votingPeriod,
               maxMilestones + 1 // Intentionally provoke reverting
             )
           )
@@ -450,6 +523,9 @@ describe("Investment Pool Factory", async () => {
       });
 
       it("[IPF][1.1.9] Can create multiple milestones", async () => {
+        const softCap = ethers.utils.parseEther("1500");
+        const hardCap = ethers.utils.parseEther("15000");
+
         const milestoneStartDate = BigNumber.from(
           new Date("2022/09/01").getTime() / 1000
         );
@@ -472,59 +548,20 @@ describe("Investment Pool Factory", async () => {
         const milestones = generateGaplessMilestones(
           milestoneStartDate,
           milestoneDuration,
-          votingPeriod,
           maxMilestones // Let's create as many as it's allowed
         );
 
-        await expect(
-          investmentPoolFactory.connect(creator).createInvestmentPool(
+        await investmentPoolFactory.connect(creator).createInvestmentPool(
             fUSDTx.address,
             softCap,
+            hardCap,
             campaignStartDate,
             campaignEndDate,
             0, // CLONE-PROXY
             milestones
-          )
-        ).to.not.be.reverted;
+          );
       });
 
-      it("[IPF][1.1.10] Ensures minimal voting period and milestone spacing", async () => {
-        const milestoneStartDate = BigNumber.from(
-          new Date("2022/09/01").getTime() / 1000
-        );
-        // Campaign ends before it starts
-        const campaignStartDate = BigNumber.from(
-          new Date("2022/07/01").getTime() / 1000
-        );
-        const campaignEndDate = BigNumber.from(
-          new Date("2022/08/01").getTime() / 1000
-        );
-
-        // 30 days
-        const milestoneDuration = BigNumber.from(30 * 24 * 60 * 60);
-
-        const votingPeriod = BigNumber.from(
-          await investmentPoolFactory.VOTING_PERIOD()
-        );
-
-        const milestones = generateGaplessMilestones(
-          milestoneStartDate,
-          milestoneDuration,
-          votingPeriod.sub(1), // Make it one second less than minimal
-          2 // will be enough
-        );
-
-        await expect(
-          investmentPoolFactory.connect(creator).createInvestmentPool(
-            fUSDTx.address,
-            softCap,
-            campaignStartDate,
-            campaignEndDate,
-            0, // CLONE-PROXY
-            milestones
-          )
-        ).to.be.reverted;
-      });
     });
   });
 });

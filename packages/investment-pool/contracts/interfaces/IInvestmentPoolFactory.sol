@@ -25,6 +25,7 @@ interface IInvestmentPoolFactory {
     function createInvestmentPool(
         ISuperToken _acceptedToken,
         uint96 _softCap,
+        uint96 _hardCap,
         uint48 _fundraiserStartAt,
         uint48 _fundraiserEndAt,
         ProxyType _proxyType,
