@@ -7,7 +7,7 @@ import {
   InvestmentPoolFactoryMock,
   InvestmentPoolMock,
   GelatoOpsMock,
-} from "../typechain";
+} from "../typechain-types";
 import traveler from "ganache-time-traveler";
 
 // const { toWad } = require("@decentral.ee/web3-helpers");
@@ -122,13 +122,11 @@ describe("Investment Pool", async () => {
     console.log("fUSDT  Address: ", fUSDTAddress);
     console.log("fUSDTx Address: ", fUSDTxAddress);
 
-    // initialize the superfluid framework...put custom and web3 only bc we are using hardhat locally
     sf = await Framework.create({
-      networkName: "custom",
+      resolverAddress: process.env.RESOLVER_ADDRESS,
+      chainId: 31337,
       provider,
-      dataMode: "WEB3_ONLY",
-      resolverAddress: process.env.RESOLVER_ADDRESS, // resolver address will be set to the env by the framework deployer
-      protocolReleaseVersion: "test",
+      protocolReleaseVersion: "test"
     });
 
     // Create and deploy Gelato Ops contract mock
