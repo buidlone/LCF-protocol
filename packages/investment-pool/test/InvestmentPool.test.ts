@@ -31,7 +31,7 @@ let fUSDTx: WrapperSuperToken;
 
 let accounts: SignerWithAddress[];
 let admin: SignerWithAddress;
-let dPatronAdmin: SignerWithAddress;
+let buidl1Admin: SignerWithAddress;
 let creator: SignerWithAddress;
 let investorA: SignerWithAddress;
 let investorB: SignerWithAddress;
@@ -72,7 +72,7 @@ const getInvestmentFromTx = async (
 
   const contractFactory = await ethers.getContractFactory(
     "InvestmentPoolMock",
-    dPatronAdmin
+    buidl1Admin
   );
 
   const pool = contractFactory.attach(poolAddress);
@@ -93,7 +93,7 @@ describe("Investment Pool", async () => {
     accounts = await ethers.getSigners();
 
     admin = accounts[0];
-    dPatronAdmin = accounts[1];
+    buidl1Admin = accounts[1];
     creator = accounts[2];
     investorA = accounts[3];
     investorB = accounts[4];
@@ -134,7 +134,7 @@ describe("Investment Pool", async () => {
     // Create and deploy Gelato Ops contract mock
     const GelatoOpsMock = await ethers.getContractFactory(
       "GelatoOpsMock",
-      dPatronAdmin
+      buidl1Admin
     );
     gelatoOpsMock = await GelatoOpsMock.deploy();
     await gelatoOpsMock.deployed();
@@ -145,23 +145,32 @@ describe("Investment Pool", async () => {
 
     fUSDT = new ethers.Contract(underlyingAddr, fTokenAbi, admin);
 
+    // Create investment pool implementation contract
+    const investmentPoolDep = await ethers.getContractFactory(
+      "InvestmentPoolMock",
+      buidl1Admin
+    );
+
+    const investmentPool = await investmentPoolDep.deploy();
+    await investmentPool.deployed();
+
     // Create investment pool factory contract
     const investmentPoolDepFactory = await ethers.getContractFactory(
       "InvestmentPoolFactoryMock",
-      dPatronAdmin
+      buidl1Admin
     );
 
     investmentPoolFactory = await investmentPoolDepFactory.deploy(
       sf.settings.config.hostAddress,
-      gelatoOpsMock.address
+      gelatoOpsMock.address,
+      investmentPool.address
     );
-
     await investmentPoolFactory.deployed();
 
     // Enforce a starting timestamp to avoid time based bugs
     const time = new Date("2022/06/01").getTime() / 1000;
     await investmentPoolFactory
-      .connect(dPatronAdmin)
+      .connect(buidl1Admin)
       .setTimestamp(BigNumber.from(time));
 
     const totalAmount = INVESTOR_INITIAL_FUNDS.mul(investors.length);
@@ -208,7 +217,7 @@ describe("Investment Pool", async () => {
         hardCap,
         campaignStartDate,
         campaignEndDate,
-        0, // NON-UPGRADEABLE
+        0, // CLONE-PROXY
         [{ startDate: milestoneStartDate, endDate: milestoneEndDate,
            intervalSeedPortion: 50000,
            intervalStreamingPortion: 950000
@@ -342,7 +351,7 @@ describe("Investment Pool", async () => {
         // Enforce a timestamp before campaign start
         const time = new Date("2022/06/15").getTime() / 1000;
         await investment
-          .connect(dPatronAdmin)
+          .connect(buidl1Admin)
           .setTimestamp(BigNumber.from(time));
 
         await expect(investment.connect(creator).cancel()).to.emit(
@@ -355,7 +364,7 @@ describe("Investment Pool", async () => {
         // Enforce a timestamp before campaign start
         const time = new Date("2022/06/15").getTime() / 1000;
         await investment
-          .connect(dPatronAdmin)
+          .connect(buidl1Admin)
           .setTimestamp(BigNumber.from(time));
 
         await expect(
@@ -372,7 +381,7 @@ describe("Investment Pool", async () => {
         // Fundraiser has already started by now
         const time = new Date("2022/07/15").getTime() / 1000;
         await investment
-          .connect(dPatronAdmin)
+          .connect(buidl1Admin)
           .setTimestamp(BigNumber.from(time));
 
         await expect(investment.connect(creator).cancel()).to.be.revertedWith(
@@ -1761,7 +1770,7 @@ describe("Investment Pool", async () => {
         await investment.setTimestamp(0);
         await traveler.advanceBlockAndSetTime(timeStamp);
 
-        await expect(investment.terminateMilestoneStreamFinal(0)).to.not.be
+        await expect(investment.terminateMilestoneStreamFinal(0)).not.to.be
           .reverted;
 
         const milestone = await investment.milestones(0);

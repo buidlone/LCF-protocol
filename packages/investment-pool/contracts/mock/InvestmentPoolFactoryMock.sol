@@ -1,9 +1,10 @@
-// @ DPATRON 2022
+// @ buidl.one 2022
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.9;
 
 import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
+import "@openzeppelin/contracts/proxy/Clones.sol";
 import {IInitializableInvestmentPool} from "../interfaces/IInvestmentPool.sol";
 import {IGelatoOps} from "../interfaces/IGelatoOps.sol";
 
@@ -11,11 +12,14 @@ import {InvestmentPoolFactory} from "../InvestmentPoolFactory.sol";
 import {InvestmentPoolMock} from "./InvestmentPoolMock.sol";
 
 contract InvestmentPoolFactoryMock is InvestmentPoolFactory {
+    // Assign all Clones library functions to addresses
+    using Clones for address;
+
     uint256 public timestamp = 0;
 
     // solhint-disable-next-line no-empty-blocks
-    constructor(ISuperfluid _host, IGelatoOps _gelatoOps)
-        InvestmentPoolFactory(_host, _gelatoOps)
+    constructor(ISuperfluid _host, IGelatoOps _gelatoOps, address _implementationContract)
+        InvestmentPoolFactory(_host, _gelatoOps, _implementationContract)
     {}
 
     function setTimestamp(uint256 _timestamp) public {
@@ -28,13 +32,15 @@ contract InvestmentPoolFactoryMock is InvestmentPoolFactory {
         return timestamp == 0 ? block.timestamp : timestamp;
     }
 
-    function _deployLogic()
+    function _deployClone()
         internal
         virtual
         override
         returns (IInitializableInvestmentPool pool)
     {
-        InvestmentPoolMock p = new InvestmentPoolMock();
+        InvestmentPoolMock p = InvestmentPoolMock(
+            investmentPoolImplementation.clone()
+        );
         p.setTimestamp(timestamp);
         return p;
     }

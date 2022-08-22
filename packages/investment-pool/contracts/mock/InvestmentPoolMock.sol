@@ -1,10 +1,10 @@
-// @ DPATRON 2022
+// @ buidl.one 2022
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.9;
 
 import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
-import { InvestmentPool } from "../InvestmentPool.sol";
+import {InvestmentPool} from "../InvestmentPool.sol";
 
 contract InvestmentPoolMock is InvestmentPool {
     uint256 timestamp = 0;
@@ -13,7 +13,7 @@ contract InvestmentPoolMock is InvestmentPool {
         timestamp = _timestamp;
     }
 
-    function _getNow() internal view virtual override returns(uint256) {
+    function _getNow() internal view virtual override returns (uint256) {
         // TODO: ISuperfluid host can provide time with .getNow(), investigate that
         // solhint-disable-next-line not-rely-on-time
         return timestamp == 0 ? block.timestamp : timestamp;

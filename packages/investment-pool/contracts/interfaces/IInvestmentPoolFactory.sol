@@ -1,4 +1,4 @@
-// @ DPATRON 2022
+// @ buidl.one 2022
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.9;
@@ -8,20 +8,19 @@ import {IInvestmentPool} from "./IInvestmentPool.sol";
 
 interface IInvestmentPoolFactory {
     /**
-     * @dev Upgradability modes
+     * @dev ProxyType modes
      */
-    enum Upgradability {
-        // So far, only non-upgradeable deployments are supported (no-proxy)
-        NON_UPGRADABLE,
-
+    enum ProxyType {
+        CLONE_PROXY,
         // Not supported yet
-        UUPS_PROXY,
-
-        // Not supported yet
-        CLONE_PROXY
+        UUPS_PROXY
     }
 
-    event Created(address indexed creator, address indexed pool, Upgradability upgradability);
+    event Created(
+        address indexed creator,
+        address indexed pool,
+        ProxyType proxyType
+    );
 
     function createInvestmentPool(
         ISuperToken _acceptedToken,
@@ -29,7 +28,7 @@ interface IInvestmentPoolFactory {
         uint96 _hardCap,
         uint48 _fundraiserStartAt,
         uint48 _fundraiserEndAt,
-        Upgradability _upgradability,
+        ProxyType _proxyType,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
     ) external returns (IInvestmentPool);
 }

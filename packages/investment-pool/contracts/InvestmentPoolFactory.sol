@@ -1,4 +1,4 @@
-// @ DPATRON 2022
+// @ buidl.one 2022
 // SPDX-License-Identifier: MIT
 
 pragma solidity ^0.8.9;
@@ -8,14 +8,18 @@ import {ISuperfluid, ISuperToken, ISuperApp, SuperAppDefinitions} from "@superfl
 
 // Openzepelin imports
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
-
+import "@openzeppelin/contracts/proxy/Clones.sol";
 import {IInvestmentPool, IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
 import {IInvestmentPoolFactory} from "./interfaces/IInvestmentPoolFactory.sol";
 import {IGelatoOps} from "./interfaces/IGelatoOps.sol";
-
 import {InvestmentPool} from "./InvestmentPool.sol";
 
+error InvestmentPoolFactory__addressIsZero();
+
 contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
+    // Assign all Clones library functions to addresses
+    using Clones for address;
+
     uint48 public constant VOTING_PERIOD = 7 days;
     uint48 public constant TERMINATION_WINDOW = 12 hours;
     uint48 public constant AUTOMATED_TERMINATION_WINDOW = 1 hours;
@@ -32,13 +36,24 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
        variables are added APPEND-ONLY. Re-ordering variables can
        permanently BREAK the deployed proxy contract. */
 
-    ISuperfluid public host;
-    IGelatoOps public gelatoOps;
+    ISuperfluid public immutable HOST;
+    IGelatoOps public immutable GELATO_OPS;
+    address internal investmentPoolImplementation;
 
-    constructor(ISuperfluid _host, IGelatoOps _gelatoOps) {
+    constructor(
+        ISuperfluid _host,
+        IGelatoOps _gelatoOps,
+        address _implementationContract
+    ) {
         assert(address(_host) != address(0));
-        host = _host;
-        gelatoOps = _gelatoOps;
+        if (address(0) == _implementationContract)
+            revert InvestmentPoolFactory__addressIsZero();
+
+        HOST = _host;
+        GELATO_OPS = _gelatoOps;
+
+        // Assign Investment Pool logic contract
+        investmentPoolImplementation = _implementationContract;
     }
 
     function createInvestmentPool(
@@ -47,12 +62,12 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         uint96 _hardCap,
         uint48 _fundraiserStartAt,
         uint48 _fundraiserEndAt,
-        Upgradability _upgradability,
+        ProxyType _proxyType,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
     ) external returns (IInvestmentPool) {
         IInitializableInvestmentPool invPool;
         _assertPoolInitArguments(
-            host,
+            HOST,
             _acceptedToken,
             _msgSender(),
             _softCap,
@@ -62,23 +77,17 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
             _milestones
         );
 
-        // The only one available so far
-        if (_upgradability == Upgradability.NON_UPGRADABLE) {
-            invPool = _deployLogic();
-        }
-        // Other supported types will just deploy a proxy to an existing logic contract
-        // Perhaps clones can be used here for super cheap deployments
-        else {
-            revert(
-                "[IPF]: only NON_UPGRADABLE is supported"
-            );
+        if (_proxyType == ProxyType.CLONE_PROXY) {
+            invPool = _deployClone();
+        } else {
+            revert("[IPF]: only CLONE_PROXY is supported");
         }
 
         invPool.initialize(
-            host,
+            HOST,
             _acceptedToken,
             _msgSender(),
-            gelatoOps,
+            GELATO_OPS,
             _softCap,
             _hardCap,
             _fundraiserStartAt,
@@ -96,19 +105,21 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
             SuperAppDefinitions.AFTER_AGREEMENT_CREATED_NOOP |
             SuperAppDefinitions.AFTER_AGREEMENT_UPDATED_NOOP;
 
-        host.registerAppByFactory(invPool, configWord);
+        HOST.registerAppByFactory(invPool, configWord);
 
-        emit Created(_msgSender(), address(invPool), _upgradability);
+        emit Created(_msgSender(), address(invPool), _proxyType);
 
         return invPool;
     }
 
-    function _deployLogic()
+    function _deployClone()
         internal
         virtual
         returns (IInitializableInvestmentPool pool)
     {
-        pool = new InvestmentPool();
+        pool = IInitializableInvestmentPool(
+            investmentPoolImplementation.clone()
+        );
     }
 
     function _assertPoolInitArguments(
@@ -163,15 +174,15 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
 
         uint totalPercentage = _milestones[0].intervalSeedPortion + _milestones[0].intervalStreamingPortion;
 
+        require(
+            _validateMilestoneInterval(_milestones[0]),
+            "[IPF]: invalid milestone interval"
+        );
         // Starting at index 1, since the first milestone has been checked already
         for (uint32 i = 1; i < _milestones.length; ++i) {
+
             require(
-                _validateMilestoneInterval(_milestones[0]),
-                "[IPF]: invalid milestone interval"
-            );
-            require(
-                _milestones[i - 1].endDate ==
-                    _milestones[i].startDate,
+                _milestones[i - 1].endDate == _milestones[i].startDate,
                 "[IPF]: milestones be adjacent in time"
             );
             // TODO: Percentage limit validation for milestones
@@ -183,9 +194,9 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         require(totalPercentage == PERCENTAGE_DIVIDER, "[IPF]: Percentages must add up");
 
     }
-    
+
     function _getNow() internal view virtual returns (uint256) {
-        // TODO: ISuperfluid host can provide time with .getNow(), investigate that
+        // TODO: ISuperfluid HOST can provide time with .getNow(), investigate that
         // solhint-disable-next-line not-rely-on-time
         return block.timestamp;
     }
