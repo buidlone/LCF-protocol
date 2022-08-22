@@ -12,16 +12,6 @@
 
 > The governance pool allows for a more streamlined and efficient project management process, ensuring that all deadlines are met.
 
-## Usage
-
-Run Governance pool locally:
-
-```
-npm i
-npm run build
-npm run deploy:local
-```
-
 ## Working principles
 
 1. Each project will have its own id and ERC1155 token in a Governance pool, and investor votes will be represented by voting tokens.
