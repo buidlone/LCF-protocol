@@ -41,7 +41,6 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
     // Assign all Clones library functions to addresses
     using Clones for address;
 
-    uint48 public constant VOTING_PERIOD = 7 days;
     uint48 public constant TERMINATION_WINDOW = 12 hours;
     uint48 public constant AUTOMATED_TERMINATION_WINDOW = 1 hours;
     uint public constant MILESTONE_MIN_DURATION = 30 days;

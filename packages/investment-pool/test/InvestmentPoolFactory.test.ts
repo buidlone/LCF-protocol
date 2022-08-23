@@ -4,9 +4,9 @@ import {BigNumber, constants} from "ethers";
 import {ethers, web3} from "hardhat";
 import {assert, expect} from "chai";
 import {
-  InvestmentPoolFactoryMock,
-  InvestmentPoolMock,
-  GelatoOpsMock,
+    InvestmentPoolFactoryMock,
+    InvestmentPoolMock,
+    GelatoOpsMock,
 } from "../typechain-types";
 
 const fTokenAbi = require("./abis/fTokenAbi");
@@ -113,10 +113,10 @@ describe("Investment Pool Factory", async () => {
 
         // initialize the superfluid framework...put custom and web3 only bc we are using hardhat locally
         sf = await Framework.create({
-          resolverAddress: process.env.RESOLVER_ADDRESS,
-          chainId: 31337,
-          provider,
-          protocolReleaseVersion: "test"
+            resolverAddress: process.env.RESOLVER_ADDRESS,
+            chainId: 31337,
+            provider,
+            protocolReleaseVersion: "test",
         });
 
         // Create and deploy Gelato Ops contract mock
@@ -402,7 +402,7 @@ describe("Investment Pool Factory", async () => {
                     false,
                     "Milestone should not be paid initially"
                 );
-                assert.deepEqual(
+                assert.equal(
                     milestone.seedAmountPaid,
                     false,
                     "Seed funds should not be paid initially"
@@ -850,5 +850,4 @@ describe("Investment Pool Factory", async () => {
             });
         });
     });
-
 });
