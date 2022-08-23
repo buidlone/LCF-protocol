@@ -674,7 +674,7 @@
     "@nodelib/fs.scandir" "2.1.5"
     fastq "^1.6.0"
 
-"@nomicfoundation/hardhat-chai-matchers@^1.0.0":
+"@nomicfoundation/hardhat-chai-matchers@^1.0.0", "@nomicfoundation/hardhat-chai-matchers@^1.0.3":
   version "1.0.3"
   resolved "https://registry.yarnpkg.com/@nomicfoundation/hardhat-chai-matchers/-/hardhat-chai-matchers-1.0.3.tgz#a48ed0a3a58de616e4f553368d79c13a8850ebd5"
   integrity sha512-qEE7Drs2HSY+krH09TXm6P9LFogs0BqbUq6wPD7nQRhmJ+p5zoDaIZjM5WL1pHqU5MpGqya3y+BdwmTYBfU5UA==
@@ -698,7 +698,7 @@
   resolved "https://registry.yarnpkg.com/@nomicfoundation/hardhat-toolbox/-/hardhat-toolbox-1.0.2.tgz#342b79e19c456a56d8e76bc2e9cc8474cbcfc774"
   integrity sha512-8CEgWSKUK2aMit+76Sez8n7UB0Ze1lwT+LcWxj4EFP30lQWOwOws048t6MTPfThH0BlSWjC6hJRr0LncIkc1Sw==
 
-"@nomiclabs/hardhat-ethers@^2.0.0":
+"@nomiclabs/hardhat-ethers@^2.0.0", "@nomiclabs/hardhat-ethers@^2.0.2":
   version "2.1.1"
   resolved "https://registry.yarnpkg.com/@nomiclabs/hardhat-ethers/-/hardhat-ethers-2.1.1.tgz#3f1d1ab49813d1bae4c035cc1adec224711e528b"
   integrity sha512-Gg0IFkT/DW3vOpih4/kMjeZCLYqtfgECLeLXTs7ZDPzcK0cfoc5wKk4nq5n/izCUzdhidO/Utd6ptF9JrWwWVA==
@@ -1059,7 +1059,7 @@
     fs-extra "^9.1.0"
     lodash "^4.17.15"
 
-"@types/abstract-leveldown@*":
+"@types/abstract-leveldown@*", "@types/abstract-leveldown@^7.2.0":
   version "7.2.0"
   resolved "https://registry.yarnpkg.com/@types/abstract-leveldown/-/abstract-leveldown-7.2.0.tgz#f055979a99f7654e84d6b8e6267419e9c4cfff87"
   integrity sha512-q5veSX6zjUy/DlDhR4Y4cU0k2Ar+DT2LUraP00T19WLmTO6Se1djepCCaqU6nQrwcJ5Hyo/CWqxTzrrFg8eqbQ==
@@ -4070,7 +4070,7 @@ ethers@^4.0.32, ethers@^4.0.40:
     uuid "2.0.1"
     xmlhttprequest "1.8.0"
 
-ethers@^5.0.13, ethers@^5.4.7, ethers@^5.5.3, ethers@^5.6.8:
+ethers@^5.0.13, ethers@^5.4.7, ethers@^5.5.3, ethers@^5.6.6, ethers@^5.6.8:
   version "5.7.0"
   resolved "https://registry.yarnpkg.com/ethers/-/ethers-5.7.0.tgz#0055da174b9e076b242b8282638bc94e04b39835"
   integrity sha512-5Xhzp2ZQRi0Em+0OkOcRHxPzCfoBfgtOQA+RUylSkuHbhTEaQklnYi2hsWbRgs3ztJsXVXd9VKBcO1ScWL8YfA==

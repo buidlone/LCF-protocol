@@ -1,6 +1,9 @@
 import "dotenv/config";
 import { HardhatUserConfig, task } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
+import "@nomicfoundation/hardhat-chai-matchers";
+import "@nomiclabs/hardhat-etherscan";
+import "@nomiclabs/hardhat-ethers";
 import "@nomiclabs/hardhat-web3";
 import "hardhat-gas-reporter";
 import "solidity-coverage";
