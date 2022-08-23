@@ -1,7 +1,7 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ethers, network} from "hardhat";
 import {assert, expect} from "chai";
-import {VotingToken, GovernancePoolMock} from "../../typechain";
+import {VotingToken, GovernancePoolMock} from "../../typechain-types";
 import traveler from "ganache-time-traveler";
 import {BigNumber} from "ethers";
 
@@ -1061,7 +1061,7 @@ describe("Governance Pool", async () => {
                     governancePool
                         .connect(investorA)
                         .voteAgainst(fakeInvestmentPool1.address, votesAgainst)
-                ).to.be.revertedWith("ERC1155: caller is not owner nor approved");
+                ).to.be.revertedWith("ERC1155: caller is not token owner nor approved");
             });
             it("[GP][8.2.9] Should be able to vote with all of the tokens", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");

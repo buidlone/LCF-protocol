@@ -4,10 +4,10 @@ import {BigNumber, constants} from "ethers";
 import {ethers, web3} from "hardhat";
 import {assert, expect} from "chai";
 import {
-    InvestmentPoolFactoryMock,
-    InvestmentPoolMock,
-    GelatoOpsMock,
-} from "../typechain";
+  InvestmentPoolFactoryMock,
+  InvestmentPoolMock,
+  GelatoOpsMock,
+} from "../typechain-types";
 
 const fTokenAbi = require("./abis/fTokenAbi");
 
@@ -73,7 +73,7 @@ const errorHandler = (err: any) => {
     if (err) throw err;
 };
 
-describe.only("Investment Pool Factory", async () => {
+describe("Investment Pool Factory", async () => {
     before(async () => {
         // get accounts from hardhat
         accounts = await ethers.getSigners();
@@ -113,11 +113,10 @@ describe.only("Investment Pool Factory", async () => {
 
         // initialize the superfluid framework...put custom and web3 only bc we are using hardhat locally
         sf = await Framework.create({
-            networkName: "custom",
-            provider,
-            dataMode: "WEB3_ONLY",
-            resolverAddress: process.env.RESOLVER_ADDRESS, // resolver address will be set to the env by the framework deployer
-            protocolReleaseVersion: "test",
+          resolverAddress: process.env.RESOLVER_ADDRESS,
+          chainId: 31337,
+          provider,
+          protocolReleaseVersion: "test"
         });
 
         // Create and deploy Gelato Ops contract mock
@@ -851,4 +850,5 @@ describe.only("Investment Pool Factory", async () => {
             });
         });
     });
+
 });
