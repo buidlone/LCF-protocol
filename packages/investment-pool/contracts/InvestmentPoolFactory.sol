@@ -14,7 +14,28 @@ import {IInvestmentPoolFactory} from "./interfaces/IInvestmentPoolFactory.sol";
 import {IGelatoOps} from "./interfaces/IGelatoOps.sol";
 import {InvestmentPool} from "./InvestmentPool.sol";
 
-error InvestmentPoolFactory__addressIsZero();
+error InvestmentPoolFactory__ImplementationContractAddressIsZero();
+error InvestmentPoolFactory__HostAddressIsZero();
+error InvestmentPoolFactory__GelatoOpsAddressIsZero();
+error InvestmentPoolFactory__AcceptedTokenAddressIsZero();
+error InvestmentPoolFactory__CreatorAddressIsZero();
+error InvestmentPoolFactory__SoftCapIsGreaterThanHardCap(
+    uint96 softCap,
+    uint96 hardCap
+);
+error InvestmentPoolFactory__FundraiserStartIsInPast();
+error InvestmentPoolFactory__FundraiserStartTimeIsGreaterThanEndTime();
+error InvestmentPoolFactory__FundraiserExceedsMaxDuration();
+error InvestmentPoolFactory__FundraiserDurationIsTooShort();
+error InvestmentPoolFactory__NoMilestonesAdded();
+error InvestmentPoolFactory__MilestonesCountExceedsMaxCount();
+error InvestmentPoolFactory__MilestoneStartsBeforeFundraiserEnds();
+error InvestmentPoolFactory__InvalidMilestoneInverval();
+error InvestmentPoolFactory__PercentagesAreNotAddingUp();
+error InvestmentPoolFactory__MilestonesAreNotAdjacentInTime(
+    uint256 oldMilestoneEnd,
+    uint256 newMilestoneStart
+);
 
 contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
     // Assign all Clones library functions to addresses
@@ -23,11 +44,12 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
     uint48 public constant VOTING_PERIOD = 7 days;
     uint48 public constant TERMINATION_WINDOW = 12 hours;
     uint48 public constant AUTOMATED_TERMINATION_WINDOW = 1 hours;
-    // TODO: Add min/max durations for fundraiser campaign and milestone respectively
     uint public constant MILESTONE_MIN_DURATION = 30 days;
+    uint public constant MILESTONE_MAX_DURATION = 90 days;
+    uint public constant FUNDRAISER_MIN_DURATION = 30 days;
     uint public constant FUNDRAISER_MAX_DURATION = 90 days;
 
-    uint256 public constant PERCENTAGE_DIVIDER = 10 ** 6;
+    uint256 public constant PERCENTAGE_DIVIDER = 10**6;
 
     // TODO: Arbitrary choice, set this later to something that makes sense
     uint32 public constant MAX_MILESTONE_COUNT = 10;
@@ -38,16 +60,21 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
 
     ISuperfluid public immutable HOST;
     IGelatoOps public immutable GELATO_OPS;
-    address internal investmentPoolImplementation;
+    address public investmentPoolImplementation;
 
     constructor(
         ISuperfluid _host,
         IGelatoOps _gelatoOps,
         address _implementationContract
     ) {
-        assert(address(_host) != address(0));
-        if (address(0) == _implementationContract)
-            revert InvestmentPoolFactory__addressIsZero();
+        if (address(_host) == address(0))
+            revert InvestmentPoolFactory__HostAddressIsZero();
+
+        if (address(_gelatoOps) == address(0))
+            revert InvestmentPoolFactory__GelatoOpsAddressIsZero();
+
+        if (_implementationContract == address(0))
+            revert InvestmentPoolFactory__ImplementationContractAddressIsZero();
 
         HOST = _host;
         GELATO_OPS = _gelatoOps;
@@ -124,75 +151,72 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
 
     function _assertPoolInitArguments(
         // solhint-disable-next-line no-unused-vars
-        ISuperfluid _host,
+        ISuperfluid, /*_host*/
         ISuperToken _superToken,
         address _creator,
-        // solhint-disable-next-line no-unused-vars
         uint96 _softCap,
         uint96 _hardCap,
         uint96 _fundraiserStartAt,
         uint96 _fundraiserEndAt,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
     ) internal view {
-        require(
-            address(_superToken) != address(0),
-            "[IPF]: accepted token zero address"
-        );
-        require(address(_creator) != address(0), "[IPF]: creator zero address");
+        if (address(_superToken) == address(0))
+            revert InvestmentPoolFactory__AcceptedTokenAddressIsZero();
 
-        require(
-            _fundraiserStartAt >= _getNow(),
-            "[IPF]: fundraiser start at < now"
-        );
-        require(
-            _fundraiserEndAt > _fundraiserStartAt,
-            "[IPF]:fundraiser end at < start at"
-        );
-        require(
-            _fundraiserEndAt - _fundraiserStartAt <= FUNDRAISER_MAX_DURATION,
-            "[IPF]: fundraiser duration exceeds max duration"
-        );
+        if (address(_creator) == address(0))
+            revert InvestmentPoolFactory__CreatorAddressIsZero();
 
-        require(
-            _milestones.length > 0,
-            "[IPF]: must contain at least 1 milestone"
-        );
-        require(
-            _milestones.length <= MAX_MILESTONE_COUNT,
-            "[IPF]: milestone count > max count"
-        );
+        if (_softCap > _hardCap)
+            revert InvestmentPoolFactory__SoftCapIsGreaterThanHardCap(
+                _softCap,
+                _hardCap
+            );
+
+        if (_fundraiserStartAt < _getNow())
+            revert InvestmentPoolFactory__FundraiserStartIsInPast();
+
+        if (_fundraiserEndAt < _fundraiserStartAt)
+            revert InvestmentPoolFactory__FundraiserStartTimeIsGreaterThanEndTime();
+
+        if (_fundraiserEndAt - _fundraiserStartAt > FUNDRAISER_MAX_DURATION)
+            revert InvestmentPoolFactory__FundraiserExceedsMaxDuration();
+
+        if (_fundraiserEndAt - _fundraiserStartAt < FUNDRAISER_MIN_DURATION)
+            revert InvestmentPoolFactory__FundraiserDurationIsTooShort();
+
+        if (_milestones.length == 0)
+            revert InvestmentPoolFactory__NoMilestonesAdded();
+
+        if (_milestones.length > MAX_MILESTONE_COUNT)
+            revert InvestmentPoolFactory__MilestonesCountExceedsMaxCount();
 
         // Special case for the first milestone
-        require(
-            _milestones[0].startDate >= _fundraiserEndAt,
-            "[IPF]: milestones can't start before fundraiser ends"
-        );
-        require(
-            _validateMilestoneInterval(_milestones[0]),
-            "[IPF]: invalid milestone interval"
-        );
+        if (_milestones[0].startDate < _fundraiserEndAt)
+            revert InvestmentPoolFactory__MilestoneStartsBeforeFundraiserEnds();
 
-        uint totalPercentage = _milestones[0].intervalSeedPortion + _milestones[0].intervalStreamingPortion;
+        if (!_validateMilestoneInterval(_milestones[0]))
+            revert InvestmentPoolFactory__InvalidMilestoneInverval();
 
-        require(
-            _validateMilestoneInterval(_milestones[0]),
-            "[IPF]: invalid milestone interval"
-        );
+        uint totalPercentage = _milestones[0].intervalSeedPortion +
+            _milestones[0].intervalStreamingPortion;
+
         // Starting at index 1, since the first milestone has been checked already
         for (uint32 i = 1; i < _milestones.length; ++i) {
+            if (_milestones[i - 1].endDate != _milestones[i].startDate)
+                revert InvestmentPoolFactory__MilestonesAreNotAdjacentInTime(
+                    _milestones[i - 1].endDate,
+                    _milestones[i].startDate
+                );
 
-            require(
-                _milestones[i - 1].endDate == _milestones[i].startDate,
-                "[IPF]: milestones be adjacent in time"
-            );
             // TODO: Percentage limit validation for milestones
             // Meaning - limit max percentage of seeding, for each milestone
-
-            totalPercentage += _milestones[i].intervalSeedPortion + _milestones[i].intervalStreamingPortion;
+            totalPercentage +=
+                _milestones[i].intervalSeedPortion +
+                _milestones[i].intervalStreamingPortion;
         }
 
-        require(totalPercentage == PERCENTAGE_DIVIDER, "[IPF]: Percentages must add up");
-
+        if (totalPercentage != PERCENTAGE_DIVIDER)
+            revert InvestmentPoolFactory__PercentagesAreNotAddingUp();
     }
 
     function _getNow() internal view virtual returns (uint256) {
@@ -204,8 +228,10 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
     function _validateMilestoneInterval(
         IInvestmentPool.MilestoneInterval memory milestone
     ) internal pure returns (bool) {
-        return
-            milestone.endDate > milestone.startDate &&
-            (milestone.endDate - milestone.startDate >= MILESTONE_MIN_DURATION);
+        return (milestone.endDate > milestone.startDate &&
+            (milestone.endDate - milestone.startDate >=
+                MILESTONE_MIN_DURATION) &&
+            (milestone.endDate - milestone.startDate <=
+                MILESTONE_MAX_DURATION));
     }
 }
