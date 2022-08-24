@@ -41,6 +41,8 @@ error InvestmentPool__AlreadyStreamingForMilestone(uint256 milestone);
 error InvestmentPool__GelatoEthTransferFailed();
 error InvestmentPool__CannotInvestAboveHardCap();
 error InvestmentPool__CannotUnpledgeInvestment();
+error InvestmentPool__InLastMilestone();
+error InvestmentPool__ZeroAmountProvided();
 
 contract InvestmentPool is
     IInitializableInvestmentPool,
@@ -66,26 +68,17 @@ contract InvestmentPool is
     ISuperToken public acceptedToken;
 
     address public creator;
-
     IGelatoOps public gelatoOps;
-
     address payable public gelato;
 
     // TODO: validate that uint96 for soft cap is enough
     uint96 public softCap;
-
     uint96 public hardCap;
-
     uint48 public fundraiserStartAt;
-
     uint48 public fundraiserEndAt;
-
     uint48 public totalStreamingDuration;
-
     uint48 public terminationWindow;
-
     uint48 public automatedTerminationWindow;
-
     uint48 public emergencyTerminationTimestamp;
 
     // Investment data
@@ -99,7 +92,6 @@ contract InvestmentPool is
     // TODO: Look into, maybe an array would be better, since we have a fixed amount?
     mapping(uint256 => Milestone) public milestones;
     uint256 public currentMilestone;
-    uint256 public maxUnlockedMilestone;
 
     // It's a memoization mapping for milestone Portions
     // n-th element describes how much of a project is "left"
@@ -114,8 +106,10 @@ contract InvestmentPool is
     event Claim(uint256 milestoneId);
     event Refund(address indexed caller, uint256 amount);
 
-    /// @dev Checks every callback to validate inputs. MUST be called by the host.
-    /// @param token The Super Token streamed in. MUST be the in-token.
+    /**
+     * @dev Checks every callback to validate inputs. MUST be called by the host.
+     * @param token The Super Token streamed in. MUST be the in-token.
+     */
     modifier validCallback(ISuperToken token) {
         if (token != acceptedToken) revert InvestmentPool__InvalidToken();
 
@@ -126,79 +120,89 @@ contract InvestmentPool is
         _;
     }
 
+    /// @notice Ensures that project is not canceled
     modifier isNotCanceled() {
         if (emergencyTerminationTimestamp != 0)
             revert InvestmentPool__CampaignCanceled();
         _;
     }
 
-    /** @notice Confirms that the fundraiser has reached a soft cap
-     */
+    /// @notice Confirms that the fundraiser has reached a soft cap
     modifier softCapReached() {
         if (!isSoftCapReached()) revert InvestmentPool__SoftCapNotReached();
         _;
     }
 
-    /** @notice Ensures that the fundraiser is not started yet
-     */
+    /// @notice Ensures that the fundraiser is not started yet
     modifier fundraiserNotStartedYet() {
         if (_getNow() > fundraiserStartAt)
             revert InvestmentPool__FundraiserAlreadyStarted();
         _;
     }
 
-    /** @notice Ensures that the fundraiser is already started
-     */
+    /// @notice Ensures that the fundraiser is already started
     modifier fundraiserAlreadyStarted() {
         if (_getNow() < fundraiserStartAt)
             revert InvestmentPool__FundraiserNotStartedYet();
         _;
     }
 
-    /** @notice Ensures that the fundraiser period for a given campaign is ongoing
-     */
+    /// @notice Ensures that the fundraiser period for a given campaign is ongoing
     modifier fundraiserOngoingNow() {
         if (!isFundraiserOngoingNow())
             revert InvestmentPool__NotInFundraiserPeriod();
         _;
     }
 
-    /** @notice Ensures that the fundraiser has failed and investors are eligible for refunds
-     */
+    /// @notice Ensures that the fundraiser has failed and investors are eligible for refunds
     modifier failedFundraiser() {
         if (!isFailedFundraiser()) revert InvestmentPool__FundraiserNotFailed();
         _;
     }
 
-    /** @notice Ensures that the message sender is the fundraiser creator
-     */
+    /// @notice Ensures that the message sender is the fundraiser creator
     modifier onlyCreator() {
         if (creator != _msgSender()) revert InvestmentPool__NotCreator();
         _;
     }
 
-    /** @notice Ensures that the message sender is the gelato ops contract
-     */
+    /// @notice Ensures that the message sender is the gelato ops contract
     modifier onlyGelatoOps() {
         if (address(gelatoOps) != _msgSender())
             revert InvestmentPool__NotGelatoOps();
         _;
     }
 
-    modifier milestoneUnlocked(uint256 index) {
-        if (index > _getMaxUnlockedMilestone())
+    /// @notice Ensures that the current milestone is greater or equal to provided one
+    modifier milestoneUnlocked(uint256 _index) {
+        if (_index > _getCurrentMilestoneIndex())
             revert InvestmentPool__MilestoneStillLocked();
         _;
     }
 
-    modifier canTerminateMilestoneFinal(uint index) {
-        if (!canTerminateMilestoneStreamFinal(index))
+    /// @notice Ensures that the current milestone is not the last one
+    modifier notInLastMilestone() {
+        if (_getCurrentMilestoneIndex() + 1 == milestoneCount)
+            revert InvestmentPool__InLastMilestone();
+        _;
+    }
+
+    /// @notice Ensures that provided amount is not zero
+    modifier notZeroAmount(uint256 _amount) {
+        if (_amount == 0) revert InvestmentPool__ZeroAmountProvided();
+        _;
+    }
+
+    /// @notice Ensures that the milestone stream can be terminated
+    modifier canTerminateMilestoneFinal(uint _index) {
+        if (!canTerminateMilestoneStreamFinal(_index))
             revert InvestmentPool__MilestoneStreamTerminationUnavailable();
         _;
     }
 
-    modifier canGelatoTerminateMilestoneFinal(uint index) {
-        if (!canGelatoTerminateMilestoneStreamFinal(index))
+    /// @notice Ensures that the milestone stream can be terminated by gelato
+    modifier canGelatoTerminateMilestoneFinal(uint _index) {
+        if (!canGelatoTerminateMilestoneStreamFinal(_index))
             revert InvestmentPool__GelatoMilestoneStreamTerminationUnavailable();
         _;
     }
@@ -207,16 +211,18 @@ contract InvestmentPool is
         return emergencyTerminationTimestamp != 0;
     }
 
-    /** @notice Check if in fundraiser period
-        @return true if currently accepting investments
+    /**
+     * @notice Check if in fundraiser period
+     * @return true -> if fundraiser currently accepting investments
      */
     function isFundraiserOngoingNow() public view returns (bool) {
         return _getNow() >= fundraiserStartAt && _getNow() < fundraiserEndAt;
     }
 
-    /** @notice Check if in milestone period
-        @param _id Milestone Id
-        @return true if currently in milestone period
+    /**
+     * @notice Check if in milestone period
+     * @param _id Milestone id
+     * @return true -> if currently in milestone period
      */
     function isMilestoneOngoingNow(uint _id) public view returns (bool) {
         return
@@ -224,21 +230,24 @@ contract InvestmentPool is
             _getNow() < milestones[_id].endDate;
     }
 
-    /** @notice Check if the fundraiser has raised enough invested funds to reach soft cap
-        @return true if fundraiser has raised enough invested funds to reach soft cap
+    /**
+     * @notice Check if the fundraiser has raised enough invested funds to reach soft cap
+     * @return true -> if fundraiser has raised enough invested funds to reach soft cap
      */
     function isSoftCapReached() public view returns (bool) {
         return softCap <= totalInvestedAmount;
     }
 
-    /** @notice Check if the fundraiser period has ended
+    /**
+     * @notice Check if the fundraiser period has ended
      */
     function didFundraiserPeriodEnd() public view returns (bool) {
         return _getNow() >= fundraiserEndAt;
     }
 
-    /** @notice Check if fundraiser has failed (didn't raise >= soft cap and ended)
-        @return true if the fundraiser is considered failed and investors are eligible for refunds
+    /**
+     * @notice Check if fundraiser has failed (didn't raise >= soft cap and ended)
+     * @return true -> if the fundraiser is considered failed and investors are eligible for refunds
      */
     function isFailedFundraiser() public view returns (bool) {
         return didFundraiserPeriodEnd() && !isSoftCapReached();
@@ -301,7 +310,7 @@ contract InvestmentPool is
         uint48 _automatedTerminationWindow,
         MilestoneInterval[] calldata _milestones
     ) public initializer {
-        // NOTE: Parameter validation was already done for us by the Factory, so it's safe to use "as is" and save gas
+        /// @dev Parameter validation was already done for us by the Factory, so it's safe to use "as is" and save gas
 
         // Resolve the agreement address and initialize the lib
         cfaV1Lib = CFAv1Library.InitData(
@@ -364,10 +373,10 @@ contract InvestmentPool is
      */
     function invest(uint256 _amount, bool _strict)
         external
-        //TODO: Maybe remove this, or alter logic?
-        //fundraiserOngoingNow
         isNotCanceled
         fundraiserAlreadyStarted
+        notInLastMilestone
+        notZeroAmount(_amount)
     {
         uint256 untilHardcap = hardCap - totalInvestedAmount;
 
@@ -389,7 +398,6 @@ contract InvestmentPool is
         acceptedToken.transferFrom(_msgSender(), address(this), _amount);
 
         // Add voting token mint here
-
         emit Invest(_msgSender(), _amount);
     }
 
@@ -593,7 +601,7 @@ contract InvestmentPool is
         emit Cancel();
     }
 
-    function milestoneJump() external isNotCanceled {
+    function milestoneJump() external onlyCreator isNotCanceled {
         uint curMil = _getCurrentMilestoneIndex();
         terminateMilestoneStreamFinal(curMil);
 
@@ -632,16 +640,6 @@ contract InvestmentPool is
         } else {
             milestone.paidAmount = milestone.paidAmount + streamedAmount;
         }
-    }
-
-    function _getMaxUnlockedMilestone()
-        internal
-        view
-        virtual
-        returns (uint256)
-    {
-        // NOTE: Use internal storage for now, later can swap for governance implementation
-        return maxUnlockedMilestone;
     }
 
     function _getCurrentMilestoneIndex()
@@ -879,7 +877,7 @@ contract InvestmentPool is
     function _investToMilestone(
         address _investor,
         uint256 _milestoneId,
-        uint256 amount
+        uint256 _amount
     ) internal {
         uint256 investmentCoefficient = memMilestonePortions[_milestoneId];
 
@@ -889,14 +887,14 @@ contract InvestmentPool is
             ];
         }
 
-        uint256 scaledInvestment = (amount * PERCENTAGE_DIVIDER) /
+        uint256 scaledInvestment = (_amount * PERCENTAGE_DIVIDER) /
             investmentCoefficient;
 
         memMilestoneInvestments[_milestoneId] += scaledInvestment;
 
-        investedAmount[_investor][_milestoneId] += amount;
+        investedAmount[_investor][_milestoneId] += _amount;
 
-        totalInvestedAmount += amount;
+        totalInvestedAmount += _amount;
     }
 
     function getMilestoneSeedAmount(uint256 _milestoneId)

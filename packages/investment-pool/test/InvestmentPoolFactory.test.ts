@@ -31,7 +31,11 @@ let investmentPoolFactory: InvestmentPoolFactoryMock;
 let investmentPool: InvestmentPoolMock;
 let gelatoOpsMock: GelatoOpsMock;
 
-let percentageDivider = BigNumber.from("1000000");
+let percentageDivider = BigNumber.from(0);
+let percent5InIpBigNumber: BigNumber;
+let percent10InIpBigNumber: BigNumber;
+let percent90InIpBigNumber: BigNumber;
+let percent95InIpBigNumber: BigNumber;
 
 const generateGaplessMilestones = (
     startTimeStamp: BigNumber,
@@ -51,8 +55,8 @@ const generateGaplessMilestones = (
         arr.push({
             startDate: prevTimestamp,
             endDate: endDate,
-            intervalSeedPortion: percentToIpBigNumber(10).div(amount),
-            intervalStreamingPortion: percentToIpBigNumber(90).div(amount),
+            intervalSeedPortion: percent10InIpBigNumber.div(amount),
+            intervalStreamingPortion: percent90InIpBigNumber.div(amount),
         });
         prevTimestamp = endDate;
     }
@@ -71,6 +75,32 @@ const dateToSeconds = (date: string): BigNumber => {
 
 const errorHandler = (err: any) => {
     if (err) throw err;
+};
+
+const definePercentageDivider = async () => {
+    const investmentPoolDep = await ethers.getContractFactory(
+        "InvestmentPoolMock",
+        buidl1Admin
+    );
+    investmentPool = await investmentPoolDep.deploy();
+    await investmentPool.deployed();
+
+    const investmentPoolDepFactory = await ethers.getContractFactory(
+        "InvestmentPoolFactoryMock",
+        buidl1Admin
+    );
+    investmentPoolFactory = await investmentPoolDepFactory.deploy(
+        sf.settings.config.hostAddress,
+        gelatoOpsMock.address,
+        investmentPool.address
+    );
+    await investmentPoolFactory.deployed();
+
+    percentageDivider = await investmentPoolFactory.PERCENTAGE_DIVIDER();
+    percent5InIpBigNumber = percentToIpBigNumber(5);
+    percent10InIpBigNumber = percentToIpBigNumber(10);
+    percent90InIpBigNumber = percentToIpBigNumber(90);
+    percent95InIpBigNumber = percentToIpBigNumber(95);
 };
 
 describe("Investment Pool Factory", async () => {
@@ -132,6 +162,9 @@ describe("Investment Pool Factory", async () => {
         const underlyingAddr = fUSDTx.underlyingToken.address;
 
         fUSDT = new ethers.Contract(underlyingAddr, fTokenAbi, admin);
+
+        // It just deploys the factory contract and gets the percentage divider value for other tests
+        definePercentageDivider();
     });
 
     describe("1. Investment pool factory creation", () => {
@@ -290,9 +323,9 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percentToIpBigNumber(10),
+                                intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion:
-                                    percentToIpBigNumber(90),
+                                    percent90InIpBigNumber,
                             },
                         ]
                     );
@@ -330,9 +363,9 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percentToIpBigNumber(10),
+                                intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion:
-                                    percentToIpBigNumber(90),
+                                    percent90InIpBigNumber,
                             },
                         ]
                     );
@@ -440,9 +473,9 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percentToIpBigNumber(10),
+                                intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion:
-                                    percentToIpBigNumber(90),
+                                    percent90InIpBigNumber,
                             },
                         ]
                     )
@@ -473,9 +506,9 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percentToIpBigNumber(10),
+                                intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion:
-                                    percentToIpBigNumber(90),
+                                    percent90InIpBigNumber,
                             },
                         ]
                     )
@@ -514,9 +547,9 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percentToIpBigNumber(10),
+                                intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion:
-                                    percentToIpBigNumber(90),
+                                    percent90InIpBigNumber,
                             },
                         ]
                     )
@@ -548,9 +581,9 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percentToIpBigNumber(10),
+                                intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion:
-                                    percentToIpBigNumber(90),
+                                    percent90InIpBigNumber,
                             },
                         ]
                     )
@@ -581,9 +614,9 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percentToIpBigNumber(10),
+                                intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion:
-                                    percentToIpBigNumber(90),
+                                    percent90InIpBigNumber,
                             },
                         ]
                     )
@@ -614,9 +647,9 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percentToIpBigNumber(10),
+                                intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion:
-                                    percentToIpBigNumber(90),
+                                    percent90InIpBigNumber,
                             },
                         ]
                     )
@@ -737,9 +770,9 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percentToIpBigNumber(10),
+                                intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion:
-                                    percentToIpBigNumber(90),
+                                    percent90InIpBigNumber,
                             },
                         ]
                     )
@@ -771,9 +804,9 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percentToIpBigNumber(10),
+                                intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion:
-                                    percentToIpBigNumber(90),
+                                    percent90InIpBigNumber,
                             },
                         ]
                     )
@@ -804,9 +837,9 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percentToIpBigNumber(10),
+                                intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion:
-                                    percentToIpBigNumber(90),
+                                    percent90InIpBigNumber,
                             },
                         ]
                     )
@@ -837,9 +870,9 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percentToIpBigNumber(10),
+                                intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion:
-                                    percentToIpBigNumber(90),
+                                    percent90InIpBigNumber,
                             },
                         ]
                     )
@@ -847,6 +880,83 @@ describe("Investment Pool Factory", async () => {
                     investmentPoolFactory,
                     "InvestmentPoolFactory__InvalidMilestoneInverval"
                 );
+            });
+
+            it("[IPF][2.1.16] Reverts creation if milestone are not adjacent in time", async () => {
+                const softCap = ethers.utils.parseEther("1500");
+                const hardCap = ethers.utils.parseEther("15000");
+
+                const milestoneStartDate = dateToSeconds("2022/09/01");
+                const milestoneEndDate = dateToSeconds("2022/10/01");
+                const milestoneStartDate2 = dateToSeconds("2022/11/01");
+                const milestoneEndDate2 = dateToSeconds("2022/12/01");
+                const campaignStartDate = dateToSeconds("2022/07/01");
+                const campaignEndDate = dateToSeconds("2022/08/01");
+
+                await expect(
+                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                        fUSDTx.address,
+                        softCap,
+                        hardCap,
+                        campaignStartDate,
+                        campaignEndDate,
+                        0, // CLONE-PROXY
+                        [
+                            {
+                                startDate: milestoneStartDate,
+                                endDate: milestoneEndDate,
+                                intervalSeedPortion: percent10InIpBigNumber,
+                                intervalStreamingPortion:
+                                    percent90InIpBigNumber,
+                            },
+                            {
+                                startDate: milestoneStartDate2,
+                                endDate: milestoneEndDate2,
+                                intervalSeedPortion: percent10InIpBigNumber,
+                                intervalStreamingPortion:
+                                    percent90InIpBigNumber,
+                            },
+                        ]
+                    )
+                ).to.be.revertedWithCustomError(
+                    investmentPoolFactory,
+                    "InvestmentPoolFactory__MilestonesAreNotAdjacentInTime"
+                );
+            });
+
+            it("[IPF][2.1.17] Reverts creation if milestone percentages are not adding up", async () => {
+                const softCap = ethers.utils.parseEther("1500");
+                const hardCap = ethers.utils.parseEther("15000");
+
+                const milestoneStartDate = dateToSeconds("2022/09/01");
+                const milestoneEndDate = dateToSeconds("2022/10/01");
+                const campaignStartDate = dateToSeconds("2022/07/01");
+                const campaignEndDate = dateToSeconds("2022/08/01");
+
+                await expect(
+                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                        fUSDTx.address,
+                        softCap,
+                        hardCap,
+                        campaignStartDate,
+                        campaignEndDate,
+                        0, // CLONE-PROXY
+                        [
+                            {
+                                startDate: milestoneStartDate,
+                                endDate: milestoneEndDate,
+                                intervalSeedPortion: percent5InIpBigNumber,
+                                intervalStreamingPortion:
+                                    percent90InIpBigNumber,
+                            },
+                        ]
+                    )
+                )
+                    .to.be.revertedWithCustomError(
+                        investmentPoolFactory,
+                        "InvestmentPoolFactory__PercentagesAreNotAddingUp"
+                    )
+                    .withArgs(percent95InIpBigNumber, percentageDivider);
             });
         });
     });

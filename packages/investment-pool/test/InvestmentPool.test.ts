@@ -1,7 +1,7 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {Framework, WrapperSuperToken} from "@superfluid-finance/sdk-core";
-import {BigNumber, ContractTransaction, providers, Contract} from "ethers";
-import {ethers, web3, network} from "hardhat";
+import {BigNumber, ContractTransaction, constants} from "ethers";
+import {ethers, web3} from "hardhat";
 import {assert, expect} from "chai";
 import {
     InvestmentPoolFactoryMock,
@@ -9,6 +9,7 @@ import {
     GelatoOpsMock,
 } from "../typechain-types";
 import traveler from "ganache-time-traveler";
+import {notDeepEqual} from "assert";
 
 // const { toWad } = require("@decentral.ee/web3-helpers");
 // const { assert, should, expect } = require("chai");
@@ -22,7 +23,7 @@ const deploySuperToken = require("@superfluid-finance/ethereum-contracts/scripts
 // Should be enough for all of the tests, in order to not perform funding before each
 const INVESTOR_INITIAL_FUNDS = ethers.utils.parseEther("50000000000");
 
-const UINT256_MAX = BigNumber.from(2).pow(256).sub(1);
+const UINT256_MAX = constants.MaxUint256;
 
 const provider = web3;
 
@@ -58,7 +59,16 @@ let campaignEndDate: BigNumber;
 let creationRes: ContractTransaction;
 let gelatoOpsMock: GelatoOpsMock;
 
-let percentageDivider = BigNumber.from("1000000");
+let percentageDivider: BigNumber = BigNumber.from(0);
+let percent5InIpBigNumber: BigNumber;
+let percent20InIpBigNumber: BigNumber;
+let percent25InIpBigNumber: BigNumber;
+let percent70InIpBigNumber: BigNumber;
+let percent95InIpBigNumber: BigNumber;
+
+const percentToIpBigNumber = (percent: number): BigNumber => {
+    return percentageDivider.mul(percent).div(100);
+};
 
 const errorHandler = (err: any) => {
     if (err) throw err;
@@ -85,10 +95,6 @@ const getInvestmentFromTx = async (
     return pool;
 };
 
-const percentToIpBigNumber = (percent: number): BigNumber => {
-    return percentageDivider.mul(percent).div(100);
-};
-
 const dateToSeconds = (
     date: string,
     isBigNumber: boolean = true
@@ -99,6 +105,17 @@ const dateToSeconds = (
     } else {
         return convertedDate;
     }
+};
+
+const definePercentageDivider = async (
+    investmentPoolFactory: InvestmentPoolFactoryMock
+) => {
+    percentageDivider = await investmentPoolFactory.PERCENTAGE_DIVIDER();
+    percent5InIpBigNumber = percentToIpBigNumber(5);
+    percent20InIpBigNumber = percentToIpBigNumber(20);
+    percent25InIpBigNumber = percentToIpBigNumber(25);
+    percent70InIpBigNumber = percentToIpBigNumber(70);
+    percent95InIpBigNumber = percentToIpBigNumber(95);
 };
 
 const createInvestmentWithOneMilestone = async () => {
@@ -122,8 +139,8 @@ const createInvestmentWithOneMilestone = async () => {
                 {
                     startDate: milestoneStartDate,
                     endDate: milestoneEndDate,
-                    intervalSeedPortion: 50000,
-                    intervalStreamingPortion: 950000,
+                    intervalSeedPortion: percent5InIpBigNumber,
+                    intervalStreamingPortion: percent95InIpBigNumber,
                 },
             ]
         );
@@ -154,19 +171,37 @@ const createInvestmentWithTwoMilestones = async () => {
                 {
                     startDate: milestoneStartDate,
                     endDate: milestoneEndDate,
-                    intervalSeedPortion: percentToIpBigNumber(5),
-                    intervalStreamingPortion: percentToIpBigNumber(75),
+                    intervalSeedPortion: percent5InIpBigNumber,
+                    intervalStreamingPortion: percent70InIpBigNumber,
                 },
                 {
                     startDate: milestoneStartDate2,
                     endDate: milestoneEndDate2,
-                    intervalSeedPortion: percentToIpBigNumber(5),
-                    intervalStreamingPortion: percentToIpBigNumber(20),
+                    intervalSeedPortion: percent5InIpBigNumber,
+                    intervalStreamingPortion: percent20InIpBigNumber,
                 },
             ]
         );
 
     investment = await getInvestmentFromTx(creationRes);
+};
+
+const investMoney = async (
+    fUSDTxToken: WrapperSuperToken,
+    investmentPool: InvestmentPoolMock,
+    investorObj: SignerWithAddress,
+    investedMoney: BigNumber
+) => {
+    // Give token approval
+    await fUSDTxToken
+        .approve({
+            receiver: investmentPool.address,
+            amount: UINT256_MAX.toString(),
+        })
+        .exec(investorObj);
+
+    // Invest money
+    await investmentPool.connect(investorObj).invest(investedMoney, false);
 };
 
 describe("Investment Pool", async () => {
@@ -255,6 +290,9 @@ describe("Investment Pool", async () => {
         );
         await investmentPoolFactory.deployed();
 
+        // Get percentage divider
+        definePercentageDivider(investmentPoolFactory);
+
         // Enforce a starting timestamp to avoid time based bugs
         const time = dateToSeconds("2022/06/01");
         await investmentPoolFactory.connect(buidl1Admin).setTimestamp(time);
@@ -288,6 +326,10 @@ describe("Investment Pool", async () => {
         await sf.batchCall(operations).exec(admin);
     });
 
+    beforeEach(async () => {
+        await createInvestmentWithTwoMilestones();
+    });
+
     afterEach(async () => {
         // If prior investment exists, check if it has an active money stream, terminate it
         if (investment) {
@@ -313,10 +355,6 @@ describe("Investment Pool", async () => {
     });
 
     describe("1. Investment pool creation", () => {
-        beforeEach(async () => {
-            await createInvestmentWithOneMilestone();
-        });
-
         describe("1.1 Public state", () => {
             it("[IP][1.1.1] Should assign accepted token correctly", async () => {
                 const acceptedToken = await investment.acceptedToken();
@@ -381,7 +419,7 @@ describe("Investment Pool", async () => {
 
             it("[IP][1.1.10] Should assign milestones count correctly", async () => {
                 const contractCount = await investment.milestoneCount();
-                const realCount = BigNumber.from(1);
+                const realCount = BigNumber.from(2);
                 assert.deepEqual(contractCount, realCount);
             });
 
@@ -426,51 +464,151 @@ describe("Investment Pool", async () => {
                 assert.deepEqual(invested, BigNumber.from(0));
             });
 
-            it("[IP][1.1.18] Milestone should have a correct start date", async () => {
-                const milestone = await investment.milestones(0);
+            it("[IP][1.1.18] Milestones should have a correct start date", async () => {
+                const milestone1 = await investment.milestones(0);
+                const milestone2 = await investment.milestones(1);
                 assert.deepEqual(
-                    BigNumber.from(milestone.startDate),
+                    BigNumber.from(milestone1.startDate),
                     milestoneStartDate
                 );
-            });
-
-            it("[IP][1.1.19] Milestone should have a correct end date", async () => {
-                const milestone = await investment.milestones(0);
                 assert.deepEqual(
-                    BigNumber.from(milestone.endDate),
-                    milestoneEndDate
+                    BigNumber.from(milestone2.startDate),
+                    milestoneStartDate2
                 );
             });
 
-            it("[IP][1.1.20] Milestone should not be paid initially", async () => {
-                const milestone = await investment.milestones(0);
-                assert.equal(milestone.paid, false);
+            it("[IP][1.1.19] Milestones should have a correct end date", async () => {
+                const milestone1 = await investment.milestones(0);
+                const milestone2 = await investment.milestones(1);
+                assert.deepEqual(
+                    BigNumber.from(milestone1.endDate),
+                    milestoneEndDate
+                );
+                assert.deepEqual(
+                    BigNumber.from(milestone2.endDate),
+                    milestoneEndDate2
+                );
             });
 
-            it("[IP][1.1.21] Milestone's seed amount should not be paid initially", async () => {
-                const milestone = await investment.milestones(0);
-                assert.equal(milestone.seedAmountPaid, false);
+            it("[IP][1.1.20] Milestones should not be paid initially", async () => {
+                const milestone1 = await investment.milestones(0);
+                const milestone2 = await investment.milestones(1);
+                assert.equal(milestone1.paid, false);
+                assert.equal(milestone2.paid, false);
             });
 
-            it("[IP][1.1.22] Milestone's stream should not be ongoing from the start", async () => {
-                const milestone = await investment.milestones(0);
-                assert.equal(milestone.streamOngoing, false);
+            it("[IP][1.1.21] Milestones' seed amounts should not be paid initially", async () => {
+                const milestone1 = await investment.milestones(0);
+                const milestone2 = await investment.milestones(1);
+                assert.equal(milestone1.seedAmountPaid, false);
+                assert.equal(milestone2.seedAmountPaid, false);
+            });
+
+            it("[IP][1.1.22] Milestones' streams should not be ongoing from the start", async () => {
+                const milestones1 = await investment.milestones(0);
+                const milestones2 = await investment.milestones(1);
+                assert.equal(milestones1.streamOngoing, false);
+                assert.equal(milestones2.streamOngoing, false);
             });
 
             it("[IP][1.1.23] Should have paid 0 in funds upon creation", async () => {
-                const milestone = await investment.milestones(0);
-                assert.deepEqual(milestone.paidAmount, BigNumber.from(0));
+                const milestone1 = await investment.milestones(0);
+                const milestone2 = await investment.milestones(1);
+                assert.deepEqual(milestone1.paidAmount, BigNumber.from(0));
+                assert.deepEqual(milestone2.paidAmount, BigNumber.from(0));
+            });
+
+            it("[IP][1.1.24] Milestones should have a correct seed portions", async () => {
+                const milestone1 = await investment.milestones(0);
+                const milestone2 = await investment.milestones(1);
+                assert.deepEqual(
+                    milestone1.intervalSeedPortion,
+                    percent5InIpBigNumber
+                );
+                assert.deepEqual(
+                    milestone2.intervalSeedPortion,
+                    percent5InIpBigNumber
+                );
+            });
+
+            it("[IP][1.1.25] Milestones should have a correct stream portions", async () => {
+                const milestone1 = await investment.milestones(0);
+                const milestone2 = await investment.milestones(1);
+                assert.deepEqual(
+                    milestone1.intervalStreamingPortion,
+                    percent70InIpBigNumber
+                );
+                assert.deepEqual(
+                    milestone2.intervalStreamingPortion,
+                    percent20InIpBigNumber
+                );
+            });
+
+            it("[IP][1.1.26] Should assign milestones portions correctly", async () => {
+                const milestone1 = await investment.getMemMilestonePortions(0);
+                const milestone2 = await investment.getMemMilestonePortions(1);
+                const lastItem = await investment.getMemMilestonePortions(2);
+                assert.deepEqual(milestone1, percentageDivider);
+                assert.deepEqual(milestone2, percent25InIpBigNumber);
+                assert.deepEqual(lastItem, BigNumber.from(0));
+            });
+
+            it("[IP][1.1.27] Should assign total streaming duration correctly", async () => {
+                const totalStreamingDuration =
+                    await investment.totalStreamingDuration();
+                const realDuration =
+                    milestoneEndDate.toNumber() -
+                    milestoneStartDate.toNumber() +
+                    (milestoneEndDate2.toNumber() -
+                        milestoneStartDate2.toNumber());
+                assert.deepEqual(totalStreamingDuration, realDuration);
             });
         });
     });
 
     describe("2. Fundraiser cancelation and start", () => {
-        beforeEach(async () => {
-            await createInvestmentWithOneMilestone();
+        describe("2.1 Public state", () => {
+            it("[IP][2.1.1] Fundraiser should be ongoing if the starting date has passed", async () => {
+                // NOTE: Time traveling to 2022/07/15
+                const timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+
+                const isFundraiserOngoing =
+                    await investment.isFundraiserOngoingNow();
+                assert.equal(isFundraiserOngoing, true);
+            });
+
+            it("[IP][2.1.2] Fundraiser shouldn't have a soft cap raised initially after the fundraiser start", async () => {
+                // NOTE: Time traveling to 2022/07/15
+                const timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+
+                const isSoftCapReached = await investment.isSoftCapReached();
+                assert.equal(isSoftCapReached, false);
+            });
+
+            it("[IP][2.1.3] Fundraiser period shouldn't have ended yet", async () => {
+                // NOTE: Time traveling to 2022/07/15
+                const timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+
+                const hasFundraiserEnded =
+                    await investment.didFundraiserPeriodEnd();
+                assert.equal(hasFundraiserEnded, false);
+            });
+
+            it("[IP][2.1.4] Fundraiser shouldn't have a failed state during active fundraiser", async () => {
+                // NOTE: Time traveling to 2022/07/15
+                const timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+
+                const isFailed = await investment.isFailedFundraiser();
+                assert.equal(isFailed, false);
+            });
         });
 
-        describe("2.1 Interactions", () => {
-            it("[IP][2.1.1] Fundraiser can be cancelled if it's not started yet", async () => {
+        describe("2.2 Interactions", () => {
+            it("[IP][2.2.1] Fundraiser can be cancelled if it's not started yet", async () => {
                 // Enforce a timestamp before campaign start
                 const time = dateToSeconds("2022/06/15");
                 await investment.connect(buidl1Admin).setTimestamp(time);
@@ -479,14 +617,13 @@ describe("Investment Pool", async () => {
                     investment,
                     "Cancel"
                 );
-
                 assert.notEqual(
                     await investment.emergencyTerminationTimestamp(),
                     0
                 );
             });
 
-            it("[IP][2.1.2] Fundraiser can't be cancelled by anyone, except creator", async () => {
+            it("[IP][2.2.2] Fundraiser can't be cancelled by anyone, except creator", async () => {
                 // Enforce a timestamp before campaign start
                 const time = dateToSeconds("2022/06/15");
                 await investment.connect(buidl1Admin).setTimestamp(time);
@@ -499,7 +636,7 @@ describe("Investment Pool", async () => {
                 );
             });
 
-            it("[IP][2.1.3] Fundraiser can't be cancelled, if it's already started", async () => {
+            it("[IP][2.2.3] Fundraiser can't be cancelled, if it's already started", async () => {
                 // Fundraiser has already started by now
                 const time = dateToSeconds("2022/07/15");
                 await investment.connect(buidl1Admin).setTimestamp(time);
@@ -512,7 +649,7 @@ describe("Investment Pool", async () => {
                 );
             });
 
-            it("[IP][2.1.4] Fundraiser can't be cancelled, if it's already been canceled", async () => {
+            it("[IP][2.2.4] Fundraiser can't be cancelled, if it's already been canceled", async () => {
                 // Enforce a timestamp before campaign start
                 const time = dateToSeconds("2022/06/15");
                 await investment.connect(buidl1Admin).setTimestamp(time);
@@ -525,59 +662,241 @@ describe("Investment Pool", async () => {
                     "InvestmentPool__CampaignCanceled"
                 );
             });
-
-            it("[IP][2.1.5] Fundraiser should be ongoing if the starting date has passed", async () => {
-                // NOTE: Time traveling to 2022/07/15
-                const timeStamp = dateToSeconds("2022/07/15");
-                await investment.setTimestamp(timeStamp);
-
-                const isFundraiserOngoing =
-                    await investment.isFundraiserOngoingNow();
-                assert.equal(isFundraiserOngoing, true);
-            });
-
-            it("[IP][2.1.6] Fundraiser shouldn't have a soft cap raised initially after the fundraiser start", async () => {
-                // NOTE: Time traveling to 2022/07/15
-                const timeStamp = dateToSeconds("2022/07/15");
-                await investment.setTimestamp(timeStamp);
-
-                const isSoftCapReached = await investment.isSoftCapReached();
-                assert.equal(isSoftCapReached, false);
-            });
-
-            it("[IP][2.1.7] Fundraiser period shouldn't have ended yet", async () => {
-                // NOTE: Time traveling to 2022/07/15
-                const timeStamp = dateToSeconds("2022/07/15");
-                await investment.setTimestamp(timeStamp);
-
-                const hasFundraiserEnded =
-                    await investment.didFundraiserPeriodEnd();
-                assert.equal(hasFundraiserEnded, false);
-            });
-
-            it("[IP][2.1.8] Fundraiser shouldn't have a failed state during active fundraiser", async () => {
-                // NOTE: Time traveling to 2022/07/15
-                const timeStamp = dateToSeconds("2022/07/15");
-                await investment.setTimestamp(timeStamp);
-
-                const isFailed = await investment.isFailedFundraiser();
-                assert.equal(isFailed, false);
-            });
         });
     });
 
-    describe.only("3. Investing (with 2 milestones)", () => {
-        beforeEach(async () => {
-            await createInvestmentWithTwoMilestones();
-        });
+    describe("3. Investing process", () => {
+        describe("3.1 Public state", () => {
+            it("[IP][3.1.1] On fundraising investors investment should update memMilestoneInvestments", async () => {
+                const investedAmount: BigNumber =
+                    ethers.utils.parseEther("100");
 
-        describe("3.1 Public state", () => {});
+                // NOTE: Time traveling to 2022/07/15
+                const timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+
+                await investMoney(
+                    fUSDTx,
+                    investment,
+                    investorA,
+                    investedAmount
+                );
+
+                const memMilestoneInvestments =
+                    await investment.getMemMilestoneInvestments(0);
+
+                assert.deepEqual(investedAmount, memMilestoneInvestments);
+            });
+
+            it("[IP][3.1.2] On fundraising investors investment should update investedAmount", async () => {
+                const investedAmount: BigNumber =
+                    ethers.utils.parseEther("100");
+
+                // NOTE: Time traveling to 2022/07/15
+                const timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+
+                await investMoney(
+                    fUSDTx,
+                    investment,
+                    investorA,
+                    investedAmount
+                );
+
+                const contractInvestedAmount = await investment.investedAmount(
+                    investorA.address,
+                    0
+                );
+
+                assert.deepEqual(investedAmount, contractInvestedAmount);
+            });
+
+            it("[IP][3.1.3] On fundraising investors investment should update totalInvestedAmount", async () => {
+                const investedAmount: BigNumber =
+                    ethers.utils.parseEther("100");
+
+                // NOTE: Time traveling to 2022/07/15
+                const timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+
+                await investMoney(
+                    fUSDTx,
+                    investment,
+                    investorA,
+                    investedAmount
+                );
+
+                const totalInvestedAmount =
+                    await investment.totalInvestedAmount();
+
+                assert.deepEqual(investedAmount, totalInvestedAmount);
+            });
+
+            it("[IP][3.1.4] On fundraising investors investment should update balance", async () => {
+                const investedAmount: BigNumber =
+                    ethers.utils.parseEther("100");
+                const investorPriorBalance = BigNumber.from(
+                    await fUSDTx.balanceOf({
+                        account: investorA.address,
+                        providerOrSigner: investorA,
+                    })
+                );
+                // NOTE: Time traveling to 2022/07/15
+                const timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+
+                await investMoney(
+                    fUSDTx,
+                    investment,
+                    investorA,
+                    investedAmount
+                );
+
+                const investorBalance = await fUSDTx.balanceOf({
+                    account: investorA.address,
+                    providerOrSigner: investorA,
+                });
+
+                const balanceDiff = investorPriorBalance.sub(investedAmount);
+                assert.deepEqual(BigNumber.from(investorBalance), balanceDiff);
+            });
+
+            it("[IP][3.1.5] On fundraising investors investment should emit event", async () => {
+                const investedAmount: BigNumber =
+                    ethers.utils.parseEther("100");
+
+                // NOTE: Time traveling to 2022/07/15
+                const timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+
+                // Give token approval
+                await fUSDTx
+                    .approve({
+                        receiver: investment.address,
+                        amount: UINT256_MAX.toString(),
+                    })
+                    .exec(investorA);
+
+                // Invest money
+                await expect(
+                    investment.connect(investorA).invest(investedAmount, false)
+                )
+                    .to.emit(investment, "Invest")
+                    .withArgs(investorA.address, investedAmount);
+            });
+
+            it("[IP][3.1.6] On milestone 0 investor investment should update memMilestoneInvestments", async () => {
+                const investedAmount: BigNumber =
+                    ethers.utils.parseEther("100");
+                const investedAmount2: BigNumber = ethers.utils.parseEther("5");
+
+                // NOTE: Time traveling to 2022/07/15, when 1st milestone already started
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+
+                await investMoney(
+                    fUSDTx,
+                    investment,
+                    investorA,
+                    investedAmount
+                );
+
+                // NOTE: Time traveling to 2022/09/15, when 1st milestone already started
+                timeStamp = dateToSeconds("2022/09/15");
+                await investment.setTimestamp(timeStamp);
+
+                await investMoney(
+                    fUSDTx,
+                    investment,
+                    investorB,
+                    investedAmount2
+                );
+
+                const memMilestoneInvestments =
+                    await investment.getMemMilestoneInvestments(1);
+                const memMilestonePortions =
+                    await investment.getMemMilestonePortions(1);
+                const expectedMemInvestment = investedAmount.add(
+                    investedAmount2
+                        .mul(percentageDivider)
+                        .div(memMilestonePortions)
+                );
+
+                assert.deepEqual(
+                    memMilestoneInvestments,
+                    expectedMemInvestment
+                );
+            });
+
+            it("[IP][3.1.7] On milestone 0 investor investment should update investedAmount", async () => {
+                const investedAmount: BigNumber =
+                    ethers.utils.parseEther("100");
+                const investedAmount2: BigNumber = ethers.utils.parseEther("5");
+
+                // NOTE: Time traveling to 2022/07/15, when 1st milestone already started
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+
+                await investMoney(
+                    fUSDTx,
+                    investment,
+                    investorA,
+                    investedAmount
+                );
+
+                // NOTE: Time traveling to 2022/09/15, when 1st milestone already started
+                timeStamp = dateToSeconds("2022/09/15");
+                await investment.setTimestamp(timeStamp);
+
+                await investMoney(
+                    fUSDTx,
+                    investment,
+                    investorB,
+                    investedAmount2
+                );
+
+                const amount = await investment.investedAmount(
+                    investorB.address,
+                    1
+                );
+                assert.deepEqual(investedAmount2, amount);
+            });
+
+            it("[IP][3.1.8] On milestone 0 investor investment should update totalInvestedAmount", async () => {
+                const investedAmount: BigNumber =
+                    ethers.utils.parseEther("100");
+                const investedAmount2: BigNumber = ethers.utils.parseEther("5");
+
+                // NOTE: Time traveling to 2022/07/15, when 1st milestone already started
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+
+                await investMoney(
+                    fUSDTx,
+                    investment,
+                    investorA,
+                    investedAmount
+                );
+
+                // NOTE: Time traveling to 2022/09/15, when 1st milestone already started
+                timeStamp = dateToSeconds("2022/09/15");
+                await investment.setTimestamp(timeStamp);
+
+                await investMoney(
+                    fUSDTx,
+                    investment,
+                    investorB,
+                    investedAmount2
+                );
+
+                const amount = await investment.totalInvestedAmount();
+                assert.deepEqual(investedAmount.add(investedAmount2), amount);
+            });
+        });
 
         describe("3.2 Interactions", () => {
             it("[IP][3.2.1] Investor shouldn't be able to invest if fundraiser has already been canceled", async () => {
                 const amountToInvest: BigNumber = ethers.utils.parseEther("1");
-                const time = dateToSeconds("2022/06/15");
-                await investment.connect(buidl1Admin).setTimestamp(time);
 
                 await investment.connect(creator).cancel();
 
@@ -594,8 +913,6 @@ describe("Investment Pool", async () => {
                 const time = dateToSeconds("2022/06/15");
                 await investment.connect(buidl1Admin).setTimestamp(time);
 
-                await investment.connect(creator).cancel();
-
                 await expect(
                     investment.connect(investorA).invest(amountToInvest, false)
                 ).to.be.revertedWithCustomError(
@@ -603,292 +920,355 @@ describe("Investment Pool", async () => {
                     "InvestmentPool__FundraiserNotStartedYet"
                 );
             });
+
+            it("[IP][3.2.3] Investor shouldn't be able to invest more than a hard cap if stric mode is enabled", async () => {
+                const amountToInvest: BigNumber = hardCap.add(1);
+                const time = dateToSeconds("2022/07/15");
+                await investment.connect(buidl1Admin).setTimestamp(time);
+
+                await expect(
+                    investment.connect(investorA).invest(amountToInvest, true)
+                ).to.be.revertedWithCustomError(
+                    investment,
+                    "InvestmentPool__CannotInvestAboveHardCap"
+                );
+            });
+
+            it("[IP][3.2.4] Investor shouldn't be able to invest more than a hard cap if hard cap is reached", async () => {
+                const amountToInvest: BigNumber = ethers.utils.parseEther("1");
+                const time = dateToSeconds("2022/07/15");
+                await investment.connect(buidl1Admin).setTimestamp(time);
+
+                // Give token approval
+                await fUSDTx
+                    .approve({
+                        receiver: investment.address,
+                        amount: UINT256_MAX.toString(),
+                    })
+                    .exec(investorA);
+
+                // Invest money
+                await investment.connect(investorA).invest(hardCap, false);
+
+                await expect(
+                    investment.connect(investorB).invest(amountToInvest, false)
+                ).to.be.revertedWithCustomError(
+                    investment,
+                    "InvestmentPool__CannotInvestAboveHardCap"
+                );
+            });
+
+            it("[IP][3.2.5] Investor shouldn't be able to invest more than a hard cap if hard cap is reached and stric mode is enabled", async () => {
+                const amountToInvest: BigNumber = ethers.utils.parseEther("1");
+                const time = dateToSeconds("2022/07/15");
+                await investment.connect(buidl1Admin).setTimestamp(time);
+
+                // Give token approval
+                await fUSDTx
+                    .approve({
+                        receiver: investment.address,
+                        amount: UINT256_MAX.toString(),
+                    })
+                    .exec(investorA);
+
+                // Invest money
+                await investment.connect(investorA).invest(hardCap, false);
+
+                await expect(
+                    investment.connect(investorB).invest(amountToInvest, true)
+                ).to.be.revertedWithCustomError(
+                    investment,
+                    "InvestmentPool__CannotInvestAboveHardCap"
+                );
+            });
+
+            it("[IP][3.2.6] Should allow a smaller investment to go through than a total amount", async () => {
+                const amountToInvest: BigNumber = hardCap.add(10);
+                const time = dateToSeconds("2022/07/15");
+                await investment.connect(buidl1Admin).setTimestamp(time);
+
+                // Give token approval
+                await fUSDTx
+                    .approve({
+                        receiver: investment.address,
+                        amount: UINT256_MAX.toString(),
+                    })
+                    .exec(investorA);
+
+                // Invest money
+                await expect(
+                    investment.connect(investorA).invest(amountToInvest, false)
+                )
+                    .to.emit(investment, "Invest")
+                    .withArgs(investorA.address, hardCap);
+            });
+
+            it("[IP][3.2.7] Shouldn't be able to invest in last milestone", async () => {
+                const investedAmount: BigNumber =
+                    ethers.utils.parseEther("100");
+
+                // NOTE: Time traveling to 2022/07/15
+                const timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+
+                await investment.setCurrentMilestone(1);
+
+                // Invest money
+                await expect(
+                    investment.connect(investorA).invest(investedAmount, false)
+                ).to.be.revertedWithCustomError(
+                    investment,
+                    "InvestmentPool__InLastMilestone"
+                );
+            });
+            it("[IP][3.2.8] Shouldn't be able to invest zero amount", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("0");
+
+                // NOTE: Time traveling to 2022/07/15, when 1st milestone already started
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+
+                await expect(
+                    investment.connect(investorA).invest(investedAmount, false)
+                ).to.be.revertedWithCustomError(
+                    investment,
+                    "InvestmentPool__ZeroAmountProvided"
+                );
+            });
         });
     });
-    /////////////////////////////////////////////////////////////////
 
+    describe("4. Unpledge process", () => {
+        describe("4.1 Public state", () => {
+            it("[IP][4.1.1]", async () => {});
+        });
+        describe("4.2 Interactions", () => {
+            it("[IP][4.2.1]", async () => {});
+        });
+    });
+});
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*
     describe("3. Fundraiser", () => {
         describe("3.2 Interactions", () => {
-            // it("[IP][3.2.1] Investors should not be able to invest before the fundraiser period", async () => {
-            //     // NOTE: Time traveling to 2022/06/15
-            //     const timeStamp = dateToSeconds("2022/06/15");
-            //     await investment.setTimestamp(timeStamp);
-            //     const investedAmount: BigNumber = ethers.utils.parseEther("10");
-            //     // Give token approval
-            //     fUSDTx
-            //         .approve({
-            //             receiver: investment.address,
-            //             // Max value here to test if contract attempts something out of line
-            //             amount: UINT256_MAX.toString(),
-            //         })
-            //         .exec(investorA);
-            //     await expect(
-            //         investment.connect(investorA).invest(investedAmount, false)
-            //     ).to.be.revertedWith("[IP]: not in fundraiser period");
-            // });
-            // it("[IP][2.2.2] Investors should be able to invest money", async () => {
-            //     const investorPriorBalance = BigNumber.from(
-            //         await fUSDTx.balanceOf({
-            //             account: investorA.address,
-            //             providerOrSigner: investorA,
-            //         })
-            //     );
-            //     // NOTE: Time traveling to 2022/07/15
-            //     const timeStamp = dateToSeconds("2022/07/15");
-            //     await investment.setTimestamp(timeStamp);
-            //     const investedAmount: BigNumber = ethers.utils.parseEther("10");
-            //     // Give token approval
-            //     await fUSDTx
-            //         .approve({
-            //             receiver: investment.address,
-            //             // Max value here to test if contract attempts something out of line
-            //             amount: UINT256_MAX.toString(),
-            //         })
-            //         .exec(investorA);
-            //     // Invest money
-            //     await expect(
-            //         investment.connect(investorA).invest(investedAmount, false)
-            //     )
-            //         .to.emit(investment, "Invest")
-            //         .withArgs(investorA.address, investedAmount);
-            //     const investedFunds = await investment.investedAmount(
-            //         investorA.address,
-            //         0
-            //     );
-            //     assert.deepEqual(
-            //         investedFunds,
-            //         investedAmount,
-            //         "Invested amount is wrong"
-            //     );
-            //     const investorBalance = await fUSDTx.balanceOf({
-            //         account: investorA.address,
-            //         providerOrSigner: investorA,
-            //     });
-            //     const balanceDiff = investorPriorBalance.sub(investedAmount);
-            //     assert.deepEqual(
-            //         BigNumber.from(investorBalance),
-            //         balanceDiff,
-            //         "Investors balance is wrong after the investment"
-            //     );
-            // });
-            // it("[IP][2.2.3] Investor should be able to do a full unpledge", async () => {
-            //     const investorPriorBalance = BigNumber.from(
-            //         await fUSDTx.balanceOf({
-            //             account: investorA.address,
-            //             providerOrSigner: investorA,
-            //         })
-            //     );
-            //     // NOTE: Time traveling to 2022/07/15
-            //     const timeStamp = dateToSeconds("2022/07/15");
-            //     await investment.setTimestamp(timeStamp);
-            //     const investedAmount: BigNumber = ethers.utils.parseEther("10");
-            //     // Give token approval
-            //     await fUSDTx
-            //         .approve({
-            //             receiver: investment.address,
-            //             // Max value here to test if contract attempts something out of line
-            //             amount: UINT256_MAX.toString(),
-            //         })
-            //         .exec(investorA);
-            //     // Invest money
-            //     await expect(
-            //         investment.connect(investorA).invest(investedAmount, false)
-            //     )
-            //         .to.emit(investment, "Invest")
-            //         .withArgs(investorA.address, investedAmount);
-            //     // Request them back
-            //     await expect(
-            //         investment.connect(investorA).unpledge(0, investedAmount)
-            //     )
-            //         .to.emit(investment, "Unpledge")
-            //         .withArgs(investorA.address, investedAmount);
-            //     const investorsBalance = await fUSDTx.balanceOf({
-            //         account: investorA.address,
-            //         providerOrSigner: investorA,
-            //     });
-            //     assert.deepEqual(
-            //         BigNumber.from(investorsBalance),
-            //         investorPriorBalance,
-            //         "Investor's balance should be == initial, after full unpledge"
-            //     );
-            // });
-            // it("[IP][2.2.4] Investor should be able to do a partial unpledge", async () => {
-            //     const investorPriorBalance = BigNumber.from(
-            //         await fUSDTx.balanceOf({
-            //             account: investorA.address,
-            //             providerOrSigner: investorA,
-            //         })
-            //     );
-            //     // NOTE: Time traveling to 2022/07/15
-            //     const timeStamp = "2022/07/15";
-            //     await investment.setTimestamp(timeStamp);
-            //     const investedAmount: BigNumber = ethers.utils.parseEther("10");
-            //     // Give token approval
-            //     await fUSDTx
-            //         .approve({
-            //             receiver: investment.address,
-            //             // Max value here to test if contract attempts something out of line
-            //             amount: UINT256_MAX.toString(),
-            //         })
-            //         .exec(investorA);
-            //     // Invest money
-            //     await expect(
-            //         investment.connect(investorA).invest(investedAmount, false)
-            //     )
-            //         .to.emit(investment, "Invest")
-            //         .withArgs(investorA.address, investedAmount);
-            //     // Request half of the funds back
-            //     await expect(
-            //         investment
-            //             .connect(investorA)
-            //             .unpledge(0, investedAmount.div(2))
-            //     )
-            //         .to.emit(investment, "Unpledge")
-            //         .withArgs(investorA.address, investedAmount.div(2));
-            //     const investorsBalance = await fUSDTx.balanceOf({
-            //         account: investorA.address,
-            //         providerOrSigner: investorA,
-            //     });
-            //     assert.deepEqual(
-            //         BigNumber.from(investorsBalance),
-            //         investorPriorBalance.sub(investedAmount.div(2)),
-            //         "Investor's balance should get half of invested funds back"
-            //     );
-            //     const investedLeft = await investment.investedAmount(
-            //         investorA.address,
-            //         0
-            //     );
-            //     assert.deepEqual(
-            //         investedLeft,
-            //         investedAmount.div(2),
-            //         "Half of invested funds should stay in contract"
-            //     );
-            // });
-            // it("[IP][2.2.5] Investor shouldn't be able to unpledge more than invested", async () => {
-            //     // NOTE: Time traveling to 2022/07/15
-            //     const timeStamp = dateToSeconds("2022/07/15");
-            //     await investment.setTimestamp(timeStamp);
-            //     const investedAmount: BigNumber = ethers.utils.parseEther("10");
-            //     // Give token approval
-            //     await fUSDTx
-            //         .approve({
-            //             receiver: investment.address,
-            //             // Max value here to test if contract attempts something out of line
-            //             amount: UINT256_MAX.toString(),
-            //         })
-            //         .exec(investorA);
-            //     // Invest money
-            //     await expect(
-            //         investment.connect(investorA).invest(investedAmount, false)
-            //     )
-            //         .to.emit(investment, "Invest")
-            //         .withArgs(investorA.address, investedAmount);
-            //     // Request them back, but 1 wei more, should revert
-            //     await expect(
-            //         investment
-            //             .connect(investorA)
-            //             .unpledge(0, investedAmount.add(1))
-            //     ).to.be.revertedWith("[IP]: cannot unpledge this investment");
-            // });
-            // it("[IP][2.2.6] Investors should be able to collectively raise the soft cap", async () => {
-            //     // NOTE: Time traveling to 2022/07/15
-            //     const timeStamp = dateToSeconds("2022/07/15");
-            //     await investment.setTimestamp(timeStamp);
-            //     const investedAmount: BigNumber =
-            //         ethers.utils.parseEther("750");
-            //     // Give token approval Investor A
-            //     await fUSDTx
-            //         .approve({
-            //             receiver: investment.address,
-            //             // Max value here to test if contract attempts something out of line
-            //             amount: UINT256_MAX.toString(),
-            //         })
-            //         .exec(investorA);
-            //     // Invest money
-            //     await expect(
-            //         investment.connect(investorA).invest(investedAmount, false)
-            //     )
-            //         .to.emit(investment, "Invest")
-            //         .withArgs(investorA.address, investedAmount);
-            //     // Give token approval Investor B
-            //     await fUSDTx
-            //         .approve({
-            //             receiver: investment.address,
-            //             // Max value here to test if contract attempts something out of line
-            //             amount: UINT256_MAX.toString(),
-            //         })
-            //         .exec(investorB);
-            //     // Invest money
-            //     await expect(
-            //         investment.connect(investorB).invest(investedAmount, false)
-            //     )
-            //         .to.emit(investment, "Invest")
-            //         .withArgs(investorB.address, investedAmount);
-            //     const softCapRaised = await investment.isSoftCapReached();
-            //     assert.isTrue(softCapRaised);
-            // });
-            // it("[IP][2.2.7] Non-investor shouldn't be able to unpledge", async () => {
-            //     // NOTE: Time traveling to 2022/07/15
-            //     const timeStamp = dateToSeconds("2022/07/15");
-            //     await investment.setTimestamp(timeStamp);
-            //     const investedAmount: BigNumber = ethers.utils.parseEther("10");
-            //     // Give token approval
-            //     await fUSDTx
-            //         .approve({
-            //             receiver: investment.address,
-            //             // Max value here to test if contract attempts something out of line
-            //             amount: UINT256_MAX.toString(),
-            //         })
-            //         .exec(investorA);
-            //     // Invest money
-            //     await expect(
-            //         investment.connect(investorA).invest(investedAmount, false)
-            //     )
-            //         .to.emit(investment, "Invest")
-            //         .withArgs(investorA.address, investedAmount);
-            //     // Note, the case testing unpledging more than investment is tested separately,
-            //     // here we'll test that unpledging 0 does not change the balance
-            //     await expect(
-            //         investment
-            //             .connect(foreignActor)
-            //             .unpledge(0, BigNumber.from(0))
-            //     )
-            //         .to.emit(investment, "Unpledge")
-            //         .withArgs(foreignActor.address, BigNumber.from(0));
-            //     const balance = await fUSDTx.balanceOf({
-            //         account: foreignActor.address,
-            //         providerOrSigner: foreignActor,
-            //     });
-            //     assert.deepEqual(
-            //         BigNumber.from(balance),
-            //         BigNumber.from(0),
-            //         "Balance was altered by unpledging 0. Foreign actor got funds"
-            //     );
-            // });
-            // it("[IP][2.2.8] Refund should be inactive during the fundraiser period", async () => {
-            //     // NOTE: Time traveling to 2022/07/15
-            //     const timeStamp = dateToSeconds("2022/07/15");
-            //     await investment.setTimestamp(timeStamp);
-            //     const investedAmount: BigNumber = ethers.utils.parseEther("10");
-            //     // Give token approval
-            //     await fUSDTx
-            //         .approve({
-            //             receiver: investment.address,
-            //             // Max value here to test if contract attempts something out of line
-            //             amount: UINT256_MAX.toString(),
-            //         })
-            //         .exec(investorA);
-            //     // Invest money
-            //     await expect(
-            //         investment.connect(investorA).invest(investedAmount, false)
-            //     )
-            //         .to.emit(investment, "Invest")
-            //         .withArgs(investorA.address, investedAmount);
-            //     // Try to refund
-            //     await expect(
-            //         investment.connect(investorA).refund()
-            //     ).to.be.revertedWith("[IP]: refund is not available");
-            // });
+            it("[IP][2.2.3] Investor should be able to do a full unpledge", async () => {
+                const investorPriorBalance = BigNumber.from(
+                    await fUSDTx.balanceOf({
+                        account: investorA.address,
+                        providerOrSigner: investorA,
+                    })
+                );
+                // NOTE: Time traveling to 2022/07/15
+                const timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                const investedAmount: BigNumber = ethers.utils.parseEther("10");
+                // Give token approval
+                await fUSDTx
+                    .approve({
+                        receiver: investment.address,
+                        // Max value here to test if contract attempts something out of line
+                        amount: UINT256_MAX.toString(),
+                    })
+                    .exec(investorA);
+                // Invest money
+                await expect(
+                    investment.connect(investorA).invest(investedAmount, false)
+                )
+                    .to.emit(investment, "Invest")
+                    .withArgs(investorA.address, investedAmount);
+                // Request them back
+                await expect(
+                    investment.connect(investorA).unpledge(0, investedAmount)
+                )
+                    .to.emit(investment, "Unpledge")
+                    .withArgs(investorA.address, investedAmount);
+                const investorsBalance = await fUSDTx.balanceOf({
+                    account: investorA.address,
+                    providerOrSigner: investorA,
+                });
+                assert.deepEqual(
+                    BigNumber.from(investorsBalance),
+                    investorPriorBalance,
+                    "Investor's balance should be == initial, after full unpledge"
+                );
+            });
+            it("[IP][2.2.4] Investor should be able to do a partial unpledge", async () => {
+                const investorPriorBalance = BigNumber.from(
+                    await fUSDTx.balanceOf({
+                        account: investorA.address,
+                        providerOrSigner: investorA,
+                    })
+                );
+                // NOTE: Time traveling to 2022/07/15
+                const timeStamp = "2022/07/15";
+                await investment.setTimestamp(timeStamp);
+                const investedAmount: BigNumber = ethers.utils.parseEther("10");
+                // Give token approval
+                await fUSDTx
+                    .approve({
+                        receiver: investment.address,
+                        // Max value here to test if contract attempts something out of line
+                        amount: UINT256_MAX.toString(),
+                    })
+                    .exec(investorA);
+                // Invest money
+                await expect(
+                    investment.connect(investorA).invest(investedAmount, false)
+                )
+                    .to.emit(investment, "Invest")
+                    .withArgs(investorA.address, investedAmount);
+                // Request half of the funds back
+                await expect(
+                    investment
+                        .connect(investorA)
+                        .unpledge(0, investedAmount.div(2))
+                )
+                    .to.emit(investment, "Unpledge")
+                    .withArgs(investorA.address, investedAmount.div(2));
+                const investorsBalance = await fUSDTx.balanceOf({
+                    account: investorA.address,
+                    providerOrSigner: investorA,
+                });
+                assert.deepEqual(
+                    BigNumber.from(investorsBalance),
+                    investorPriorBalance.sub(investedAmount.div(2)),
+                    "Investor's balance should get half of invested funds back"
+                );
+                const investedLeft = await investment.investedAmount(
+                    investorA.address,
+                    0
+                );
+                assert.deepEqual(
+                    investedLeft,
+                    investedAmount.div(2),
+                    "Half of invested funds should stay in contract"
+                );
+            });
+            it("[IP][2.2.5] Investor shouldn't be able to unpledge more than invested", async () => {
+                // NOTE: Time traveling to 2022/07/15
+                const timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                const investedAmount: BigNumber = ethers.utils.parseEther("10");
+                // Give token approval
+                await fUSDTx
+                    .approve({
+                        receiver: investment.address,
+                        // Max value here to test if contract attempts something out of line
+                        amount: UINT256_MAX.toString(),
+                    })
+                    .exec(investorA);
+                // Invest money
+                await expect(
+                    investment.connect(investorA).invest(investedAmount, false)
+                )
+                    .to.emit(investment, "Invest")
+                    .withArgs(investorA.address, investedAmount);
+                // Request them back, but 1 wei more, should revert
+                await expect(
+                    investment
+                        .connect(investorA)
+                        .unpledge(0, investedAmount.add(1))
+                ).to.be.revertedWith("[IP]: cannot unpledge this investment");
+            });
+            it("[IP][2.2.6] Investors should be able to collectively raise the soft cap", async () => {
+                // NOTE: Time traveling to 2022/07/15
+                const timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                const investedAmount: BigNumber =
+                    ethers.utils.parseEther("750");
+                // Give token approval Investor A
+                await fUSDTx
+                    .approve({
+                        receiver: investment.address,
+                        // Max value here to test if contract attempts something out of line
+                        amount: UINT256_MAX.toString(),
+                    })
+                    .exec(investorA);
+                // Invest money
+                await expect(
+                    investment.connect(investorA).invest(investedAmount, false)
+                )
+                    .to.emit(investment, "Invest")
+                    .withArgs(investorA.address, investedAmount);
+                // Give token approval Investor B
+                await fUSDTx
+                    .approve({
+                        receiver: investment.address,
+                        // Max value here to test if contract attempts something out of line
+                        amount: UINT256_MAX.toString(),
+                    })
+                    .exec(investorB);
+                // Invest money
+                await expect(
+                    investment.connect(investorB).invest(investedAmount, false)
+                )
+                    .to.emit(investment, "Invest")
+                    .withArgs(investorB.address, investedAmount);
+                const softCapRaised = await investment.isSoftCapReached();
+                assert.isTrue(softCapRaised);
+            });
+            it("[IP][2.2.7] Non-investor shouldn't be able to unpledge", async () => {
+                // NOTE: Time traveling to 2022/07/15
+                const timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                const investedAmount: BigNumber = ethers.utils.parseEther("10");
+                // Give token approval
+                await fUSDTx
+                    .approve({
+                        receiver: investment.address,
+                        // Max value here to test if contract attempts something out of line
+                        amount: UINT256_MAX.toString(),
+                    })
+                    .exec(investorA);
+                // Invest money
+                await expect(
+                    investment.connect(investorA).invest(investedAmount, false)
+                )
+                    .to.emit(investment, "Invest")
+                    .withArgs(investorA.address, investedAmount);
+                // Note, the case testing unpledging more than investment is tested separately,
+                // here we'll test that unpledging 0 does not change the balance
+                await expect(
+                    investment
+                        .connect(foreignActor)
+                        .unpledge(0, BigNumber.from(0))
+                )
+                    .to.emit(investment, "Unpledge")
+                    .withArgs(foreignActor.address, BigNumber.from(0));
+                const balance = await fUSDTx.balanceOf({
+                    account: foreignActor.address,
+                    providerOrSigner: foreignActor,
+                });
+                assert.deepEqual(
+                    BigNumber.from(balance),
+                    BigNumber.from(0),
+                    "Balance was altered by unpledging 0. Foreign actor got funds"
+                );
+            });
+            it("[IP][2.2.8] Refund should be inactive during the fundraiser period", async () => {
+                // NOTE: Time traveling to 2022/07/15
+                const timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                const investedAmount: BigNumber = ethers.utils.parseEther("10");
+                // Give token approval
+                await fUSDTx
+                    .approve({
+                        receiver: investment.address,
+                        // Max value here to test if contract attempts something out of line
+                        amount: UINT256_MAX.toString(),
+                    })
+                    .exec(investorA);
+                // Invest money
+                await expect(
+                    investment.connect(investorA).invest(investedAmount, false)
+                )
+                    .to.emit(investment, "Invest")
+                    .withArgs(investorA.address, investedAmount);
+                // Try to refund
+                await expect(
+                    investment.connect(investorA).refund()
+                ).to.be.revertedWith("[IP]: refund is not available");
+            });
         });
     });
 
@@ -2315,3 +2695,4 @@ describe("Investment Pool", async () => {
         // });
     });
 });
+*/

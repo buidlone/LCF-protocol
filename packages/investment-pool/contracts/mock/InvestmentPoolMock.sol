@@ -34,4 +34,8 @@ contract InvestmentPoolMock is InvestmentPool {
     {
         return memMilestoneInvestments[_id];
     }
+
+    function setCurrentMilestone(uint256 _id) public {
+        currentMilestone = _id;
+    }
 }

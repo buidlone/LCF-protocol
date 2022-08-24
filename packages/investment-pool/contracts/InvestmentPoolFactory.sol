@@ -31,7 +31,10 @@ error InvestmentPoolFactory__NoMilestonesAdded();
 error InvestmentPoolFactory__MilestonesCountExceedsMaxCount();
 error InvestmentPoolFactory__MilestoneStartsBeforeFundraiserEnds();
 error InvestmentPoolFactory__InvalidMilestoneInverval();
-error InvestmentPoolFactory__PercentagesAreNotAddingUp();
+error InvestmentPoolFactory__PercentagesAreNotAddingUp(
+    uint256 totalPercentagesProvided,
+    uint256 maxPercentages
+);
 error InvestmentPoolFactory__MilestonesAreNotAdjacentInTime(
     uint256 oldMilestoneEnd,
     uint256 newMilestoneStart
@@ -215,7 +218,10 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         }
 
         if (totalPercentage != PERCENTAGE_DIVIDER)
-            revert InvestmentPoolFactory__PercentagesAreNotAddingUp();
+            revert InvestmentPoolFactory__PercentagesAreNotAddingUp(
+                totalPercentage,
+                PERCENTAGE_DIVIDER
+            );
     }
 
     function _getNow() internal view virtual returns (uint256) {
