@@ -28,6 +28,7 @@ error InvestmentPool__SoftCapNotReached();
 error InvestmentPool__FundraiserAlreadyStarted();
 error InvestmentPool__FundraiserNotStartedYet();
 error InvestmentPool__NotInFundraiserPeriod();
+error InvestmentPool__InFundraiserPeriod();
 error InvestmentPool__FundraiserNotFailed();
 error InvestmentPool__FundraiserFailed();
 error InvestmentPool__NotCreator();
@@ -40,9 +41,15 @@ error InvestmentPool__NoMoneyInvested();
 error InvestmentPool__AlreadyStreamingForMilestone(uint256 milestone);
 error InvestmentPool__GelatoEthTransferFailed();
 error InvestmentPool__CannotInvestAboveHardCap();
-error InvestmentPool__CannotUnpledgeInvestment();
 error InvestmentPool__InLastMilestone();
 error InvestmentPool__ZeroAmountProvided();
+error InvestmentPool__AmountIsGreaterThanInvested(
+    uint256 givenAmount,
+    uint256 investedAmount
+);
+error InvestmentPool__MilestoneAlreadyStarted();
+error InvestmentPool__FundraiserAlreadyEnded();
+error InvestmentPool__AlreadyPaidSeedAmountForMilestone(uint256 milestoneId);
 
 contract InvestmentPool is
     IInitializableInvestmentPool,
@@ -140,6 +147,13 @@ contract InvestmentPool is
         _;
     }
 
+    /// @notice Ensures that the fundraiser is not started yet
+    modifier fundraiserNotEndedYet() {
+        if (_getNow() > fundraiserEndAt)
+            revert InvestmentPool__FundraiserAlreadyEnded();
+        _;
+    }
+
     /// @notice Ensures that the fundraiser is already started
     modifier fundraiserAlreadyStarted() {
         if (_getNow() < fundraiserStartAt)
@@ -160,6 +174,12 @@ contract InvestmentPool is
         _;
     }
 
+    /// @notice Ensures that the fundraiser has not failed
+    modifier fundraiserNotFailed() {
+        if (isFailedFundraiser()) revert InvestmentPool__FundraiserFailed();
+        _;
+    }
+
     /// @notice Ensures that the message sender is the fundraiser creator
     modifier onlyCreator() {
         if (creator != _msgSender()) revert InvestmentPool__NotCreator();
@@ -170,13 +190,6 @@ contract InvestmentPool is
     modifier onlyGelatoOps() {
         if (address(gelatoOps) != _msgSender())
             revert InvestmentPool__NotGelatoOps();
-        _;
-    }
-
-    /// @notice Ensures that the current milestone is greater or equal to provided one
-    modifier milestoneUnlocked(uint256 _index) {
-        if (_index > _getCurrentMilestoneIndex())
-            revert InvestmentPool__MilestoneStillLocked();
         _;
     }
 
@@ -377,6 +390,7 @@ contract InvestmentPool is
         fundraiserAlreadyStarted
         notInLastMilestone
         notZeroAmount(_amount)
+        fundraiserNotFailed
     {
         uint256 untilHardcap = hardCap - totalInvestedAmount;
 
@@ -401,48 +415,60 @@ contract InvestmentPool is
         emit Invest(_msgSender(), _amount);
     }
 
-    /** @notice Allows investors to change their mind during the fundraiser period and get their funds back. All at once, or just a specified portion
-        @param _amount Amount of funds to withdraw.
+    /**
+     * @notice Allows investors to change their mind during the fundraiser and milestone periods and get their funds back while milestone hasn't started yet. All at once, or just a specified portion
+     * @param _milestoneId id of milestone from which investor wants to unpledge the amount
+     * @param _amount Amount of funds to withdraw.
      */
-    function unpledge(uint256 _milestoneId, uint256 _amount) external {
-        if (isFailedFundraiser()) revert InvestmentPool__FundraiserFailed();
+    function unpledge(uint256 _milestoneId, uint256 _amount)
+        external
+        notZeroAmount(_amount)
+    {
+        uint256 currentInvestedAmount = investedAmount[_msgSender()][
+            _milestoneId
+        ];
+        if (_amount > currentInvestedAmount)
+            revert InvestmentPool__AmountIsGreaterThanInvested(
+                _amount,
+                currentInvestedAmount
+            );
+        if (_milestoneId == 0 && _getNow() > fundraiserEndAt)
+            revert InvestmentPool__FundraiserAlreadyEnded();
+        if (_getNow() > milestones[_milestoneId].startDate)
+            revert InvestmentPool__MilestoneAlreadyStarted();
 
         uint256 investmentCoefficient = memMilestonePortions[_milestoneId];
 
-        if (
-            investedAmount[_msgSender()][_milestoneId] >= _amount &&
-            milestones[_milestoneId].startDate > _getNow()
-        ) {
-            totalInvestedAmount -= _amount;
-            investedAmount[_msgSender()][_milestoneId] -= _amount;
-            memMilestoneInvestments[_milestoneId] -=
-                (_amount * investmentCoefficient) /
-                PERCENTAGE_DIVIDER;
+        memMilestoneInvestments[_milestoneId] -=
+            (_amount * PERCENTAGE_DIVIDER) /
+            investmentCoefficient;
+        investedAmount[_msgSender()][_milestoneId] -= _amount;
+        totalInvestedAmount -= _amount;
 
-            acceptedToken.transfer(_msgSender(), _amount);
+        acceptedToken.transfer(_msgSender(), _amount);
 
-            emit Unpledge(_msgSender(), _amount);
-        } else {
-            revert InvestmentPool__CannotUnpledgeInvestment();
-        }
+        emit Unpledge(_msgSender(), _amount);
     }
 
-    /** @notice Allows investors to withdraw all locked funds for a failed campaign(if the soft cap has not been raised by the fundraiser end date)
+    /**
+     * @notice Allows investors to withdraw all locked funds for a failed campaign(if the soft cap has not been raised by the fundraiser end date)
      */
     function refund()
         external
-    // failedFundraiser // TODO: Possible that after milestone voting is added, this needs to be changed
-    // to account for milestone rejection
+    // failedFundraiser // TODO: Possible that after milestone voting is added, this needs to be changed to account for milestone rejection
     {
-        if (!(isFailedFundraiser() || isEmergencyTerminated()))
-            revert InvestmentPool__RefundNotAvailable();
+        if (isFundraiserOngoingNow())
+            revert InvestmentPool__InFundraiserPeriod();
+
+        // TODO: simplify this part
+        // if (!(isFailedFundraiser() || isEmergencyTerminated()))
+        //     revert InvestmentPool__RefundNotAvailable();
 
         if (isFailedFundraiser()) {
             uint investment = investedAmount[_msgSender()][0];
-            investedAmount[_msgSender()][0] = 0;
-
             if (investment == 0) revert InvestmentPool__NoMoneyInvested();
 
+            investedAmount[_msgSender()][0] = 0;
             acceptedToken.transfer(_msgSender(), investment);
 
             emit Refund(_msgSender(), investment);
@@ -457,13 +483,14 @@ contract InvestmentPool is
             _getCurrentMilestoneIndex()
         );
 
-        uint tokensOwed;
+        uint256 tokensOwed = 0;
         for (uint i = 0; i < milestoneCount; i++) {
             // We'll just straight up delete the investment information for now
             // Maybe needed for bookkeeping reasons?
 
             uint256 investmentCoef = memMilestonePortions[i];
             uint256 investment = investedAmount[_msgSender()][i];
+            investedAmount[_msgSender()][i] = 0;
 
             uint256 investmentLeft = _getUnburnedAmountForInvestment(
                 investment,
@@ -472,26 +499,22 @@ contract InvestmentPool is
             );
 
             tokensOwed += investmentLeft;
-
-            investedAmount[_msgSender()][i] = 0;
         }
 
         if (tokensOwed == 0) revert InvestmentPool__NoMoneyInvested();
 
         acceptedToken.transfer(_msgSender(), tokensOwed);
-
         emit Refund(_msgSender(), tokensOwed);
     }
 
-    /** @notice Allows the pool creator to start streaming/receive funds for a certain milestone
-        @param _milestoneId Milestone index to claim funds for
+    /**
+     * @notice Allows the pool creator to start streaming/receive funds for a certain milestone
+     * @param _milestoneId Milestone index to claim funds for
      */
-    function claim(uint256 _milestoneId)
-        public
-        onlyCreator
-        milestoneUnlocked(_milestoneId)
-        isNotCanceled
-    {
+    function claim(uint256 _milestoneId) public onlyCreator isNotCanceled {
+        if (_milestoneId > _getCurrentMilestoneIndex())
+            revert InvestmentPool__MilestoneStillLocked();
+
         Milestone storage milestone = milestones[_milestoneId];
 
         if (!milestone.seedAmountPaid) {
@@ -504,6 +527,7 @@ contract InvestmentPool is
 
         uint256 tokenPortion = getTotalMilestoneTokenAllocation(_milestoneId);
         uint256 owedAmount = tokenPortion - milestone.paidAmount;
+
         // NOTE: we'll need to account for termination window here
         // in order to not create very high rate and short lived streams
         // that are difficult to terminate in time
@@ -514,11 +538,10 @@ contract InvestmentPool is
             milestone.paidAmount = tokenPortion;
             acceptedToken.transfer(creator, owedAmount);
         } else {
-            if (milestone.streamOngoing)
-                revert InvestmentPool__AlreadyStreamingForMilestone(
-                    _milestoneId
-                );
-
+            require(
+                !milestone.streamOngoing,
+                "[IP]: already streaming for this milestone"
+            );
             // Milestone is still ongoing, calculate the flowrate and stream
             uint leftStreamDuration = milestone.endDate - _getNow();
 
@@ -551,8 +574,6 @@ contract InvestmentPool is
             creator
         );
 
-        // TODO: handle overstream case in-between milestones
-        // (if stream was not terminated in time)
         uint256 streamedAmount = (_getNow() - timestamp) *
             uint256(int256(flowRate));
 
@@ -563,14 +584,10 @@ contract InvestmentPool is
     }
 
     // TODO: Decide if needed
-    /** @notice Stops fundraiser campaign
+    /**
+     * @notice Stops fundraiser campaign
      */
-    function cancel()
-        external
-        onlyCreator
-        isNotCanceled
-        fundraiserNotStartedYet
-    {
+    function cancel() external onlyCreator isNotCanceled fundraiserNotEndedYet {
         emergencyTerminationTimestamp = (uint48)(block.timestamp);
         emit Cancel();
     }
@@ -683,6 +700,7 @@ contract InvestmentPool is
     }
 
     /// @dev Callback executed AFTER a stream is TERMINATED. This MUST NOT revert.
+    /// @dev Not called from our smart contract
     /// @param token Super Token no longer being streamed in.
     /// @param agreementClass Agreement contract address.
     /// @param ctx Callback context.
@@ -815,6 +833,7 @@ contract InvestmentPool is
 
     function _calculatePortion(uint256 _amountTotal, uint256 _portion)
         internal
+        pure
         returns (uint256)
     {
         return (_amountTotal * _portion) / PERCENTAGE_DIVIDER;
@@ -847,30 +866,6 @@ contract InvestmentPool is
         }
     }
 
-    // NOTE: potentially expensive, verify
-    function _getRealTimeInvestIndex(uint256 timestamp)
-        internal
-        view
-        returns (uint)
-    {
-        for (uint i = 0; i < milestoneCount; i++) {
-            if (
-                milestones[i].startDate <= timestamp &&
-                milestones[i].endDate > timestamp
-            ) {
-                return i + 1;
-            }
-        }
-
-        if (milestones[0].startDate > timestamp) {
-            return 0;
-            // Not Started yet, fundraiser
-        } else {
-            // Ended
-            return milestoneCount;
-        }
-    }
-
     // NOTE: Milestone id here is the milestone you are investing "FOR".
     // Meaning, for initial fundraiser with the goal to achieve soft cap
     // the index would be 0, and returned coefficient shall be 100% (PERCENTAGE_DIVIDER)
@@ -891,9 +886,7 @@ contract InvestmentPool is
             investmentCoefficient;
 
         memMilestoneInvestments[_milestoneId] += scaledInvestment;
-
         investedAmount[_investor][_milestoneId] += _amount;
-
         totalInvestedAmount += _amount;
     }
 
@@ -929,10 +922,13 @@ contract InvestmentPool is
         uint totalPercentage = milestones[_milestoneId].intervalSeedPortion +
             milestones[_milestoneId].intervalStreamingPortion;
 
+        // 1200
         uint256 memInvAmount = memMilestoneInvestments[_milestoneId];
 
+        // 1200 * 25 = 30'000
         uint256 subt = memInvAmount * totalPercentage;
 
+        // 30'000 / 100 = 300
         return subt / PERCENTAGE_DIVIDER;
     }
 
@@ -953,6 +949,7 @@ contract InvestmentPool is
         }
 
         // TODO: perhaps linearize the logic?
+        // 25% - (60$ * 100% / 300$)
         return
             memMilestonePortions[_terminationMilestoneId] -
             ((tokensReserved * PERCENTAGE_DIVIDER) /
