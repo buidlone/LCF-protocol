@@ -42,7 +42,7 @@ interface IInvestmentPool is ISuperApp {
 
     function invest(uint256 _amount, bool _strict) external;
 
-    function unpledge(uint256 _milestoneId, uint256 _amount) external;
+    function unpledge(uint256 _amount) external;
 
     function refund() external;
 
@@ -50,7 +50,9 @@ interface IInvestmentPool is ISuperApp {
 
     function terminateMilestoneStreamFinal(uint256 _milestoneId) external;
 
-    function cancel() external;
+    function cancelBeforeFundraiserStart() external;
+
+    function cancelDuringMilestones() external;
 
     function milestoneJump() external;
 
@@ -64,20 +66,14 @@ interface IInvestmentPool is ISuperApp {
 
     function isFailedFundraiser() external view returns (bool);
 
-    function canTerminateMilestoneStreamFinal(uint256 _milestoneId)
-        external
-        view
-        returns (bool);
+    function canTerminateMilestoneStreamFinal(uint256 _milestoneId) external view returns (bool);
 
     function canGelatoTerminateMilestoneStreamFinal(uint256 _milestoneId)
         external
         view
         returns (bool);
 
-    function gelatoChecker()
-        external
-        view
-        returns (bool canExec, bytes memory execPayload);
+    function gelatoChecker() external view returns (bool canExec, bytes memory execPayload);
 
     function startGelatoTask() external;
 
