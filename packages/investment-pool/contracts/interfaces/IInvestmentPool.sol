@@ -54,7 +54,7 @@ interface IInvestmentPool is ISuperApp {
 
     function cancelDuringMilestones() external;
 
-    function milestoneJump() external;
+    function milestoneJumpOrFinalProjectTermination() external;
 
     function isFundraiserOngoingNow() external view returns (bool);
 

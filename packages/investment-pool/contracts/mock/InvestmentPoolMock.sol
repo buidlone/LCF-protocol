@@ -19,19 +19,11 @@ contract InvestmentPoolMock is InvestmentPool {
         return timestamp == 0 ? block.timestamp : timestamp;
     }
 
-    function getMemMilestonePortions(uint256 _id)
-        public
-        view
-        returns (uint256)
-    {
+    function getMemMilestonePortions(uint256 _id) public view returns (uint256) {
         return memMilestonePortions[_id];
     }
 
-    function getMemMilestoneInvestments(uint256 _id)
-        public
-        view
-        returns (uint256)
-    {
+    function getMemMilestoneInvestments(uint256 _id) public view returns (uint256) {
         return memMilestoneInvestments[_id];
     }
 
