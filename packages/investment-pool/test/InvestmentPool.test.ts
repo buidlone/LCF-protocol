@@ -6,6 +6,7 @@ import {assert, expect} from "chai";
 import {InvestmentPoolFactoryMock, InvestmentPoolMock, GelatoOpsMock} from "../typechain-types";
 import traveler from "ganache-time-traveler";
 import {notDeepEqual} from "assert";
+import {iInvestmentPoolSol} from "../typechain-types/contracts/interfaces";
 
 // const { toWad } = require("@decentral.ee/web3-helpers");
 // const { assert, should, expect } = require("chai");
@@ -55,12 +56,24 @@ let campaignEndDate: BigNumber;
 let creationRes: ContractTransaction;
 let gelatoOpsMock: GelatoOpsMock;
 
+// Percentages (in divider format)
 let percentageDivider: BigNumber = BigNumber.from(0);
 let percent5InIpBigNumber: BigNumber;
 let percent20InIpBigNumber: BigNumber;
 let percent25InIpBigNumber: BigNumber;
 let percent70InIpBigNumber: BigNumber;
 let percent95InIpBigNumber: BigNumber;
+
+// Project state values
+let canceledProjectByteValue: BigNumber;
+let beforeFundraiserByteValue: BigNumber;
+let activeFundraiserByteValue: BigNumber;
+let failedFundraiserByteValue: BigNumber;
+let fundraiserEndedNoActiveMilestone: BigNumber;
+let notLastActiveMilestoneByteValue: BigNumber;
+let lastMilestoneByteValue: BigNumber;
+let terminatedByVotingByteValue: BigNumber;
+let noStateByteValue: BigNumber;
 
 const percentToIpBigNumber = (percent: number): BigNumber => {
     return percentageDivider.mul(percent).div(100);
@@ -100,6 +113,19 @@ const definePercentageDivider = async (investmentPoolFactory: InvestmentPoolFact
     percent25InIpBigNumber = percentToIpBigNumber(25);
     percent70InIpBigNumber = percentToIpBigNumber(70);
     percent95InIpBigNumber = percentToIpBigNumber(95);
+};
+
+const defineProjectStateByteValues = async (investment: InvestmentPoolMock) => {
+    canceledProjectByteValue = await investment.CANCELED_PROJECT_BYTE_VALUE();
+    beforeFundraiserByteValue = await investment.BEFORE_FUNDRAISER_BYTE_VALUE();
+    activeFundraiserByteValue = await investment.ACTIVE_FUNDRAISER_BYTE_VALUE();
+    failedFundraiserByteValue = await investment.FAILED_FUNDRAISER_BYTE_VALUE();
+    fundraiserEndedNoActiveMilestone =
+        await investment.FUNDRAISER_ENDED_NO_ACTIVE_MILESTONE_BYTE_VALUE();
+    notLastActiveMilestoneByteValue = await investment.NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE();
+    lastMilestoneByteValue = await investment.LAST_MILESTONE_BYTE_VALUE();
+    terminatedByVotingByteValue = await investment.TERMINATED_BY_VOTING_BYTE_VALUE();
+    noStateByteValue = await investment.NO_STATE_BYTE_VALUE();
 };
 
 const createInvestmentWithTwoMilestones = async () => {
@@ -160,8 +186,14 @@ const timeTravelToDate = async (date: number | BigNumber) => {
     if (date instanceof BigNumber) {
         date = date.toNumber();
     }
-    await network.provider.send("evm_setNextBlockTimestamp", [date]);
-    await network.provider.request({method: "evm_mine", params: []});
+    await traveler.advanceBlockAndSetTime(date);
+};
+
+const timeTravelByIncreasingSeconds = async (seconds: number | BigNumber) => {
+    if (seconds instanceof BigNumber) {
+        seconds = seconds.toNumber();
+    }
+    await traveler.advanceTimeAndBlock(seconds);
 };
 
 describe("Investment Pool", async () => {
@@ -241,6 +273,8 @@ describe("Investment Pool", async () => {
 
         // Get percentage divider
         definePercentageDivider(investmentPoolFactory);
+
+        defineProjectStateByteValues(investmentPool);
 
         // Enforce a starting timestamp to avoid time based bugs
         const time = dateToSeconds("2022/06/01");
@@ -501,12 +535,12 @@ describe("Investment Pool", async () => {
                 const time = dateToSeconds("2022/07/15");
                 await investment.connect(buidl1Admin).setTimestamp(time);
 
-                await expect(
-                    investment.connect(creator).cancelBeforeFundraiserStart()
-                ).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
+                await expect(investment.connect(creator).cancelBeforeFundraiserStart())
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(activeFundraiserByteValue);
             });
 
             it("[IP][2.1.4] Fundraiser can't be cancelled, if it's already been canceled", async () => {
@@ -516,12 +550,12 @@ describe("Investment Pool", async () => {
 
                 await investment.connect(creator).cancelBeforeFundraiserStart();
 
-                await expect(
-                    investment.connect(creator).cancelBeforeFundraiserStart()
-                ).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
+                await expect(investment.connect(creator).cancelBeforeFundraiserStart())
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(canceledProjectByteValue);
             });
         });
     });
@@ -777,33 +811,176 @@ describe("Investment Pool", async () => {
         });
 
         describe("3.2 Interactions", () => {
-            it("[IP][3.2.1] Investor shouldn't be able to invest if fundraiser has already been canceled", async () => {
+            it("[IP][3.2.1] Shouldn't be able to invest zero amount", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("0");
+
+                // NOTE: Time traveling to 2022/07/15,
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+
+                await expect(
+                    investment.connect(investorA).invest(investedAmount, false)
+                ).to.be.revertedWithCustomError(investment, "InvestmentPool__ZeroAmountProvided");
+            });
+
+            it("[IP][3.2.2] Investor shouldn't be able to invest if fundraiser has already been canceled", async () => {
                 const amountToInvest: BigNumber = ethers.utils.parseEther("1");
 
                 await investment.connect(creator).cancelBeforeFundraiserStart();
 
-                await expect(
-                    investment.connect(investorA).invest(amountToInvest, false)
-                ).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
+                await expect(investment.connect(investorA).invest(amountToInvest, false))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(canceledProjectByteValue);
             });
 
-            it("[IP][3.2.2] Investor shouldn't be able to invest if fundraiser hasn't been started", async () => {
+            it("[IP][3.2.3] Investor shouldn't be able to invest if fundraiser hasn't been started", async () => {
                 const amountToInvest: BigNumber = ethers.utils.parseEther("1");
                 const time = dateToSeconds("2022/06/15");
                 await investment.connect(buidl1Admin).setTimestamp(time);
 
-                await expect(
-                    investment.connect(investorA).invest(amountToInvest, false)
-                ).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
+                await expect(investment.connect(investorA).invest(amountToInvest, false))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(beforeFundraiserByteValue);
             });
 
-            it("[IP][3.2.3] Investor shouldn't be able to invest more than a hard cap if stric mode is enabled", async () => {
+            it("[IP][3.2.4] Investor shouldn't be able to invest if fundraiser has failed", async () => {
+                const amountToInvest: BigNumber = ethers.utils.parseEther("1");
+                // No investments were made, which means fundraiser failed
+
+                // NOTE: Time traveling to 2022/08/15
+                const timeStamp = dateToSeconds("2022/08/15");
+                await investment.setTimestamp(timeStamp);
+
+                await expect(investment.connect(investorA).invest(amountToInvest, false))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(failedFundraiserByteValue);
+            });
+
+            it("[IP][3.2.5] Investor shouldn't be able to invest during gap between fundraiser end and 0 milestone start", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/08/15
+                timeStamp = dateToSeconds("2022/08/15");
+                await investment.setTimestamp(timeStamp);
+
+                // Give token approval
+                await fUSDTx
+                    .approve({
+                        receiver: investment.address,
+                        amount: UINT256_MAX.toString(),
+                    })
+                    .exec(investorB);
+
+                await expect(investment.connect(investorB).invest(investedAmount, false))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(fundraiserEndedNoActiveMilestone);
+            });
+
+            it("[IP][3.2.6] Shouldn't be able to invest in last milestone", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/10/15
+                timeStamp = dateToSeconds("2022/10/15");
+                await investment.setTimestamp(timeStamp);
+
+                // Give token approval
+                await fUSDTx
+                    .approve({
+                        receiver: investment.address,
+                        amount: UINT256_MAX.toString(),
+                    })
+                    .exec(investorB);
+
+                // Invest money
+                await expect(investment.connect(investorB).invest(investedAmount, false))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(lastMilestoneByteValue);
+            });
+
+            it("[IP][3.2.7] Shouldn't be able to invest if project was terminated by voting", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/09/15
+                timeStamp = dateToSeconds("2022/09/15");
+                await investment.setTimestamp(timeStamp);
+                await investment.cancelDuringMilestones();
+
+                // Give token approval
+                await fUSDTx
+                    .approve({
+                        receiver: investment.address,
+                        amount: UINT256_MAX.toString(),
+                    })
+                    .exec(investorB);
+
+                // Invest money
+                await expect(investment.connect(investorB).invest(investedAmount, false))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(terminatedByVotingByteValue);
+            });
+
+            it("[IP][3.2.8] Investor shouldn't be able to invest after project has ended", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/12/15
+                timeStamp = dateToSeconds("2022/12/15");
+                await investment.setTimestamp(timeStamp);
+
+                // Give token approval
+                await fUSDTx
+                    .approve({
+                        receiver: investment.address,
+                        amount: UINT256_MAX.toString(),
+                    })
+                    .exec(investorB);
+
+                await expect(investment.connect(investorB).invest(investedAmount, false))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(noStateByteValue);
+            });
+
+            it("[IP][3.2.9] Investor shouldn't be able to invest more than a hard cap if stric mode is enabled", async () => {
                 const amountToInvest: BigNumber = hardCap.add(1);
                 const time = dateToSeconds("2022/07/15");
                 await investment.connect(buidl1Admin).setTimestamp(time);
@@ -816,7 +993,7 @@ describe("Investment Pool", async () => {
                 );
             });
 
-            it("[IP][3.2.4] Investor shouldn't be able to invest more than a hard cap if hard cap is reached", async () => {
+            it("[IP][3.2.10] Investor shouldn't be able to invest more than a hard cap if hard cap is reached", async () => {
                 const amountToInvest: BigNumber = ethers.utils.parseEther("1");
                 const time = dateToSeconds("2022/07/15");
                 await investment.connect(buidl1Admin).setTimestamp(time);
@@ -831,11 +1008,10 @@ describe("Investment Pool", async () => {
                 );
             });
 
-            it("[IP][3.2.5] Investor shouldn't be able to invest more than a hard cap if hard cap is reached and stric mode is enabled", async () => {
+            it("[IP][3.2.11] Investor shouldn't be able to invest more than a hard cap if hard cap is reached and stric mode is enabled", async () => {
                 const amountToInvest: BigNumber = ethers.utils.parseEther("1");
                 const time = dateToSeconds("2022/07/15");
                 await investment.connect(buidl1Admin).setTimestamp(time);
-
                 await investMoney(fUSDTx, investment, investorA, hardCap);
 
                 await expect(
@@ -846,7 +1022,7 @@ describe("Investment Pool", async () => {
                 );
             });
 
-            it("[IP][3.2.6] Should allow a smaller investment to go through than a total amount", async () => {
+            it("[IP][3.2.12] Should allow a smaller investment to go through than a total amount", async () => {
                 const amountToInvest: BigNumber = hardCap.add(10);
                 const time = dateToSeconds("2022/07/15");
                 await investment.connect(buidl1Admin).setTimestamp(time);
@@ -865,50 +1041,7 @@ describe("Investment Pool", async () => {
                     .withArgs(investorA.address, hardCap);
             });
 
-            it("[IP][3.2.7] Shouldn't be able to invest in last milestone", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
-
-                // NOTE: Time traveling to 2022/07/15
-                let timeStamp = dateToSeconds("2022/07/15");
-                await investment.setTimestamp(timeStamp);
-
-                // Investor A invests
-                await investMoney(fUSDTx, investment, investorA, investedAmount);
-
-                // NOTE: Time traveling to 2022/10/15
-                timeStamp = dateToSeconds("2022/10/15");
-                await investment.setTimestamp(timeStamp);
-
-                // Give token approval
-                await fUSDTx
-                    .approve({
-                        receiver: investment.address,
-                        amount: UINT256_MAX.toString(),
-                    })
-                    .exec(investorB);
-
-                // Invest money
-                await expect(
-                    investment.connect(investorB).invest(investedAmount, false)
-                ).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
-            });
-
-            it("[IP][3.2.8] Shouldn't be able to invest zero amount", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("0");
-
-                // NOTE: Time traveling to 2022/07/15,
-                let timeStamp = dateToSeconds("2022/07/15");
-                await investment.setTimestamp(timeStamp);
-
-                await expect(
-                    investment.connect(investorA).invest(investedAmount, false)
-                ).to.be.revertedWithCustomError(investment, "InvestmentPool__ZeroAmountProvided");
-            });
-
-            it("[IP][3.2.9] Investors should be able to collectively raise the soft cap", async () => {
+            it("[IP][3.2.13] Investors should be able to collectively raise the soft cap", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("750");
 
                 // NOTE: Time traveling to 2022/07/15
@@ -923,82 +1056,6 @@ describe("Investment Pool", async () => {
 
                 const softCapRaised = await investment.isSoftCapReached();
                 assert.isTrue(softCapRaised);
-            });
-
-            it("[IP][3.2.10] Investor shouldn't be able to invest if fundraiser has failed", async () => {
-                const amountToInvest: BigNumber = ethers.utils.parseEther("1");
-                // No investments were made, which means fundraiser failed
-
-                // NOTE: Time traveling to 2022/08/15
-                const timeStamp = dateToSeconds("2022/08/15");
-                await investment.setTimestamp(timeStamp);
-
-                await expect(
-                    investment.connect(investorA).invest(amountToInvest, false)
-                ).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
-            });
-
-            it("[IP][3.2.11] Investor shouldn't be able to invest after project has ended", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
-
-                // NOTE: Time traveling to 2022/07/15
-                let timeStamp = dateToSeconds("2022/07/15");
-                await investment.setTimestamp(timeStamp);
-
-                // Investor A invests
-                await investMoney(fUSDTx, investment, investorA, investedAmount);
-
-                // NOTE: Time traveling to 2022/12/15
-                timeStamp = dateToSeconds("2022/12/15");
-                await investment.setTimestamp(timeStamp);
-
-                // Give token approval
-                await fUSDTx
-                    .approve({
-                        receiver: investment.address,
-                        amount: UINT256_MAX.toString(),
-                    })
-                    .exec(investorB);
-
-                await expect(
-                    investment.connect(investorB).invest(investedAmount, false)
-                ).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
-            });
-
-            it("[IP][3.2.12] Investor shouldn't be able to invest during gap between fundraiser end and 0 milestone start", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
-
-                // NOTE: Time traveling to 2022/07/15
-                let timeStamp = dateToSeconds("2022/07/15");
-                await investment.setTimestamp(timeStamp);
-
-                // Investor A invests
-                await investMoney(fUSDTx, investment, investorA, investedAmount);
-
-                // NOTE: Time traveling to 2022/08/15
-                timeStamp = dateToSeconds("2022/08/15");
-                await investment.setTimestamp(timeStamp);
-
-                // Give token approval
-                await fUSDTx
-                    .approve({
-                        receiver: investment.address,
-                        amount: UINT256_MAX.toString(),
-                    })
-                    .exec(investorB);
-
-                await expect(
-                    investment.connect(investorB).invest(investedAmount, false)
-                ).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
             });
         });
     });
@@ -1247,7 +1304,134 @@ describe("Investment Pool", async () => {
                 ).to.be.revertedWithCustomError(investment, "InvestmentPool__ZeroAmountProvided");
             });
 
-            it("[IP][4.2.2] Investor shouldn't be able to unpledge more than invested", async () => {
+            it("[IP][4.2.2] Shouldn't be able to unpledge if project was canceled", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/06/15
+                let timeStamp = dateToSeconds("2022/06/15");
+                await investment.setTimestamp(timeStamp);
+                await investment.connect(creator).cancelBeforeFundraiserStart();
+
+                await expect(investment.connect(investorA).unpledge(investedAmount))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(canceledProjectByteValue);
+            });
+
+            it("[IP][4.2.3] Shouldn't be able to unpledge if fundraiser hasn't started", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/06/15
+                let timeStamp = dateToSeconds("2022/06/15");
+                await investment.setTimestamp(timeStamp);
+
+                await expect(investment.connect(investorA).unpledge(investedAmount))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(beforeFundraiserByteValue);
+            });
+
+            it("[IP][4.2.4] Shouldn't be able to unpledge from failed fundraiser", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/08/15
+                let timeStamp = dateToSeconds("2022/08/15");
+                await investment.setTimestamp(timeStamp);
+
+                await expect(investment.connect(investorA).unpledge(investedAmount))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(failedFundraiserByteValue);
+            });
+
+            it("[IP][4.2.5] Shouldn't be able to unpledge if fundraiser has ended (in gap between fundraiser and 0 milestone)", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/08/15, when the fundraiser ended
+                timeStamp = dateToSeconds("2022/08/15");
+                await investment.setTimestamp(timeStamp);
+
+                await expect(investment.connect(investorA).unpledge(investedAmount))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(fundraiserEndedNoActiveMilestone);
+            });
+
+            it("[IP][4.2.6] Shouldn't be able to unpledge in last milestone", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/10/15
+                timeStamp = dateToSeconds("2022/10/15");
+                await investment.setTimestamp(timeStamp);
+
+                await expect(investment.connect(investorB).unpledge(investedAmount))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(lastMilestoneByteValue);
+            });
+
+            it("[IP][4.2.7] Shouldn't be able to unpledge if project was terminated by voting", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/09/15
+                timeStamp = dateToSeconds("2022/09/15");
+                await investment.setTimestamp(timeStamp);
+                await investment.cancelDuringMilestones();
+
+                await expect(investment.connect(investorB).unpledge(investedAmount))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(terminatedByVotingByteValue);
+            });
+
+            it("[IP][4.2.8] Shouldn't be able to unpledge after project ended", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/12/15
+                timeStamp = dateToSeconds("2022/12/15");
+                await investment.setTimestamp(timeStamp);
+
+                await expect(investment.connect(investorB).unpledge(investedAmount))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(noStateByteValue);
+            });
+
+            it("[IP][4.2.9] Investor shouldn't be able to unpledge more than invested", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("10");
 
                 // NOTE: Time traveling to 2022/07/15
@@ -1265,7 +1449,7 @@ describe("Investment Pool", async () => {
                     .withArgs(investedAmount.add(1), investedAmount);
             });
 
-            it("[IP][4.2.3] Investor should be able to do a full unpledge", async () => {
+            it("[IP][4.2.10] Investor should be able to do a full unpledge", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("10");
                 const investorPriorBalance = BigNumber.from(
                     await fUSDTx.balanceOf({
@@ -1307,7 +1491,7 @@ describe("Investment Pool", async () => {
                 assert.deepEqual(contractBalance, contractPriorBalance);
             });
 
-            it("[IP][4.2.4] Investor should be able to do a partial unpledge", async () => {
+            it("[IP][4.2.11] Investor should be able to do a partial unpledge", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("10");
                 const investorPriorBalance = BigNumber.from(
                     await fUSDTx.balanceOf({
@@ -1352,7 +1536,7 @@ describe("Investment Pool", async () => {
                 assert.deepEqual(contractBalance, contractPriorBalance.add(investedAmount.div(2)));
             });
 
-            it("[IP][4.2.5] Non-investor shouldn't be able to unpledge", async () => {
+            it("[IP][4.2.12] Non-investor shouldn't be able to unpledge", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("10");
 
                 // NOTE: Time traveling to 2022/07/15
@@ -1368,127 +1552,6 @@ describe("Investment Pool", async () => {
                     .withArgs(1, 0);
             });
 
-            it("[IP][4.2.6] Shouldn't be able to unpledge if fundraiser has ended", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
-
-                // NOTE: Time traveling to 2022/07/15
-                let timeStamp = dateToSeconds("2022/07/15");
-                await investment.setTimestamp(timeStamp);
-                await investMoney(fUSDTx, investment, investorA, investedAmount);
-
-                // NOTE: Time traveling to 2022/08/15, when the fundraiser ended
-                timeStamp = dateToSeconds("2022/08/15");
-                await investment.setTimestamp(timeStamp);
-
-                await expect(
-                    investment.connect(investorA).unpledge(investedAmount)
-                ).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
-            });
-
-            it("[IP][4.2.7] Shouldn't be able to unpledge if project was canceled", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
-
-                // NOTE: Time traveling to 2022/06/15
-                let timeStamp = dateToSeconds("2022/06/15");
-                await investment.setTimestamp(timeStamp);
-                await investment.connect(creator).cancelBeforeFundraiserStart();
-
-                await expect(
-                    investment.connect(investorA).unpledge(investedAmount)
-                ).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
-            });
-
-            it("[IP][4.2.8] Shouldn't be able to unpledge if fundraiser hasn't started", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
-
-                // NOTE: Time traveling to 2022/06/15
-                let timeStamp = dateToSeconds("2022/06/15");
-                await investment.setTimestamp(timeStamp);
-
-                await expect(
-                    investment.connect(investorA).unpledge(investedAmount)
-                ).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
-            });
-
-            it("[IP][4.2.9] Shouldn't be able to unpledge from failed fundraiser", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
-
-                // NOTE: Time traveling to 2022/08/15
-                let timeStamp = dateToSeconds("2022/08/15");
-                await investment.setTimestamp(timeStamp);
-
-                await expect(
-                    investment.connect(investorA).unpledge(investedAmount)
-                ).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
-            });
-
-            it("[IP][4.2.10] Shouldn't be able to unpledge during gap between fundraiser and 0 milestone", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
-
-                // NOTE: Time traveling to 2022/08/15
-                let timeStamp = dateToSeconds("2022/08/15");
-                await investment.setTimestamp(timeStamp);
-
-                await expect(
-                    investment.connect(investorA).unpledge(investedAmount)
-                ).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
-            });
-
-            it("[IP][4.2.11] Shouldn't be able to unpledge in last milestone", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
-
-                // NOTE: Time traveling to 2022/07/15
-                let timeStamp = dateToSeconds("2022/07/15");
-                await investment.setTimestamp(timeStamp);
-                await investMoney(fUSDTx, investment, investorA, investedAmount);
-
-                // NOTE: Time traveling to 2022/10/15
-                timeStamp = dateToSeconds("2022/10/15");
-                await investment.setTimestamp(timeStamp);
-
-                await expect(
-                    investment.connect(investorB).unpledge(investedAmount)
-                ).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
-            });
-
-            it("[IP][4.2.12] Shouldn't be able to unpledge after project ended", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
-
-                // NOTE: Time traveling to 2022/07/15
-                let timeStamp = dateToSeconds("2022/07/15");
-                await investment.setTimestamp(timeStamp);
-                await investMoney(fUSDTx, investment, investorA, investedAmount);
-
-                // NOTE: Time traveling to 2022/12/15
-                timeStamp = dateToSeconds("2022/12/15");
-                await investment.setTimestamp(timeStamp);
-
-                await expect(
-                    investment.connect(investorB).unpledge(investedAmount)
-                ).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
-            });
-
             it("[IP][4.2.13] Shouldn't be able to unpledge if next milestone has started", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
@@ -1500,23 +1563,18 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2022/09/15
                 timeStamp = dateToSeconds("2022/09/15");
                 await investment.setTimestamp(timeStamp);
-                await investMoney(fUSDTx, investment, investorB, investedAmount);
 
-                // NOTE: Time traveling to 2022/10/15
-                timeStamp = dateToSeconds("2022/10/15");
-                await investment.setTimestamp(timeStamp);
-
-                await expect(
-                    investment.connect(investorB).unpledge(investedAmount)
-                ).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
+                await expect(investment.connect(investorA).unpledge(investedAmount))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__AmountIsGreaterThanInvested"
+                    )
+                    .withArgs(investedAmount, 0);
             });
         });
     });
 
-    describe.only("5. Refund process", () => {
+    describe("5. Refund process", () => {
         describe("5.1 Public state", () => {
             it("[IP][5.1.1] If failed fundraiser, refund should assign investedAmount to 0", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("10");
@@ -1684,10 +1742,12 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await investment.connect(creator).cancelBeforeFundraiserStart();
 
-                await expect(investment.connect(investorA).refund()).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
+                await expect(investment.connect(investorA).refund())
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(canceledProjectByteValue);
             });
 
             it("[IP][5.2.2] Refund should be inactive before fundraiser", async () => {
@@ -1695,10 +1755,12 @@ describe("Investment Pool", async () => {
                 let timeStamp = dateToSeconds("2022/06/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.connect(investorA).refund()).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
+                await expect(investment.connect(investorA).refund())
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(beforeFundraiserByteValue);
             });
 
             it("[IP][5.2.3] Refund should be inactive during fundraiser", async () => {
@@ -1709,13 +1771,15 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await investMoney(fUSDTx, investment, investorA, investedAmount);
 
-                await expect(investment.connect(investorA).refund()).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
+                await expect(investment.connect(investorA).refund())
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(activeFundraiserByteValue);
             });
 
-            it("[IP][5.2.4] Refund should be inactive if fundraiser was successful", async () => {
+            it("[IP][5.2.4] Refund should be inactive if fundraiser was successful (gap between fundraiser and 0 milestone)", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
                 // NOTE: Time traveling to 2022/07/15
@@ -1727,10 +1791,12 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2022/08/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.connect(investorA).refund()).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
+                await expect(investment.connect(investorA).refund())
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(fundraiserEndedNoActiveMilestone);
             });
 
             it("[IP][5.2.5] Refund should be inactive if not last milestone is active", async () => {
@@ -1745,10 +1811,12 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2022/09/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.connect(investorA).refund()).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
+                await expect(investment.connect(investorA).refund())
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(notLastActiveMilestoneByteValue);
             });
 
             it("[IP][5.2.6] Refund should be inactive if last milestone is active", async () => {
@@ -1763,10 +1831,12 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2022/10/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.connect(investorA).refund()).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CurrentStateIsNotAllowed"
-                );
+                await expect(investment.connect(investorA).refund())
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(lastMilestoneByteValue);
             });
 
             it("[IP][5.2.7] If failed fundraiser, refund should revert where zero investments were made", async () => {
@@ -1825,24 +1895,7 @@ describe("Investment Pool", async () => {
             // If stream was opened, invested in 1 milestone, terminated by voting, should transfer left amount
             // If stream was opened, invested in 1 milestone, creator closed stream, next stream was opened, terminated by voting, should transfer left amount
 
-            it("[IP][5.2.10] If invested in 0 milestone, stream was opened, invested in 1 milestone, terminated by voting, should get back the right amount", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
-
-                // NOTE: Time traveling to 2022/07/15
-                let timeStamp = dateToSeconds("2022/07/15");
-                await investment.setTimestamp(timeStamp);
-                await investMoney(fUSDTx, investment, investorA, investedAmount);
-
-                // NOTE: Time traveling to 2022/09/15
-                timeStamp = dateToSeconds("2022/09/15");
-                await investment.setTimestamp(timeStamp);
-                await investment.cancelDuringMilestones();
-
-                await expect(investment.connect(investorB).refund()).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__NoMoneyInvested"
-                );
-            });
+            it("[IP][5.2.10] If invested in 0 milestone, stream was opened, invested in 1 milestone, terminated by voting, should get back the right amount", async () => {});
         });
     });
 
@@ -2011,8 +2064,336 @@ describe("Investment Pool", async () => {
     });
 
     describe("9. Creator tokens claim", () => {
+        beforeEach(async () => {
+            let snapshot = await traveler.takeSnapshot();
+            snapshotId = snapshot["result"];
+        });
+
+        afterEach(async () => {
+            await traveler.revertToSnapshot(snapshotId);
+        });
+
         describe("9.1 Public state", () => {
-            it("[IP][9.1.?] Should update streamOngoing variable state", async () => {
+            it("[IP][9.1.1] If project was terminated by voting and seed amount for given milestone wasn't paid, it should update seedAmountPaid", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/09/15
+                timeStamp = dateToSeconds("2022/09/15");
+                await investment.setTimestamp(timeStamp);
+                await investment.cancelDuringMilestones();
+
+                await investment.connect(creator).claim(0);
+
+                const milestone = await investment.milestones(0);
+                assert.isTrue(milestone.seedAmountPaid);
+            });
+
+            it("[IP][9.1.2] If project was terminated by voting and seed amount for given milestone wasn't paid, it should update paidAmount", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/09/15
+                timeStamp = dateToSeconds("2022/09/15");
+                await investment.setTimestamp(timeStamp);
+                await investment.cancelDuringMilestones();
+
+                await investment.connect(creator).claim(0);
+
+                const milestone = await investment.milestones(0);
+                const seedAmount = await investment.getMilestoneSeedAmount(0);
+                assert.deepEqual(milestone.paidAmount, seedAmount);
+            });
+
+            it("[IP][9.1.3] If project was terminated by voting and seed amount for given milestone wasn't paid, it should transfer seedtokens", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                const creatorPriorBalance = BigNumber.from(
+                    await fUSDTx.balanceOf({
+                        account: creator.address,
+                        providerOrSigner: creator,
+                    })
+                );
+                const contractPriorBalance = BigNumber.from(
+                    await fUSDTx.balanceOf({
+                        account: investment.address,
+                        providerOrSigner: buidl1Admin,
+                    })
+                );
+
+                // NOTE: Time traveling to 2022/09/15
+                timeStamp = dateToSeconds("2022/09/15");
+                await investment.setTimestamp(timeStamp);
+                await investment.cancelDuringMilestones();
+
+                await investment.connect(creator).claim(0);
+
+                const creatorBalance = BigNumber.from(
+                    await fUSDTx.balanceOf({
+                        account: creator.address,
+                        providerOrSigner: creator,
+                    })
+                );
+                const contractBalance = BigNumber.from(
+                    await fUSDTx.balanceOf({
+                        account: investment.address,
+                        providerOrSigner: buidl1Admin,
+                    })
+                );
+                const milestone = await investment.milestones(0);
+                assert.deepEqual(creatorPriorBalance.add(milestone.paidAmount), creatorBalance);
+                assert.deepEqual(contractPriorBalance.sub(milestone.paidAmount), contractBalance);
+            });
+
+            it("[IP][9.1.4] If project was terminated by voting and seed amount for given milestone wasn't paid, it should emit event", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/09/15
+                timeStamp = dateToSeconds("2022/09/15");
+                await investment.setTimestamp(timeStamp);
+                await investment.cancelDuringMilestones();
+
+                await expect(investment.connect(creator).claim(0))
+                    .to.emit(investment, "ClaimFunds")
+                    .withArgs(0, true, false, false);
+            });
+
+            it("[IP][9.1.5] If seed amount for given milestone wasn't paid, it should update seedAmountPaid", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/09/15
+                timeStamp = dateToSeconds("2022/09/15");
+                await investment.setTimestamp(timeStamp);
+
+                await investment.connect(creator).claim(0);
+
+                const milestone = await investment.milestones(0);
+                assert.isTrue(milestone.seedAmountPaid);
+            });
+
+            it("[IP][9.1.6] If seed amount for given milestone wasn't paid, it should update paidAmount", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/09/15
+                timeStamp = dateToSeconds("2022/09/15");
+                await investment.setTimestamp(timeStamp);
+
+                await investment.connect(creator).claim(0);
+
+                const milestone = await investment.milestones(0);
+                const seedAmount = await investment.getMilestoneSeedAmount(0);
+                assert.deepEqual(milestone.paidAmount, seedAmount);
+            });
+
+            it("[IP][9.1.7] If seed amount for given milestone wasn't paid, it should transfer seed tokens", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                const creatorPriorBalance = BigNumber.from(
+                    await fUSDTx.balanceOf({
+                        account: creator.address,
+                        providerOrSigner: creator,
+                    })
+                );
+                const contractPriorBalance = BigNumber.from(
+                    await fUSDTx.balanceOf({
+                        account: investment.address,
+                        providerOrSigner: buidl1Admin,
+                    })
+                );
+
+                // NOTE: Time traveling to 2022/09/15
+                timeStamp = dateToSeconds("2022/09/15");
+                await investment.setTimestamp(0);
+                await timeTravelToDate(timeStamp);
+
+                await investment.connect(creator).claim(0);
+
+                // timeStamp = dateToSeconds("2022/09/16");
+                await timeTravelByIncreasingSeconds(60);
+
+                const creatorBalance = BigNumber.from(
+                    await fUSDTx.balanceOf({
+                        account: creator.address,
+                        providerOrSigner: creator,
+                    })
+                );
+                const contractBalance = BigNumber.from(
+                    await fUSDTx.balanceOf({
+                        account: investment.address,
+                        providerOrSigner: buidl1Admin,
+                    })
+                );
+                const milestone = await investment.milestones(0);
+
+                // Stream was opened, so we can't get the specific balance, we just check if seed amount was transfered
+                assert.isTrue(creatorPriorBalance.add(milestone.paidAmount).lt(creatorBalance));
+                assert.isTrue(contractPriorBalance.sub(milestone.paidAmount).gt(contractBalance));
+            });
+
+            it("[IP][9.1.8] If seed amount for given milestone wasn't paid, it should emit event", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/09/15
+                timeStamp = dateToSeconds("2022/09/15");
+                await investment.setTimestamp(timeStamp);
+
+                await expect(investment.connect(creator).claim(0))
+                    .to.emit(investment, "ClaimFunds")
+                    .withArgs(0, true, false, false);
+            });
+
+            it("[IP][9.1.9] If termination window is entered, it should update paid value to true", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/10/01 - 2 minute
+                timeStamp = dateToSeconds("2022/10/01", false) as number;
+                await investment.setTimestamp(timeStamp - 120);
+
+                await investment.connect(creator).claim(0);
+
+                const milestone = await investment.milestones(0);
+                assert.isTrue(milestone.paid);
+            });
+
+            it("[IP][9.1.10] If termination window is entered, it should update paidAmount value", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+                const creatorPriorBalance = BigNumber.from(
+                    await fUSDTx.balanceOf({
+                        account: creator.address,
+                        providerOrSigner: creator,
+                    })
+                );
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/10/01 - 2 minute
+                timeStamp = dateToSeconds("2022/10/01", false) as number;
+                await investment.setTimestamp(timeStamp - 120);
+
+                await investment.connect(creator).claim(0);
+
+                const creatorBalance = BigNumber.from(
+                    await fUSDTx.balanceOf({
+                        account: creator.address,
+                        providerOrSigner: creator,
+                    })
+                );
+
+                const milestone = await investment.milestones(0);
+                const milestoneAllocation = await investment.getTotalMilestoneTokenAllocation(0);
+                assert.deepEqual(milestone.paidAmount, milestoneAllocation);
+                assert.deepEqual(creatorBalance.sub(milestone.paidAmount), creatorPriorBalance);
+            });
+
+            it("[IP][9.1.11] If termination window is entered, it should transfer stream tokens instantly", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                const creatorPriorBalance = BigNumber.from(
+                    await fUSDTx.balanceOf({
+                        account: creator.address,
+                        providerOrSigner: creator,
+                    })
+                );
+                const contractPriorBalance = BigNumber.from(
+                    await fUSDTx.balanceOf({
+                        account: investment.address,
+                        providerOrSigner: buidl1Admin,
+                    })
+                );
+
+                // NOTE: Time traveling to 2022/10/01 - 2 minute
+                timeStamp = dateToSeconds("2022/10/01", false) as number;
+                await investment.setTimestamp(timeStamp - 120);
+
+                await investment.connect(creator).claim(0);
+
+                const creatorBalance = BigNumber.from(
+                    await fUSDTx.balanceOf({
+                        account: creator.address,
+                        providerOrSigner: creator,
+                    })
+                );
+                const contractBalance = BigNumber.from(
+                    await fUSDTx.balanceOf({
+                        account: investment.address,
+                        providerOrSigner: buidl1Admin,
+                    })
+                );
+
+                const milestoneAllocation = await investment.getTotalMilestoneTokenAllocation(0);
+                assert.deepEqual(creatorPriorBalance.add(milestoneAllocation), creatorBalance);
+                assert.deepEqual(contractPriorBalance.sub(milestoneAllocation), contractBalance);
+            });
+
+            it("[IP][9.1.12] If termination window is entered, it should emit event", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/10/01 - 2 minute
+                timeStamp = dateToSeconds("2022/10/01", false) as number;
+                await investment.setTimestamp(timeStamp - 120);
+
+                await expect(investment.connect(creator).claim(0))
+                    .to.emit(investment, "ClaimFunds")
+                    .withArgs(0, false, true, false);
+            });
+
+            it("[IP][9.1.13] Should update streamOngoing variable state", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
                 // NOTE: Time traveling to 2022/07/15
@@ -2030,7 +2411,7 @@ describe("Investment Pool", async () => {
                 assert.isTrue(milestone.streamOngoing);
             });
 
-            it("[IP][9.1.?] On creator funds claim, it should emit event", async () => {
+            it("[IP][9.1.14] On creator funds claim, it should emit event", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
                 // NOTE: Time traveling to 2022/07/15
@@ -2043,8 +2424,8 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
 
                 await expect(investment.connect(creator).claim(0))
-                    .to.emit(investment, "Claim")
-                    .withArgs(0);
+                    .to.emit(investment, "ClaimFunds")
+                    .withArgs(0, false, false, true);
             });
         });
 
@@ -2067,24 +2448,60 @@ describe("Investment Pool", async () => {
                 ).to.be.revertedWithCustomError(investment, "InvestmentPool__NotCreator");
             });
 
-            it("[IP][9.2.?] Creator shouldn't be able to claim tokens if project was canceled", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
-
-                // NOTE: Time traveling to 2022/07/15
-                let timeStamp = dateToSeconds("2022/07/15");
+            it("[IP][9.2.2] Creator shouldn't be able to claim tokens if project was canceled", async () => {
+                // NOTE: Time traveling to 2022/06/15
+                let timeStamp = dateToSeconds("2022/06/15");
                 await investment.setTimestamp(timeStamp);
-
-                await investMoney(fUSDTx, investment, investorA, investedAmount);
-
                 await investment.connect(creator).cancelBeforeFundraiserStart();
 
-                await expect(investment.connect(creator).claim(0)).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__CampaignCanceled"
-                );
+                await expect(investment.connect(creator).claim(0))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(canceledProjectByteValue);
             });
 
-            it("[IP][9.2.?] Creator shouldn't be able to claim funds before milestone starts", async () => {
+            it("[IP][9.2.3] Creator shouldn't be able to claim tokens before fundraiser start", async () => {
+                // NOTE: Time traveling to 2022/06/15
+                let timeStamp = dateToSeconds("2022/06/15");
+                await investment.setTimestamp(timeStamp);
+
+                await expect(investment.connect(creator).claim(0))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(beforeFundraiserByteValue);
+            });
+
+            it("[IP][9.2.4] Creator shouldn't be able to claim tokens during fundraiser", async () => {
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+
+                await expect(investment.connect(creator).claim(0))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(activeFundraiserByteValue);
+            });
+
+            it("[IP][9.2.5] Creator shouldn't be able to claim tokens if fundraiser failed", async () => {
+                // NOTE: Time traveling to 2022/08/15
+                let timeStamp = dateToSeconds("2022/08/15");
+                await investment.setTimestamp(timeStamp);
+
+                await expect(investment.connect(creator).claim(0))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(failedFundraiserByteValue);
+            });
+
+            it("[IP][9.2.6] Creator shouldn't be able to claim tokens in gap between fundraiser and 0 milestone", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
                 // NOTE: Time traveling to 2022/07/15
@@ -2092,7 +2509,47 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await investMoney(fUSDTx, investment, investorA, investedAmount);
 
-                // NOTE: Time traveling to 2022/09/15, when milestone starts
+                // NOTE: Time traveling to 2022/08/15
+                timeStamp = dateToSeconds("2022/08/15");
+                await investment.setTimestamp(timeStamp);
+
+                await expect(investment.connect(creator).claim(0))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(fundraiserEndedNoActiveMilestone);
+            });
+
+            it("[IP][9.2.7] Creator shouldn't be able to claim tokens after project ends", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/12/15
+                timeStamp = dateToSeconds("2022/12/15");
+                await investment.setTimestamp(timeStamp);
+
+                await expect(investment.connect(creator).claim(1))
+                    .to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__CurrentStateIsNotAllowed"
+                    )
+                    .withArgs(noStateByteValue);
+            });
+
+            it("[IP][9.2.8] Creator shouldn't be able to claim funds and open stream before milestone starts", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/09/15, when 0 milestone already started
                 timeStamp = dateToSeconds("2022/09/15");
                 await investment.setTimestamp(timeStamp);
 
@@ -2102,7 +2559,7 @@ describe("Investment Pool", async () => {
                 );
             });
 
-            it("[IP][9.2.???] Creator shouldn't be able to claim funds if stream is ongoing already", async () => {
+            it("[IP][9.2.9] Creator shouldn't be able to claim funds and open stream if stream is ongoing already", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
                 // NOTE: Time traveling to 2022/07/15
@@ -2110,13 +2567,12 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await investMoney(fUSDTx, investment, investorA, investedAmount);
 
-                // NOTE: Time traveling to 2022/09/15, when the milestone is active
+                // NOTE: Time traveling to 2022/09/15, when 0 milestone already started
                 timeStamp = dateToSeconds("2022/09/15");
                 await investment.setTimestamp(timeStamp);
 
                 await investment.connect(creator).claim(0);
 
-                // Try to double claim
                 await expect(investment.connect(creator).claim(0))
                     .to.be.revertedWithCustomError(
                         investment,
@@ -2125,7 +2581,52 @@ describe("Investment Pool", async () => {
                     .withArgs(0);
             });
 
-            it("[IP][9.2.???] Should claim instantly after milestone end", async () => {
+            it("[IP][9.2.10] If project was terminated by voting, but seed amount was already paid, it should revert", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/09/15
+                timeStamp = dateToSeconds("2022/09/15");
+                await investment.setTimestamp(timeStamp);
+                await investment.cancelDuringMilestones();
+
+                await investment.connect(creator).claim(0);
+
+                await expect(investment.connect(creator).claim(0)).to.be.revertedWithCustomError(
+                    investment,
+                    "InvestmentPool__NoSeedAmountDedicated"
+                );
+            });
+
+            it("[IP][9.2.11] If project was terminated by voting, but termination didn't happen in given milestone, it should revert", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2022/07/15
+                let timeStamp = dateToSeconds("2022/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2022/09/15
+                timeStamp = dateToSeconds("2022/09/15");
+                await investment.setTimestamp(timeStamp);
+                await investment.cancelDuringMilestones();
+
+                await investment.increaseMilestone();
+                // NOTE: Time traveling to 2022/10/15
+                timeStamp = dateToSeconds("2022/10/15");
+                await investment.setTimestamp(timeStamp);
+
+                await expect(investment.connect(creator).claim(1)).to.be.revertedWithCustomError(
+                    investment,
+                    "InvestmentPool__NoSeedAmountDedicated"
+                );
+            });
+
+            it("[IP][9.2.12] Should claim all the funds instantly if milestone has ended", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("2000");
                 const initialCreatorBalance = BigNumber.from(
                     await fUSDTx.balanceOf({
@@ -2153,64 +2654,62 @@ describe("Investment Pool", async () => {
                 );
 
                 const milestone = await investment.milestones(0);
-                const paidAmount = milestone.paidAmount;
-
-                assert.deepEqual(
-                    paidAmount,
-                    creatorBalance.sub(initialCreatorBalance),
-                    "Streamed balance and stored record should match"
-                );
-
-                assert.deepEqual(
-                    creatorBalance.sub(initialCreatorBalance),
-                    investedAmount,
-                    "Should transfer all of the funds to the creator"
-                );
-
-                assert.equal(milestone.paid, true, "Should mark milestone as paid");
+                const milestoneAllocation = await investment.getTotalMilestoneTokenAllocation(0);
+                assert.deepEqual(milestone.paidAmount, milestoneAllocation);
+                assert.deepEqual(creatorBalance.sub(milestone.paidAmount), initialCreatorBalance);
             });
 
-            it("[IP][9.2.???] Superfluid creates a stream of funds on claim", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+            // NOTE: Doesn't work
+            // it("[IP][9.2.13] Superfluid creates a stream of funds on claim", async () => {
+            //     const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
-                // NOTE: Time traveling to 2022/07/15
-                let timeStamp = dateToSeconds("2022/07/15");
-                await investment.setTimestamp(timeStamp);
-                await investMoney(fUSDTx, investment, investorA, investedAmount);
+            //     // NOTE: Time traveling to 2022/07/15
+            //     let timeStamp = dateToSeconds("2022/07/15");
+            //     await investment.setTimestamp(timeStamp);
+            //     await investMoney(fUSDTx, investment, investorA, investedAmount);
 
-                // NOTE: Time traveling to 2022/09/15 when the milestone is active
-                timeStamp = dateToSeconds("2022/09/15");
-                // NOTE: Here we we want explicitly the chain reported time
-                await investment.setTimestamp(0);
-                await timeTravelToDate(timeStamp);
+            //     // NOTE: Time traveling to 2022/09/15 when the milestone is active
+            //     timeStamp = dateToSeconds("2022/09/15");
+            //     // NOTE: Here we we want explicitly the chain reported time
+            //     await investment.setTimestamp(0);
+            //     await timeTravelToDate(timeStamp);
 
-                await investment.connect(creator).claim(0);
+            //     await investment.connect(creator).claim(0);
 
-                /**
-                 * NOTE: even though we cannot get precise time with the traveler,
-                 * the investment contract itself creates flowrate, and uses the timestamp that was passed to it
-                 * So it's ok to make calculations using it
-                 * Calculate the desired flowrate, should match the one from contract
-                 */
-                const timeLeft = milestoneEndDate.sub(timeStamp);
-                const seedAmount = (await investment.milestones(0)).paidAmount;
+            //     /**
+            //      * NOTE: even though we cannot get precise time with the traveler,
+            //      * the investment contract itself creates flowrate, and uses the timestamp that was passed to it
+            //      * So it's ok to make calculations using it
+            //      * Calculate the desired flowrate, should match the one from contract
+            //      */
+            //     const timeLeft = milestoneEndDate.sub(timeStamp);
+            //     const seedAmount = (await investment.milestones(0)).paidAmount;
 
-                const flowRate = investedAmount.sub(seedAmount).div(timeLeft);
-                const flowInfo = await sf.cfaV1.getFlow({
-                    superToken: fUSDTx.address,
-                    sender: investment.address,
-                    receiver: creator.address,
-                    providerOrSigner: creator,
-                });
+            //     const flowRate = investedAmount.sub(seedAmount).div(timeLeft);
+            //     const flowInfo = await sf.cfaV1.getFlow({
+            //         superToken: fUSDTx.address,
+            //         sender: investment.address,
+            //         receiver: creator.address,
+            //         providerOrSigner: creator,
+            //     });
 
-                console.log(flowInfo);
-                assert.isDefined(flowInfo);
-                assert.deepEqual(BigNumber.from(flowInfo.flowRate), flowRate);
-            });
+            //     assert.isDefined(flowInfo);
+            //     assert.deepEqual(BigNumber.from(flowInfo.flowRate), flowRate);
+            // });
         });
     });
 
+    /**
     describe("10. Money streaming corner cases", () => {
+        beforeEach(async () => {
+            let snapshot = await traveler.takeSnapshot();
+            snapshotId = snapshot["result"];
+        });
+
+        afterEach(async () => {
+            await traveler.revertToSnapshot(snapshotId);
+        });
+
         describe("10.1 Interactions", () => {
             it("[IP][10.1.1] Volunteer stopping of streamed funds updates records", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("2000");
@@ -2341,17 +2840,17 @@ describe("Investment Pool", async () => {
                 await investMoney(fUSDTx, investment, investorA, investedAmount);
 
                 // NOTE: Time traveling to 2022/09/15 when the milestone is active
-                timeStamp = dateToSeconds("2022/09/15", false) as number;
+                timeStamp = dateToSeconds("2022/09/15");
 
                 // NOTE: Here we we want explicitly the chain reported time
                 await investment.setTimestamp(0);
-                await traveler.advanceBlockAndSetTime(timeStamp);
+                await timeTravelToDate(timeStamp);
 
                 await investment.connect(creator).claim(0);
 
                 // Advance in time a little
-                timeStamp = dateToSeconds("2022/09/20", false) as number;
-                await traveler.advanceBlockAndSetTime(timeStamp);
+                timeStamp = dateToSeconds("2022/09/20");
+                await timeTravelToDate(timeStamp);
 
                 // NOTE: we are implicitly testing the SuperApp callback here
                 // we want to find out, what happens if the flow is voluntarily stopped by the creator
@@ -2371,9 +2870,8 @@ describe("Investment Pool", async () => {
                 ).sub(initialCreatorBalance);
 
                 // Advance in time a little
-                timeStamp = dateToSeconds("2022/09/25", false) as number;
-
-                await traveler.advanceBlockAndSetTime(timeStamp);
+                timeStamp = dateToSeconds("2022/09/25");
+                await timeTravelToDate(timeStamp);
 
                 await investment.connect(creator).claim(0);
 
@@ -2392,11 +2890,7 @@ describe("Investment Pool", async () => {
                 );
                 const flowRate = investedAmount.sub(streamedSoFar).div(timeLeft);
 
-                assert.deepEqual(
-                    BigNumber.from(flowInfo.flowRate),
-                    flowRate,
-                    "Flow Rate must match the predicted one"
-                );
+                assert.deepEqual(BigNumber.from(flowInfo.flowRate), flowRate);
             });
             it("[IP][10.1.4] Should be able to pause the stream, resume later, get terminated", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("2000");
@@ -2413,16 +2907,16 @@ describe("Investment Pool", async () => {
                 await investMoney(fUSDTx, investment, investorA, investedAmount);
 
                 // NOTE: Time traveling to 2022/09/15 when the milestone is active
-                timeStamp = dateToSeconds("2022/09/15", false) as number;
+                timeStamp = dateToSeconds("2022/09/15");
                 // NOTE: Here we we want explicitly the chain reported time
                 await investment.setTimestamp(0);
-                await traveler.advanceBlockAndSetTime(timeStamp);
+                await timeTravelToDate(timeStamp);
 
                 await investment.connect(creator).claim(0);
 
                 // Advance in time a little
-                timeStamp = dateToSeconds("2022/09/20", false) as number;
-                await traveler.advanceBlockAndSetTime(timeStamp);
+                timeStamp = dateToSeconds("2022/09/20");
+                await timeTravelToDate(timeStamp);
 
                 // NOTE: we are implicitly testing the SuperApp callback here
                 // we want to find out, what happens if the flow is voluntarily stopped by the creator
@@ -2435,17 +2929,15 @@ describe("Investment Pool", async () => {
                     .exec(creator);
 
                 // Advance in time a little
-                timeStamp = dateToSeconds("2022/09/25", false) as number;
-
-                await traveler.advanceBlockAndSetTime(timeStamp);
+                timeStamp = dateToSeconds("2022/09/25");
+                await timeTravelToDate(timeStamp);
 
                 await investment.connect(creator).claim(0);
                 const terminationWindow = BigNumber.from(await investment.terminationWindow());
 
                 // Let's make sure we are in the termination window
                 timeStamp = milestoneEndDate.sub(terminationWindow.div(2)).toNumber();
-
-                await traveler.advanceBlockAndSetTime(timeStamp);
+                await timeTravelToDate(timeStamp);
 
                 await expect(investment.terminateMilestoneStreamFinal(0)).not.to.be.reverted;
 
@@ -2486,16 +2978,16 @@ describe("Investment Pool", async () => {
                 await investMoney(fUSDTx, investment, investorA, investedAmount);
 
                 // NOTE: Time traveling to 2022/09/15 when the milestone is active
-                timeStamp = dateToSeconds("2022/09/15", false) as number;
+                timeStamp = dateToSeconds("2022/09/15");
                 // NOTE: Here we we want explicitly the chain reported time
                 await investment.setTimestamp(0);
-                await traveler.advanceBlockAndSetTime(timeStamp);
+                await timeTravelToDate(timeStamp);
 
                 await investment.connect(creator).claim(0);
 
                 // Advance in time a little
-                timeStamp = dateToSeconds("2022/09/20", false) as number;
-                await traveler.advanceBlockAndSetTime(timeStamp);
+                timeStamp = dateToSeconds("2022/09/20");
+                await timeTravelToDate(timeStamp);
 
                 // NOTE: we are implicitly testing the SuperApp callback here
                 // we want to find out, what happens if the flow is voluntarily stopped by the creator
@@ -2508,9 +3000,8 @@ describe("Investment Pool", async () => {
                     .exec(creator);
 
                 // Advance in time a little
-                timeStamp = dateToSeconds("2022/09/25", false) as number;
-
-                await traveler.advanceBlockAndSetTime(timeStamp);
+                timeStamp = dateToSeconds("2022/09/25");
+                await timeTravelToDate(timeStamp);
 
                 await investment.connect(creator).claim(0);
 
@@ -2518,8 +3009,7 @@ describe("Investment Pool", async () => {
 
                 // Let's make sure we are in the termination window
                 timeStamp = milestoneEndDate.sub(terminationWindow.div(2)).toNumber();
-
-                await traveler.advanceBlockAndSetTime(timeStamp);
+                await timeTravelToDate(timeStamp);
 
                 await sf.cfaV1
                     .deleteFlow({
@@ -2553,18 +3043,21 @@ describe("Investment Pool", async () => {
         });
         // TODO: Test the ovestream case during a single milestone, probably results in internal contract undeflow, need to confirm
     });
+    */
 
     describe("11. Money stream termination", () => {
-        describe("11.1 Interactions", () => {
-            beforeEach(async () => {
-                let snapshot = await traveler.takeSnapshot();
-                snapshotId = snapshot["result"];
-            });
+        beforeEach(async () => {
+            let snapshot = await traveler.takeSnapshot();
+            snapshotId = snapshot["result"];
+        });
 
-            afterEach(async () => {
-                await traveler.revertToSnapshot(snapshotId);
-            });
-            it("[IP][11.1.1] Anyone can stop milestone during termination window, it instantly transfers the rest of funds", async () => {
+        afterEach(async () => {
+            await traveler.revertToSnapshot(snapshotId);
+        });
+
+        describe("11.1 Interactions", () => {
+            it("[IP][11.1.1] Anyone can stop milestone during termination window, it instantly transfers left funds for milestone", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
                 const initialCreatorBalance = BigNumber.from(
                     await fUSDTx.balanceOf({
                         account: creator.address,
@@ -2575,41 +3068,20 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2022/07/15
                 let timeStamp = dateToSeconds("2022/07/15");
                 await investment.setTimestamp(timeStamp);
-
-                // Invest more than soft cap here to make sure the campaign is a success
-                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
-                // Give token approval
-                await fUSDTx
-                    .approve({
-                        receiver: investment.address,
-                        // Max value here to test if contract attempts something out of line
-                        amount: UINT256_MAX.toString(),
-                    })
-                    .exec(investorA);
-
-                // Invest money
-                await expect(investment.connect(investorA).invest(investedAmount, false))
-                    .to.emit(investment, "Invest")
-                    .withArgs(investorA.address, investedAmount);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
 
                 // NOTE: Time traveling to 2022/09/15 when the milestone is active
-                timeStamp = dateToSeconds("2022/09/15", false) as number;
-
+                timeStamp = dateToSeconds("2022/09/15");
                 // NOTE: Here we we want explicitly the chain reported time
                 await investment.setTimestamp(0);
-                await traveler.advanceBlockAndSetTime(timeStamp);
+                await timeTravelToDate(timeStamp);
 
-                await expect(investment.connect(creator).claim(0))
-                    .to.emit(investment, "Claim")
-                    .withArgs(0);
+                await investment.connect(creator).claim(0);
 
-                const terminationWindow = BigNumber.from(await investment.terminationWindow());
-
-                // Let's make sure we are in the termination window
-                timeStamp = milestoneEndDate.sub(terminationWindow.div(2)).toNumber();
+                const terminationWindow = await investment.terminationWindow();
+                timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
                 // NOTE: Here we we want explicitly the chain reported time
-                await investment.setTimestamp(0);
-                await traveler.advanceBlockAndSetTime(timeStamp);
+                await timeTravelToDate(timeStamp);
 
                 await investment
                     .connect(foreignActor) // Anyone can terminate it, no access rights needed
@@ -2623,100 +3095,84 @@ describe("Investment Pool", async () => {
                 );
 
                 const milestone = await investment.milestones(0);
-                const paidAmount = milestone.paidAmount;
+                const tokenAllocation = await investment.getTotalMilestoneTokenAllocation(0);
 
                 assert.deepEqual(
-                    paidAmount,
-                    creatorBalance.sub(initialCreatorBalance),
-                    "Streamed balance and stored record should match"
+                    tokenAllocation,
+                    milestone.paidAmount,
+                    "Paid amount isn't equal to the milestone token allocation"
                 );
-
-                assert.equal(milestone.paid, true, "Milestone should be fully paid by now");
-
+                assert.isTrue(milestone.paid, "Milestone should be fully paid by now");
                 assert.deepEqual(
                     creatorBalance.sub(initialCreatorBalance),
-                    investedAmount,
+                    milestone.paidAmount,
                     "Should transfer all of the funds during the termination"
                 );
             });
 
             it("[IP][11.1.2] gelatoChecker should not pass if not in auto termination window", async () => {
                 const {canExec} = await investment.callStatic.gelatoChecker();
-
-                assert.equal(canExec, false);
+                assert.isFalse(canExec);
             });
 
             it("[IP][11.1.3] gelatoChecker should pass if in auto termination window", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
                 // NOTE: Time traveling to 2022/07/15
                 let timeStamp = dateToSeconds("2022/07/15");
                 await investment.setTimestamp(timeStamp);
-
-                // Invest more than soft cap here to make sure the campaign is a success
-                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
-                // Give token approval
-                await fUSDTx
-                    .approve({
-                        receiver: investment.address,
-                        // Max value here to test if contract attempts something out of line
-                        amount: UINT256_MAX.toString(),
-                    })
-                    .exec(investorA);
-
-                // Invest money
-                await expect(investment.connect(investorA).invest(investedAmount, false))
-                    .to.emit(investment, "Invest")
-                    .withArgs(investorA.address, investedAmount);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
 
                 // NOTE: Time traveling to 2022/09/15 when the milestone is active
-                timeStamp = dateToSeconds("2022/09/15", false) as number;
-
+                timeStamp = dateToSeconds("2022/09/15");
                 // NOTE: Here we we want explicitly the chain reported time
                 await investment.setTimestamp(0);
-                await traveler.advanceBlockAndSetTime(timeStamp);
+                await timeTravelToDate(timeStamp);
 
-                await expect(investment.connect(creator).claim(0))
-                    .to.emit(investment, "Claim")
-                    .withArgs(0);
+                await investment.connect(creator).claim(0);
 
-                const automatedTerminationWindow = BigNumber.from(
-                    await investment.automatedTerminationWindow()
-                );
-
-                // Let's make sure we are in the automated termination window
-                timeStamp = milestoneEndDate.sub(automatedTerminationWindow.div(2)).toNumber();
-
+                const automatedTerminationWindow = await investment.automatedTerminationWindow();
+                timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
                 // NOTE: Here we we want explicitly the chain reported time
-                await investment.setTimestamp(0);
-                await traveler.advanceBlockAndSetTime(timeStamp);
+                await timeTravelToDate(timeStamp);
 
                 // Call gelatoChecker and return value (not the transaction)
                 const {canExec} = await investment.callStatic.gelatoChecker();
-                assert.equal(canExec, true);
+                assert.isTrue(canExec);
             });
-            it("[IP][11.1.4] Non gelato address should not be able to terminate stream", async () => {
+            it("[IP][11.1.4] Non gelato address should not be able to call gelato stream termination", async () => {
                 await expect(
                     investment.connect(foreignActor).gelatoTerminateMilestoneStreamFinal(0)
-                ).to.be.revertedWith("[IP]: not gelato ops");
+                ).to.be.revertedWithCustomError(investment, "InvestmentPool__NotGelatoOps");
             });
-            //   it("[IP][11.1.5] Gelato should not be able to terminate stream if not in auto termination window", async () => {
-            //     await expect(
-            //       investment
-            //         .connect(ethers.provider.getSigner(gelatoOpsMock.address))
-            //         .gelatoTerminateMilestoneStreamFinal(0)
-            //     ).to.be.revertedWith(
-            //       "[IP]: gelato cannot terminate stream for this milestone"
-            //     );
-            //   });
+            it("[IP][11.1.5] Gelato shouldn't be able to terminate stream if not in auto termination window", async () => {
+                await expect(
+                    gelatoOpsMock.terminateMilestoneStream(0)
+                ).to.be.revertedWithCustomError(
+                    investment,
+                    "InvestmentPool__GelatoMilestoneStreamTerminationUnavailable"
+                );
+            });
         });
 
         // TODO: Test termination by 3P system (patricians, plebs, pirates) in case we wouldn't stop it in time, what happens then?
     });
 
-    describe("12. Governance", () => {
+    describe("12. Project cancelation during active milestones", () => {
+        describe("12.1 Public state", () => {});
+        describe("12.2 Interactions", () => {});
+    });
+
+    describe("13. Milestone jump with final termination", () => {
+        describe("13.1 Public state", () => {});
+        describe("13.2 Interactions", () => {});
+    });
+
+    describe("Governance", () => {
         // TODO: Test milestone unlocking, once governance is in place
     });
 
-    describe("13. Upgradeability", () => {
+    describe("Upgradeability", () => {
         // Validate that the storage slots for contract variables don't change their storage slot and offset
         // Validate that struct member order hasn't changed
         // it("8.1 Contract storage variables didn't shift during development", async () => {

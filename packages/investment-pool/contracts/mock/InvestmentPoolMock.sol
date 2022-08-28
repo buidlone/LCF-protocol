@@ -30,4 +30,8 @@ contract InvestmentPoolMock is InvestmentPool {
     function setCurrentMilestone(uint256 _id) public {
         currentMilestone = _id;
     }
+
+    function increaseMilestone() public {
+        currentMilestone++;
+    }
 }

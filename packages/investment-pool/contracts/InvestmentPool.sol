@@ -50,7 +50,7 @@ error InvestmentPool__MilestoneAlreadyStarted();
 error InvestmentPool__FundraiserAlreadyEnded();
 error InvestmentPool__AlreadyPaidSeedAmountForMilestone(uint256 milestoneId);
 error InvestmentPool__CurrentStateIsNotAllowed(uint256 currentStateByteValue);
-error InvestmentPool__ProjectTerminatedNotInPreviousMilestone();
+error InvestmentPool__NoSeedAmountDedicated();
 
 contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, Initializable {
     using CFAv1Library for CFAv1Library.InitData;
@@ -65,15 +65,15 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      * @dev Values are used for bitwise operations to determine current project state.
      * @dev Investment pool can't have multiple states at the same time.
      */
-    uint256 private constant CANCELED_PROJECT_BYTE_VALUE = 1;
-    uint256 private constant BEFORE_FUNDRAISER_BYTE_VALUE = 2;
-    uint256 private constant ACTIVE_FUNDRAISER_BYTE_VALUE = 4;
-    uint256 private constant FAILED_FUNDRAISER_BYTE_VALUE = 8;
-    uint256 private constant FUNDRAISER_ENDED_NO_ACTIVE_MILESTONE_BYTE_VALUE = 16;
-    uint256 private constant NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE = 32;
-    uint256 private constant LAST_MILESTONE_BYTE_VALUE = 64;
-    uint256 private constant TERMINATED_BY_VOTING_BYTE_VALUE = 128;
-    uint256 private constant NO_STATE_BYTE_VALUE = 256;
+    uint256 public constant CANCELED_PROJECT_BYTE_VALUE = 1;
+    uint256 public constant BEFORE_FUNDRAISER_BYTE_VALUE = 2;
+    uint256 public constant ACTIVE_FUNDRAISER_BYTE_VALUE = 4;
+    uint256 public constant FAILED_FUNDRAISER_BYTE_VALUE = 8;
+    uint256 public constant FUNDRAISER_ENDED_NO_ACTIVE_MILESTONE_BYTE_VALUE = 16;
+    uint256 public constant NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE = 32;
+    uint256 public constant LAST_MILESTONE_BYTE_VALUE = 64;
+    uint256 public constant TERMINATED_BY_VOTING_BYTE_VALUE = 128;
+    uint256 public constant NO_STATE_BYTE_VALUE = 256;
 
     /* WARNING: NEVER RE-ORDER VARIABLES! Always double-check that new
        variables are added APPEND-ONLY. Re-ordering variables can
@@ -131,7 +131,12 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     event Cancel();
     event Invest(address indexed caller, uint256 amount);
     event Unpledge(address indexed caller, uint256 amount);
-    event Claim(uint256 milestoneId);
+    event ClaimFunds(
+        uint256 milestoneId,
+        bool gotSeedFunds,
+        bool gotStreamAmount,
+        bool openedStream
+    );
     event Refund(address indexed caller, uint256 amount);
 
     /** MODIFIERS */
@@ -483,29 +488,30 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
                 TERMINATED_BY_VOTING_BYTE_VALUE
         )
     {
-        // transfer seed tokens and update state
         Milestone storage milestone = milestones[_milestoneId];
 
-        // Allow creator to claim only milestone seed funds if milestone was terminated by voting in previous milestone
-        if (isCanceledDuringMilestones() && _milestoneId != 0 && !milestone.seedAmountPaid) {
-            Milestone memory previousMilestone = milestones[_milestoneId - 1];
+        if (_milestoneId > _getCurrentMilestoneIndex())
+            revert InvestmentPool__MilestoneStillLocked();
+        if (milestone.streamOngoing)
+            revert InvestmentPool__AlreadyStreamingForMilestone(_milestoneId);
 
-            // Check if canceled project in previouse milestone
+        // Allow creator to claim only milestone seed funds if milestone was terminated by voting
+        if (isCanceledDuringMilestones()) {
             if (
-                emergencyTerminationTimestamp > previousMilestone.startDate &&
-                emergencyTerminationTimestamp < previousMilestone.endDate
+                !milestone.seedAmountPaid &&
+                emergencyTerminationTimestamp > milestone.startDate &&
+                emergencyTerminationTimestamp < milestone.endDate
             ) {
                 uint256 seedAmount = getMilestoneSeedAmount(_milestoneId);
                 milestone.seedAmountPaid = true;
                 milestone.paidAmount = seedAmount;
                 acceptedToken.transfer(creator, seedAmount);
+                emit ClaimFunds(_milestoneId, true, false, false);
+                return;
             } else {
-                revert InvestmentPool__ProjectTerminatedNotInPreviousMilestone();
+                revert InvestmentPool__NoSeedAmountDedicated();
             }
         }
-
-        if (_milestoneId > _getCurrentMilestoneIndex())
-            revert InvestmentPool__MilestoneStillLocked();
 
         // Seed amount was not paid yet, send seed funds instantly to the creator
         if (!milestone.seedAmountPaid) {
@@ -513,6 +519,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             milestone.seedAmountPaid = true;
             milestone.paidAmount = amount;
             acceptedToken.transfer(creator, amount);
+            emit ClaimFunds(_milestoneId, true, false, false);
         }
 
         uint256 tokenPortion = getTotalMilestoneTokenAllocation(_milestoneId);
@@ -526,10 +533,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             milestone.paid = true;
             milestone.paidAmount = tokenPortion;
             acceptedToken.transfer(creator, owedAmount);
+            emit ClaimFunds(_milestoneId, false, true, false);
         } else {
-            if (milestone.streamOngoing)
-                revert InvestmentPool__AlreadyStreamingForMilestone(_milestoneId);
-
             milestone.streamOngoing = true;
 
             // TODO: Calculate the limits here, make sure there is no possibility of overflow
@@ -539,9 +544,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             uint leftStreamDuration = milestone.endDate - _getNow();
             int96 flowRate = int96(int256(owedAmount / leftStreamDuration));
             cfaV1Lib.createFlow(creator, acceptedToken, flowRate);
+            emit ClaimFunds(_milestoneId, false, false, true);
         }
-
-        emit Claim(_milestoneId);
     }
 
     /** @notice Terminates the stream of funds from contract to creator.
@@ -558,8 +562,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             creator
         );
 
-        uint256 streamedAmount = (_getNow() - timestamp) * (uint256(int256(flowRate)));
-
+        uint256 streamedAmount = (_getNow() - timestamp) * uint256(int256(flowRate));
         cfaV1Lib.deleteFlow(address(this), creator, acceptedToken);
 
         // Perform final termination. Rest of the token buffer gets instantly sent
@@ -719,7 +722,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     function _afterMilestoneStreamTermination(
         uint256 _milestoneId,
         uint256 streamedAmount,
-        bool finalTermination
+        bool _finalTermination
     ) internal {
         Milestone storage milestone = milestones[_milestoneId];
         // TODO: Handle overstream situations here, if it wasn't closed in time
@@ -730,7 +733,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         milestone.streamOngoing = false;
 
         // If final, send all the left funds straight to the creator
-        if (finalTermination) {
+        if (_finalTermination) {
             uint256 tokenPortion = getTotalMilestoneTokenAllocation(_milestoneId);
             uint256 owedAmount = tokenPortion - milestone.paidAmount - streamedAmount;
 
