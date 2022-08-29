@@ -19,6 +19,10 @@ contract InvestmentPoolMock is InvestmentPool {
         return timestamp == 0 ? block.timestamp : timestamp;
     }
 
+    function getTimeInContract() public view returns (uint256) {
+        return _getNow();
+    }
+
     function getMemMilestonePortions(uint256 _id) public view returns (uint256) {
         return memMilestonePortions[_id];
     }
@@ -33,5 +37,9 @@ contract InvestmentPoolMock is InvestmentPool {
 
     function increaseMilestone() public {
         currentMilestone++;
+    }
+
+    function terminateMilestoneStreamFinal(uint256 _id) public {
+        _terminateMilestoneStreamFinal(_id);
     }
 }

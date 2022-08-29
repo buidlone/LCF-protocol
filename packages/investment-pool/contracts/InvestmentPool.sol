@@ -17,8 +17,6 @@ import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeE
 import {IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
 import {IGelatoOps} from "./interfaces/IGelatoOps.sol";
 
-import "hardhat/console.sol";
-
 /// @notice Superfluid ERRORS for callbacks
 /// @dev Thrown when the wrong token is streamed to the contract.
 error InvestmentPool__InvalidToken();
@@ -138,6 +136,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         bool openedStream
     );
     event Refund(address indexed caller, uint256 amount);
+    event TerminateStream(uint256 milestoneId);
 
     /** MODIFIERS */
 
@@ -444,9 +443,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
         // Flow exists, do bookkeeping
         if (timestamp != 0) {
-            uint256 streamedAmount = (_getNow() - timestamp) * (uint256(int256(flowRate)));
+            uint256 streamedAmount = (_getNow() - timestamp) * uint256(int256(flowRate));
 
-            cfaV1Lib.cfa.deleteFlow(acceptedToken, address(this), creator, "");
+            cfaV1Lib.deleteFlow(address(this), creator, acceptedToken);
 
             // Update the milestone paid amount, don't transfer rest of the funds
             _afterMilestoneStreamTermination(_getCurrentMilestoneIndex(), streamedAmount, false);
@@ -460,12 +459,12 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      * @notice If it is a last milestone, only terminate the stream.
      */
     function milestoneJumpOrFinalProjectTermination()
-        external
+        public
         onlyCreator
         allowedProjectStates(NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE | LAST_MILESTONE_BYTE_VALUE)
     {
         uint curMil = _getCurrentMilestoneIndex();
-        terminateMilestoneStreamFinal(curMil);
+        _terminateMilestoneStreamFinal(curMil);
 
         if (!isLastMilestoneOngoing()) {
             currentMilestone++;
@@ -543,6 +542,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             // At this point, there should be no active stream to the creator's account so it's safe to open a new one
             uint leftStreamDuration = milestone.endDate - _getNow();
             int96 flowRate = int96(int256(owedAmount / leftStreamDuration));
+
             cfaV1Lib.createFlow(creator, acceptedToken, flowRate);
             emit ClaimFunds(_milestoneId, false, false, true);
         }
@@ -552,8 +552,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         @dev Can only be called during the termination window for a particular milestone.
         @param _milestoneId Milestone index to terminate the stream for
      */
-    function terminateMilestoneStreamFinal(uint256 _milestoneId)
-        public
+    function _terminateMilestoneStreamFinal(uint256 _milestoneId)
+        internal
         canTerminateMilestoneFinal(_milestoneId)
     {
         (uint256 timestamp, int96 flowRate, , ) = cfaV1Lib.cfa.getFlow(
@@ -562,11 +562,13 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             creator
         );
 
-        uint256 streamedAmount = (_getNow() - timestamp) * uint256(int256(flowRate));
-        cfaV1Lib.deleteFlow(address(this), creator, acceptedToken);
+        if (timestamp != 0) {
+            uint256 streamedAmount = (_getNow() - timestamp) * uint256(int256(flowRate));
+            cfaV1Lib.deleteFlow(address(this), creator, acceptedToken);
 
-        // Perform final termination. Rest of the token buffer gets instantly sent
-        _afterMilestoneStreamTermination(_milestoneId, streamedAmount, true);
+            // Perform final termination. Rest of the token buffer gets instantly sent
+            _afterMilestoneStreamTermination(_milestoneId, streamedAmount, true);
+        }
     }
 
     /// @notice Checks if project was canceled
@@ -708,10 +710,15 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     }
 
     /// @notice Calculate the real funds allocation for the milestone
-    function getTotalMilestoneTokenAllocation(uint _milestoneId) public view returns (uint256) {
+    function getTotalMilestoneTokenAllocation(uint _milestoneId) public returns (uint256) {
+        uint256 memInvAmount = memMilestoneInvestments[_milestoneId];
+        if (memInvAmount == 0 && _milestoneId > 0) {
+            memInvAmount = memMilestoneInvestments[_milestoneId - 1];
+            memMilestoneInvestments[_milestoneId] = memInvAmount;
+        }
+
         uint totalPercentage = milestones[_milestoneId].intervalSeedPortion +
             milestones[_milestoneId].intervalStreamingPortion;
-        uint256 memInvAmount = memMilestoneInvestments[_milestoneId];
         uint256 subt = memInvAmount * totalPercentage;
         return subt / PERCENTAGE_DIVIDER;
     }
@@ -743,8 +750,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
                 acceptedToken.transfer(creator, owedAmount);
             }
         } else {
-            milestone.paidAmount = milestone.paidAmount + streamedAmount;
+            milestone.paidAmount += streamedAmount;
         }
+
+        emit TerminateStream(_milestoneId);
     }
 
     /**
@@ -760,7 +769,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         uint256 investmentCoefficient = memMilestonePortions[_milestoneId];
 
         if (memMilestoneInvestments[_milestoneId] == 0 && _milestoneId > 0) {
-            memMilestoneInvestments[_milestoneId] += memMilestoneInvestments[_milestoneId - 1];
+            memMilestoneInvestments[_milestoneId] = memMilestoneInvestments[_milestoneId - 1];
         }
 
         uint256 scaledInvestment = (_amount * PERCENTAGE_DIVIDER) / investmentCoefficient;
@@ -773,7 +782,6 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     /// @notice Get the total project PORTION percentage. It shouldn't be confused with total investment percentage that is left.
     function _getEarlyTerminationProjectLeftPortion(uint256 _terminationMilestoneId)
         internal
-        view
         returns (uint256)
     {
         /**
@@ -906,10 +914,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         // Check if gelato can terminate stream of current milestone
         canExec = canGelatoTerminateMilestoneStreamFinal(currentMilestoneIndex);
 
-        execPayload = abi.encodeWithSelector(
-            this.gelatoTerminateMilestoneStreamFinal.selector,
-            currentMilestoneIndex
-        );
+        execPayload = abi.encodeWithSelector(this.gelatoTerminateMilestoneStreamFinal.selector);
     }
 
     function startGelatoTask() public {
@@ -928,13 +933,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         onlyGelatoOps
         canGelatoTerminateMilestoneFinal(_milestoneId)
     {
-        terminateMilestoneStreamFinal(_milestoneId);
+        milestoneJumpOrFinalProjectTermination();
 
-        uint256 fee;
-        address feeToken;
-
-        (fee, feeToken) = gelatoOps.getFeeDetails();
-
+        (uint256 fee, address feeToken) = gelatoOps.getFeeDetails();
         _gelatoTransfer(fee, feeToken);
     }
 

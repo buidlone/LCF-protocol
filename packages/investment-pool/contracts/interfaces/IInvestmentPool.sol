@@ -48,8 +48,6 @@ interface IInvestmentPool is ISuperApp {
 
     function claim(uint256 _milestoneId) external;
 
-    function terminateMilestoneStreamFinal(uint256 _milestoneId) external;
-
     function cancelBeforeFundraiserStart() external;
 
     function cancelDuringMilestones() external;
