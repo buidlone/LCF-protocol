@@ -12,12 +12,10 @@ interface IInvestmentPool is ISuperApp {
         uint48 startDate;
         // End date of the milestone period
         uint48 endDate;
-
         // Describes the portion of the total funds(all milestones),
         // assigned as a seed portion for this milestone
         // 100% == 10 ** 18
         uint256 intervalSeedPortion;
-
         // Describes the portion of the total funds(all milestones),
         // assigned as a streaming portion for this milestone
         // 100% == 10 ** 18
@@ -31,12 +29,10 @@ interface IInvestmentPool is ISuperApp {
         bool seedAmountPaid;
         bool streamOngoing;
         uint256 paidAmount;
-
         // Describes the portion of the total funds(all milestones),
         // assigned as a seed portion for this milestone
         // 100% == 10 ** 18
         uint256 intervalSeedPortion;
-
         // Describes the portion of the total funds(all milestones),
         // assigned as a streaming portion for this milestone
         // 100% == 10 ** 18
@@ -46,17 +42,17 @@ interface IInvestmentPool is ISuperApp {
 
     function invest(uint256 _amount, bool _strict) external;
 
-    function unpledge(uint256 _milestoneId, uint256 _amount) external;
+    function unpledge(uint256 _amount) external;
 
     function refund() external;
 
     function claim(uint256 _milestoneId) external;
 
-    function terminateMilestoneStreamFinal(uint256 _milestoneId) external;
+    function cancelBeforeFundraiserStart() external;
 
-    function cancel() external;
+    function cancelDuringMilestones() external;
 
-    function milestoneJump() external;
+    function milestoneJumpOrFinalProjectTermination() external;
 
     function isFundraiserOngoingNow() external view returns (bool);
 
@@ -68,20 +64,14 @@ interface IInvestmentPool is ISuperApp {
 
     function isFailedFundraiser() external view returns (bool);
 
-    function canTerminateMilestoneStreamFinal(uint256 _milestoneId)
-        external
-        view
-        returns (bool);
+    function canTerminateMilestoneStreamFinal(uint256 _milestoneId) external view returns (bool);
 
     function canGelatoTerminateMilestoneStreamFinal(uint256 _milestoneId)
         external
         view
         returns (bool);
 
-    function gelatoChecker()
-        external
-        view
-        returns (bool canExec, bytes memory execPayload);
+    function gelatoChecker() external view returns (bool canExec, bytes memory execPayload);
 
     function startGelatoTask() external;
 

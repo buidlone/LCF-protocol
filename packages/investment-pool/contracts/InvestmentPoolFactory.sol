@@ -31,7 +31,10 @@ error InvestmentPoolFactory__NoMilestonesAdded();
 error InvestmentPoolFactory__MilestonesCountExceedsMaxCount();
 error InvestmentPoolFactory__MilestoneStartsBeforeFundraiserEnds();
 error InvestmentPoolFactory__InvalidMilestoneInverval();
-error InvestmentPoolFactory__PercentagesAreNotAddingUp();
+error InvestmentPoolFactory__PercentagesAreNotAddingUp(
+    uint256 totalPercentagesProvided,
+    uint256 maxPercentages
+);
 error InvestmentPoolFactory__MilestonesAreNotAdjacentInTime(
     uint256 oldMilestoneEnd,
     uint256 newMilestoneStart
@@ -41,7 +44,6 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
     // Assign all Clones library functions to addresses
     using Clones for address;
 
-    uint48 public constant VOTING_PERIOD = 7 days;
     uint48 public constant TERMINATION_WINDOW = 12 hours;
     uint48 public constant AUTOMATED_TERMINATION_WINDOW = 1 hours;
     uint public constant MILESTONE_MIN_DURATION = 30 days;
@@ -216,7 +218,10 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         }
 
         if (totalPercentage != PERCENTAGE_DIVIDER)
-            revert InvestmentPoolFactory__PercentagesAreNotAddingUp();
+            revert InvestmentPoolFactory__PercentagesAreNotAddingUp(
+                totalPercentage,
+                PERCENTAGE_DIVIDER
+            );
     }
 
     function _getNow() internal view virtual returns (uint256) {

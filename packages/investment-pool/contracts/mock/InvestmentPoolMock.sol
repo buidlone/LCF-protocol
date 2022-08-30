@@ -18,4 +18,28 @@ contract InvestmentPoolMock is InvestmentPool {
         // solhint-disable-next-line not-rely-on-time
         return timestamp == 0 ? block.timestamp : timestamp;
     }
+
+    function getTimeInContract() public view returns (uint256) {
+        return _getNow();
+    }
+
+    function getMemMilestonePortions(uint256 _id) public view returns (uint256) {
+        return memMilestonePortions[_id];
+    }
+
+    function getMemMilestoneInvestments(uint256 _id) public view returns (uint256) {
+        return memMilestoneInvestments[_id];
+    }
+
+    function setCurrentMilestone(uint256 _id) public {
+        currentMilestone = _id;
+    }
+
+    function increaseMilestone() public {
+        currentMilestone++;
+    }
+
+    function terminateMilestoneStreamFinal(uint256 _id) public {
+        _terminateMilestoneStreamFinal(_id);
+    }
 }

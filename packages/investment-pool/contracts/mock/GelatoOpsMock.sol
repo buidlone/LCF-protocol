@@ -4,17 +4,21 @@
 pragma solidity ^0.8.9;
 
 import {IGelatoOps} from "../interfaces/IGelatoOps.sol";
+import {IInvestmentPool} from "../interfaces/IInvestmentPool.sol";
 
 contract GelatoOpsMock is IGelatoOps {
+    IInvestmentPool public executor;
+
     event RegisterGelatoTask();
 
     function createTaskNoPrepayment(
-        address, /*_execAddress*/
+        address _execAddress,
         bytes4, /*_execSelector*/
         address, /*_resolverAddress*/
         bytes calldata, /*_resolverData*/
         address /*_feeToken*/
     ) public returns (bytes32 task) {
+        executor = IInvestmentPool(_execAddress);
         emit RegisterGelatoTask();
         task = bytes32("");
     }
@@ -25,5 +29,9 @@ contract GelatoOpsMock is IGelatoOps {
 
     function gelato() public pure returns (address payable) {
         return (payable(address(0)));
+    }
+
+    function terminateMilestoneStream(uint256 _id) public {
+        executor.gelatoTerminateMilestoneStreamFinal(_id);
     }
 }
