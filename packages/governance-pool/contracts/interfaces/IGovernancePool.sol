@@ -21,7 +21,7 @@ interface IGovernancePool {
     function mintVotingTokens(
         address _investor,
         uint256 _amount,
-        uint256 _unlockTime
+        uint48 _unlockTime
     ) external;
 
     function unlockVotingTokens(address _investmentPool) external;

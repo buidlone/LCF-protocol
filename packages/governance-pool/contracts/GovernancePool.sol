@@ -130,7 +130,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     function mintVotingTokens(
         address _investor,
         uint256 _amount,
-        uint256 _unlockTime
+        uint48 _unlockTime
     ) external onActiveInvestmentPool(_msgSender()) {
         if (_amount == 0) revert GovernancePool__amountIsZero();
         uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
@@ -161,7 +161,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
             TokensLocked memory votingTokens = lockedTokens[i];
 
             // Transfer only tokens that haven't been claimed and unlock time was reached
-            if (!votingTokens.claimed && votingTokens.unlockTime <= block.timestamp) {
+            if (!votingTokens.claimed && votingTokens.unlockTime <= uint48(block.timestamp)) {
                 tokensLocked[_msgSender()][investmentPoolId][i].claimed = true;
 
                 uint256 amount = votingTokens.amount;
@@ -318,26 +318,17 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
 
     function isInvestmentPoolUnavailable(address _investmentPool) public view returns (bool) {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        return
-            investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.Unavailable
-                ? true
-                : false;
+        return investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.Unavailable;
     }
 
     function isInvestmentPoolVotingActive(address _investmentPool) public view returns (bool) {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        return
-            investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.ActiveVoting
-                ? true
-                : false;
+        return investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.ActiveVoting;
     }
 
     function isInvestmentPoolVotingFinished(address _investmentPool) public view returns (bool) {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        return
-            investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.VotedAgainst
-                ? true
-                : false;
+        return investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.VotedAgainst;
     }
 
     /** @notice Get tokens supply for investment pool token

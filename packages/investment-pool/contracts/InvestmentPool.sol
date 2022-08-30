@@ -15,6 +15,7 @@ import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.s
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
+import {IGovernancePool} from "@buidlone/governance-pool/contracts/interfaces/IGovernancePool.sol";
 import {IGelatoOps} from "./interfaces/IGelatoOps.sol";
 
 /// @notice Superfluid ERRORS for callbacks
@@ -86,6 +87,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     address public creator;
     IGelatoOps public gelatoOps;
     address payable public gelato;
+    IGovernancePool public governancePool;
 
     // TODO: validate that uint96 for soft cap is enough
     uint96 public softCap;
@@ -220,13 +222,11 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         ISuperToken _acceptedToken,
         address _creator,
         IGelatoOps _gelatoOps,
-        uint96 _softCap,
-        uint96 _hardCap,
-        uint48 _fundraiserStartAt,
-        uint48 _fundraiserEndAt,
+        ProjectInfo calldata _projectInfo,
         uint48 _terminationWindow,
         uint48 _automatedTerminationWindow,
-        MilestoneInterval[] calldata _milestones
+        MilestoneInterval[] calldata _milestones,
+        IGovernancePool _governancePool
     ) external initializer {
         /// @dev Parameter validation was already done for us by the Factory, so it's safe to use "as is" and save gas
 
@@ -240,14 +240,15 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         creator = _creator;
         gelatoOps = _gelatoOps;
         gelato = gelatoOps.gelato();
-        softCap = _softCap;
-        hardCap = _hardCap;
-        fundraiserStartAt = _fundraiserStartAt;
-        fundraiserEndAt = _fundraiserEndAt;
+        softCap = _projectInfo.softCap;
+        hardCap = _projectInfo.hardCap;
+        fundraiserStartAt = _projectInfo.fundraiserStartAt;
+        fundraiserEndAt = _projectInfo.fundraiserEndAt;
         terminationWindow = _terminationWindow;
         automatedTerminationWindow = _automatedTerminationWindow;
         milestoneCount = _milestones.length;
         currentMilestone = 0;
+        governancePool = _governancePool;
 
         MilestoneInterval memory interval;
         uint48 streamDurationsTotal = 0;
@@ -312,7 +313,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         _investToMilestone(_msgSender(), investToMilestoneId, _amount);
         acceptedToken.transferFrom(_msgSender(), address(this), _amount);
 
-        // Add voting token mint here
+        // Mint voting tokens in governance pool
+        uint48 unlockTime = milestones[investToMilestoneId].startDate;
+        governancePool.mintVotingTokens(_msgSender(), _amount, unlockTime);
+
         emit Invest(_msgSender(), _amount);
     }
 
