@@ -5,8 +5,16 @@ pragma solidity ^0.8.9;
 
 import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {IGelatoOps} from "./IGelatoOps.sol";
+import {IGovernancePool} from "@buidlone/governance-pool/contracts/interfaces/IGovernancePool.sol";
 
 interface IInvestmentPool is ISuperApp {
+    struct ProjectInfo {
+        uint96 softCap;
+        uint96 hardCap;
+        uint48 fundraiserStartAt;
+        uint48 fundraiserEndAt;
+    }
+
     struct MilestoneInterval {
         // Starting date of the milestone
         uint48 startDate;
@@ -84,12 +92,10 @@ interface IInitializableInvestmentPool is IInvestmentPool {
         ISuperToken _acceptedToken,
         address _creator,
         IGelatoOps _gelatoOps,
-        uint96 _softCap,
-        uint96 _hardCap,
-        uint48 _fundraiserStartAt,
-        uint48 _fundraiserEndAt,
+        IInvestmentPool.ProjectInfo calldata _projectInfo,
         uint48 _terminationWindow,
         uint48 _automatedTerminationWindow,
-        MilestoneInterval[] calldata _milestones
+        MilestoneInterval[] calldata _milestones,
+        IGovernancePool _governancePool
     ) external;
 }

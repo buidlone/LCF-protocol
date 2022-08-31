@@ -7,11 +7,13 @@ pragma solidity ^0.8.9;
 import {ISuperfluid, ISuperToken, ISuperApp, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 
 // Openzepelin imports
-import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import "@openzeppelin/contracts/proxy/Clones.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {IInvestmentPool, IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
 import {IInvestmentPoolFactory} from "./interfaces/IInvestmentPoolFactory.sol";
 import {IGelatoOps} from "./interfaces/IGelatoOps.sol";
+import {IGovernancePool} from "@buidlone/governance-pool/contracts/interfaces/IGovernancePool.sol";
 import {InvestmentPool} from "./InvestmentPool.sol";
 
 error InvestmentPoolFactory__ImplementationContractAddressIsZero();
@@ -19,10 +21,7 @@ error InvestmentPoolFactory__HostAddressIsZero();
 error InvestmentPoolFactory__GelatoOpsAddressIsZero();
 error InvestmentPoolFactory__AcceptedTokenAddressIsZero();
 error InvestmentPoolFactory__CreatorAddressIsZero();
-error InvestmentPoolFactory__SoftCapIsGreaterThanHardCap(
-    uint96 softCap,
-    uint96 hardCap
-);
+error InvestmentPoolFactory__SoftCapIsGreaterThanHardCap(uint96 softCap, uint96 hardCap);
 error InvestmentPoolFactory__FundraiserStartIsInPast();
 error InvestmentPoolFactory__FundraiserStartTimeIsGreaterThanEndTime();
 error InvestmentPoolFactory__FundraiserExceedsMaxDuration();
@@ -39,8 +38,10 @@ error InvestmentPoolFactory__MilestonesAreNotAdjacentInTime(
     uint256 oldMilestoneEnd,
     uint256 newMilestoneStart
 );
+error InvestmentPoolFactory__GovernancePoolAlreadyDefined();
+error InvestmentPoolFactory__GovernancePoolNotDefined();
 
-contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
+contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     // Assign all Clones library functions to addresses
     using Clones for address;
 
@@ -56,6 +57,8 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
     // TODO: Arbitrary choice, set this later to something that makes sense
     uint32 public constant MAX_MILESTONE_COUNT = 10;
 
+    IGovernancePool public GOVERNANCE_POOL;
+
     /* WARNING: NEVER RE-ORDER VARIABLES! Always double-check that new
        variables are added APPEND-ONLY. Re-ordering variables can
        permanently BREAK the deployed proxy contract. */
@@ -69,8 +72,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         IGelatoOps _gelatoOps,
         address _implementationContract
     ) {
-        if (address(_host) == address(0))
-            revert InvestmentPoolFactory__HostAddressIsZero();
+        if (address(_host) == address(0)) revert InvestmentPoolFactory__HostAddressIsZero();
 
         if (address(_gelatoOps) == address(0))
             revert InvestmentPoolFactory__GelatoOpsAddressIsZero();
@@ -95,6 +97,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         IInvestmentPool.MilestoneInterval[] calldata _milestones
     ) external returns (IInvestmentPool) {
         IInitializableInvestmentPool invPool;
+
         _assertPoolInitArguments(
             HOST,
             _acceptedToken,
@@ -112,19 +115,28 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
             revert("[IPF]: only CLONE_PROXY is supported");
         }
 
+        // Using the struct and then passing it to the initialize function because we don't want to get the error: "Stack too deep"
+        IInvestmentPool.ProjectInfo memory projectDetails = IInvestmentPool.ProjectInfo(
+            _softCap,
+            _hardCap,
+            _fundraiserStartAt,
+            _fundraiserEndAt
+        );
+
         invPool.initialize(
             HOST,
             _acceptedToken,
             _msgSender(),
             GELATO_OPS,
-            _softCap,
-            _hardCap,
-            _fundraiserStartAt,
-            _fundraiserEndAt,
+            projectDetails,
             TERMINATION_WINDOW,
             AUTOMATED_TERMINATION_WINDOW,
-            _milestones
+            _milestones,
+            GOVERNANCE_POOL
         );
+
+        // After creating investment pool, call governance pool with investment pool address
+        GOVERNANCE_POOL.activateInvestmentPool(address(invPool));
 
         // Final level is required by the Superfluid's spec right now
         // We only really care about termination callbacks, others - noop
@@ -141,14 +153,16 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         return invPool;
     }
 
-    function _deployClone()
-        internal
-        virtual
-        returns (IInitializableInvestmentPool pool)
-    {
-        pool = IInitializableInvestmentPool(
-            investmentPoolImplementation.clone()
-        );
+    function setGovernancePool(address _governancePool) public onlyOwner {
+        if (address(GOVERNANCE_POOL) == address(0)) {
+            GOVERNANCE_POOL = IGovernancePool(_governancePool);
+        } else {
+            revert InvestmentPoolFactory__GovernancePoolAlreadyDefined();
+        }
+    }
+
+    function _deployClone() internal virtual returns (IInitializableInvestmentPool pool) {
+        pool = IInitializableInvestmentPool(investmentPoolImplementation.clone());
     }
 
     function _assertPoolInitArguments(
@@ -162,17 +176,16 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         uint96 _fundraiserEndAt,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
     ) internal view {
+        if (address(GOVERNANCE_POOL) == address(0))
+            revert InvestmentPoolFactory__GovernancePoolNotDefined();
+
         if (address(_superToken) == address(0))
             revert InvestmentPoolFactory__AcceptedTokenAddressIsZero();
 
-        if (address(_creator) == address(0))
-            revert InvestmentPoolFactory__CreatorAddressIsZero();
+        if (address(_creator) == address(0)) revert InvestmentPoolFactory__CreatorAddressIsZero();
 
         if (_softCap > _hardCap)
-            revert InvestmentPoolFactory__SoftCapIsGreaterThanHardCap(
-                _softCap,
-                _hardCap
-            );
+            revert InvestmentPoolFactory__SoftCapIsGreaterThanHardCap(_softCap, _hardCap);
 
         if (_fundraiserStartAt < _getNow())
             revert InvestmentPoolFactory__FundraiserStartIsInPast();
@@ -186,8 +199,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         if (_fundraiserEndAt - _fundraiserStartAt < FUNDRAISER_MIN_DURATION)
             revert InvestmentPoolFactory__FundraiserDurationIsTooShort();
 
-        if (_milestones.length == 0)
-            revert InvestmentPoolFactory__NoMilestonesAdded();
+        if (_milestones.length == 0) revert InvestmentPoolFactory__NoMilestonesAdded();
 
         if (_milestones.length > MAX_MILESTONE_COUNT)
             revert InvestmentPoolFactory__MilestonesCountExceedsMaxCount();
@@ -230,13 +242,13 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context {
         return block.timestamp;
     }
 
-    function _validateMilestoneInterval(
-        IInvestmentPool.MilestoneInterval memory milestone
-    ) internal pure returns (bool) {
+    function _validateMilestoneInterval(IInvestmentPool.MilestoneInterval memory milestone)
+        internal
+        pure
+        returns (bool)
+    {
         return (milestone.endDate > milestone.startDate &&
-            (milestone.endDate - milestone.startDate >=
-                MILESTONE_MIN_DURATION) &&
-            (milestone.endDate - milestone.startDate <=
-                MILESTONE_MAX_DURATION));
+            (milestone.endDate - milestone.startDate >= MILESTONE_MIN_DURATION) &&
+            (milestone.endDate - milestone.startDate <= MILESTONE_MAX_DURATION));
     }
 }
