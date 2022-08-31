@@ -6,8 +6,9 @@ pragma solidity ^0.8.9;
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
 
-import "./VotingToken.sol";
-import {IGovernancePool} from "./interfaces/IGovernancePool.sol";
+import {IInvestmentPool} from "@buidlone/investment-pool/contracts/interfaces/IInvestmentPool.sol";
+import {IGovernancePool} from "@buidlone/investment-pool/contracts/interfaces/IGovernancePool.sol";
+import {VotingToken} from "./VotingToken.sol";
 
 error GovernancePool__statusIsNotUnavailable();
 error GovernancePool__statusIsNotActiveVoting();
@@ -132,6 +133,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         uint256 _amount,
         uint48 _unlockTime
     ) external onActiveInvestmentPool(_msgSender()) {
+        /// @dev Unlock time can be in the past, which means tokens are unlocked instantly.
+
         if (_amount == 0) revert GovernancePool__amountIsZero();
         uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
 
@@ -360,10 +363,16 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         return uint256(uint160(_investmentPool));
     }
 
+    /**
+     * @notice If project reaches treshold, this function sends request to the investment pool for terminating project
+     * @param _investmentPool Address of the pool, which needs to be terminated
+     */
     function _endProject(address _investmentPool) private {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         investmentPoolStatus[investmentPoolId] = InvestmentPoolStatus.VotedAgainst;
-        // TODO: call investment pool function to end the project as voters decided to terminate the stream
+
+        // Call investment pool function to end the project as voters decided to terminate the stream
+        IInvestmentPool(_investmentPool).cancelDuringMilestones();
 
         emit FinishVoting(_investmentPool);
     }

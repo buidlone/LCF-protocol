@@ -5,7 +5,7 @@ pragma solidity ^0.8.9;
 
 import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {IGelatoOps} from "./IGelatoOps.sol";
-import {IGovernancePool} from "@buidlone/governance-pool/contracts/interfaces/IGovernancePool.sol";
+import {IGovernancePool} from "./IGovernancePool.sol";
 
 interface IInvestmentPool is ISuperApp {
     struct ProjectInfo {

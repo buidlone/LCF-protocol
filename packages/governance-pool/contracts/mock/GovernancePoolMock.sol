@@ -3,9 +3,9 @@
 
 pragma solidity ^0.8.9;
 
+import {IGovernancePool} from "@buidlone/investment-pool/contracts/interfaces/IGovernancePool.sol";
 import {GovernancePool} from "../GovernancePool.sol";
-import {IGovernancePool} from "../interfaces/IGovernancePool.sol";
-import "../VotingToken.sol";
+import {VotingToken} from "../VotingToken.sol";
 
 contract GovernancePoolMock is GovernancePool {
     constructor(

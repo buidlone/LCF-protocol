@@ -1,19 +1,17 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {Framework, WrapperSuperToken} from "@superfluid-finance/sdk-core";
 import {BigNumber, ContractTransaction, constants} from "ethers";
-import {ethers, web3, network} from "hardhat";
+import {ethers, web3} from "hardhat";
 import {assert, expect} from "chai";
 import {
     InvestmentPoolFactoryMock,
     InvestmentPoolMock,
     GelatoOpsMock,
-    VotingToken,
-    GovernancePoolMock,
+    FakeGovernancePoolMock,
 } from "../typechain-types";
 import traveler from "ganache-time-traveler";
 
 // const { toWad } = require("@decentral.ee/web3-helpers");
-// const { assert, should, expect } = require("chai");
 const fTokenAbi = require("./abis/fTokenAbi");
 
 const deployFramework = require("@superfluid-finance/ethereum-contracts/scripts/deploy-framework");
@@ -45,8 +43,7 @@ let foreignActor: SignerWithAddress;
 let sf: Framework;
 let investmentPoolFactory: InvestmentPoolFactoryMock;
 let investment: InvestmentPoolMock;
-let votingToken: VotingToken;
-let governancePool: GovernancePoolMock;
+let governancePool: FakeGovernancePoolMock;
 
 let snapshotId: string;
 
@@ -134,27 +131,13 @@ const defineProjectStateByteValues = async (investment: InvestmentPoolMock) => {
     noStateByteValue = await investment.NO_STATE_BYTE_VALUE();
 };
 
-const deployGovernancePool = async () => {
-    const votingTokensFactory = await ethers.getContractFactory("VotingToken", buidl1Admin);
-    votingToken = await votingTokensFactory.deploy();
-    await votingToken.deployed();
-
-    // Governance Pool deployment
+const deployFakeGovernancePool = async () => {
     const governancePoolFactory = await ethers.getContractFactory(
-        "GovernancePoolMock",
+        "FakeGovernancePoolMock",
         buidl1Admin
     );
-
-    governancePool = await governancePoolFactory.deploy(
-        votingToken.address,
-        investmentPoolFactory.address,
-        51, // Votes treshold
-        10 // Max investments for investor per investment pool
-    );
+    governancePool = await governancePoolFactory.deploy();
     await governancePool.deployed();
-
-    // Transfer ownership to governance pool
-    await votingToken.transferOwnership(governancePool.address);
 };
 
 const createInvestmentWithTwoMilestones = async () => {
@@ -301,7 +284,7 @@ describe("Investment Pool", async () => {
         await investmentPoolFactory.deployed();
 
         // Assign governance pool
-        await deployGovernancePool();
+        await deployFakeGovernancePool();
         await investmentPoolFactory.connect(buidl1Admin).setGovernancePool(governancePool.address);
 
         // Get percentage divider and byte values from contract constant variables
@@ -1088,33 +1071,6 @@ describe("Investment Pool", async () => {
 
                 const softCapRaised = await investment.isSoftCapReached();
                 assert.isTrue(softCapRaised);
-            });
-        });
-
-        describe("3.3 Interactions with other contracts", () => {
-            it("[IP][3.3.1] Governance pool should mint voting tokens on investment", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("100");
-
-                // NOTE: Time traveling to 2100/07/15
-                const timeStamp = dateToSeconds("2100/07/15");
-                await investment.setTimestamp(timeStamp);
-
-                // Approve and invest money
-                await investMoney(fUSDTx, investment, investorA, investedAmount);
-
-                const investmentPoolId = await governancePool.getInvestmentPoolId(
-                    investment.address
-                );
-                const lockedTokens = await governancePool.tokensLocked(
-                    investorA.address,
-                    investmentPoolId,
-                    0
-                );
-                const unlockTime = (await investment.milestones(0)).startDate;
-
-                assert.deepEqual(lockedTokens.unlockTime, BigNumber.from(unlockTime));
-                assert.deepEqual(lockedTokens.amount, investedAmount);
-                assert.isFalse(lockedTokens.claimed);
             });
         });
     });

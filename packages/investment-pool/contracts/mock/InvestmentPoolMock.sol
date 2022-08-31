@@ -9,6 +9,10 @@ import {InvestmentPool} from "../InvestmentPool.sol";
 contract InvestmentPoolMock is InvestmentPool {
     uint256 timestamp = 0;
 
+    modifier onlyGovernancePool() override {
+        _;
+    }
+
     function setTimestamp(uint256 _timestamp) public {
         timestamp = _timestamp;
     }

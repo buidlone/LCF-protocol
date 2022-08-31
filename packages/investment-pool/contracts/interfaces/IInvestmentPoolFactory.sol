@@ -16,11 +16,7 @@ interface IInvestmentPoolFactory {
         UUPS_PROXY
     }
 
-    event Created(
-        address indexed creator,
-        address indexed pool,
-        ProxyType proxyType
-    );
+    event Created(address indexed creator, address indexed pool, ProxyType proxyType);
 
     function createInvestmentPool(
         ISuperToken _acceptedToken,

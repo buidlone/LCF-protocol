@@ -15,7 +15,7 @@ import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.s
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
-import {IGovernancePool} from "@buidlone/governance-pool/contracts/interfaces/IGovernancePool.sol";
+import {IGovernancePool} from "./interfaces/IGovernancePool.sol";
 import {IGelatoOps} from "./interfaces/IGelatoOps.sol";
 
 /// @notice Superfluid ERRORS for callbacks
@@ -34,6 +34,7 @@ error InvestmentPool__FundraiserNotFailed();
 error InvestmentPool__FundraiserFailed();
 error InvestmentPool__NotCreator();
 error InvestmentPool__NotGelatoOps();
+error InvestmentPool__NotGovernancePool();
 error InvestmentPool__MilestoneStillLocked();
 error InvestmentPool__MilestoneStreamTerminationUnavailable();
 error InvestmentPool__GelatoMilestoneStreamTerminationUnavailable();
@@ -166,6 +167,11 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     /// @notice Ensures that the message sender is the gelato ops contract
     modifier onlyGelatoOps() {
         if (address(gelatoOps) != _msgSender()) revert InvestmentPool__NotGelatoOps();
+        _;
+    }
+
+    modifier onlyGovernancePool() virtual {
+        if (address(governancePool) != _msgSender()) revert InvestmentPool__NotGovernancePool();
         _;
     }
 
@@ -431,10 +437,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     /**
      * @notice Cancel project during milestone periods.
      * @notice Should only be called by the governane pool
-     * TODO: allow only governance pool to call this function
      */
     function cancelDuringMilestones()
         external
+        onlyGovernancePool
         allowedProjectStates(NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE | LAST_MILESTONE_BYTE_VALUE)
     {
         emergencyTerminationTimestamp = uint48(_getNow());
