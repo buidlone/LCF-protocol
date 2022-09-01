@@ -11,7 +11,7 @@ interface IGovernancePool {
     }
 
     struct TokensLocked {
-        uint256 unlockTime;
+        uint48 unlockTime;
         uint256 amount;
         bool claimed;
     }

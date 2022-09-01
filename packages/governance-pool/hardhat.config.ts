@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { HardhatUserConfig, task } from "hardhat/config";
+import {HardhatUserConfig, task} from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 import "@nomiclabs/hardhat-web3";
 import "hardhat-gas-reporter";
@@ -47,7 +47,7 @@ const config: HardhatUserConfig = {
     docgen: {
         path: "./docs",
         clear: true,
-        runOnCompile: true,
+        runOnCompile: false,
         only: ["contracts/GovernancePool.sol", "contracts/VotingToken.sol"],
     },
 };

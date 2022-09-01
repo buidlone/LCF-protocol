@@ -100,6 +100,7 @@ const definePercentageDivider = async () => {
     percentageDivider = await investmentPoolFactory.PERCENTAGE_DIVIDER();
     percent5InIpBigNumber = percentToIpBigNumber(5);
     percent10InIpBigNumber = percentToIpBigNumber(10);
+    percent20InIpBigNumber = percentToIpBigNumber(20);
     percent70InIpBigNumber = percentToIpBigNumber(70);
     percent90InIpBigNumber = percentToIpBigNumber(90);
     percent95InIpBigNumber = percentToIpBigNumber(95);
@@ -107,20 +108,20 @@ const definePercentageDivider = async () => {
 
 const investMoney = async (
     fUSDTxToken: WrapperSuperToken,
-    investmentPool: InvestmentPoolMock,
+    investment: InvestmentPoolMock,
     investorObj: SignerWithAddress,
     investedMoney: BigNumber
 ) => {
     // Give token approval
     await fUSDTxToken
         .approve({
-            receiver: investmentPool.address,
+            receiver: investment.address,
             amount: UINT256_MAX.toString(),
         })
         .exec(investorObj);
 
     // Invest money
-    await investmentPool.connect(investorObj).invest(investedMoney, false);
+    await investment.connect(investorObj).invest(investedMoney, false);
 };
 
 const getInvestmentFromTx = async (tx: ContractTransaction): Promise<InvestmentPoolMock> => {
@@ -160,7 +161,7 @@ const createInvestmentWithTwoMilestones = async () => {
     investment = await getInvestmentFromTx(creationRes);
 };
 
-describe("Governance Pool integration with Investment Pool Factory and Investment Pool", async () => {
+describe.only("Governance Pool integration with Investment Pool Factory and Investment Pool", async () => {
     before(async () => {
         accounts = await ethers.getSigners();
         deployer = accounts[0];
@@ -252,8 +253,8 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
                 "InvestmentPoolMock",
                 deployer
             );
-            const investmentPool = await investmentPoolDep.deploy();
-            await investmentPool.deployed();
+            investment = await investmentPoolDep.deploy();
+            await investment.deployed();
 
             // Create investment pool factory contract
             const investmentPoolDepFactory = await ethers.getContractFactory(
@@ -263,7 +264,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             investmentPoolFactory = await investmentPoolDepFactory.deploy(
                 sf.settings.config.hostAddress,
                 gelatoOpsMock.address,
-                investmentPool.address
+                investment.address
             );
             await investmentPoolFactory.deployed();
 
@@ -430,16 +431,16 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             );
         });
     });
-    /*
+
     describe("3. IP request to mint voting tokens (in GP)", () => {
-        beforeEach(async () => {
+        it("[IP-GP][3.1] Governance pool should mint voting tokens on investment", async () => {
             // Create investment pool implementation contract
             const investmentPoolDep = await ethers.getContractFactory(
                 "InvestmentPoolMock",
                 deployer
             );
-            const investmentPool = await investmentPoolDep.deploy();
-            await investmentPool.deployed();
+            investment = await investmentPoolDep.deploy();
+            await investment.deployed();
 
             // Create investment pool factory contract
             const investmentPoolDepFactory = await ethers.getContractFactory(
@@ -449,7 +450,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             investmentPoolFactory = await investmentPoolDepFactory.deploy(
                 sf.settings.config.hostAddress,
                 gelatoOpsMock.address,
-                investmentPool.address
+                investment.address
             );
             await investmentPoolFactory.deployed();
 
@@ -484,9 +485,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             await investmentPoolFactory.connect(deployer).setTimestamp(time);
 
             await createInvestmentWithTwoMilestones();
-        });
 
-        it("[IP-GP][3.1] Governance pool should mint voting tokens on investment", async () => {
             const investedAmount: BigNumber = ethers.utils.parseEther("100");
             const timeStamp = dateToSeconds("2100/07/15");
             await investment.setTimestamp(timeStamp);
@@ -502,21 +501,21 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             );
             const unlockTime = (await investment.milestones(0)).startDate;
 
-            assert.deepEqual(lockedTokens.unlockTime, BigNumber.from(unlockTime));
+            assert.equal(lockedTokens.unlockTime, unlockTime);
             assert.deepEqual(lockedTokens.amount, investedAmount);
             assert.isFalse(lockedTokens.claimed);
         });
     });
-    
+
     describe("4. GP request to terminate project (in IP)", () => {
-        beforeEach(async () => {
+        it("[GP-IP][4.1] If treshold was reached, should call investment pool and cancel the project", async () => {
             // Create investment pool implementation contract
             const investmentPoolDep = await ethers.getContractFactory(
                 "InvestmentPoolMock",
                 deployer
             );
-            const investmentPool = await investmentPoolDep.deploy();
-            await investmentPool.deployed();
+            investment = await investmentPoolDep.deploy();
+            await investment.deployed();
 
             // Create investment pool factory contract
             const investmentPoolDepFactory = await ethers.getContractFactory(
@@ -526,7 +525,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             investmentPoolFactory = await investmentPoolDepFactory.deploy(
                 sf.settings.config.hostAddress,
                 gelatoOpsMock.address,
-                investmentPool.address
+                investment.address
             );
             await investmentPoolFactory.deployed();
 
@@ -561,33 +560,30 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             await investmentPoolFactory.connect(deployer).setTimestamp(time);
 
             await createInvestmentWithTwoMilestones();
-        });
 
-        it("[GP-IP][4.1] If treshold was reached, should call investment pool and cancel the project", async () => {
-            const investedAmount: BigNumber = ethers.utils.parseEther("1000");
-            const votesAgainst = ethers.utils.parseEther("600");
+            const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+            const votesAgainst = ethers.utils.parseEther("1200");
+
             let timeStamp = dateToSeconds("2100/07/15");
             await investment.setTimestamp(timeStamp);
+            await governancePool.setTimestamp(timeStamp);
 
             // Approve and invest money
             await investMoney(fUSDTx, investment, investorA, investedAmount);
 
+            const investmentPoolId = await governancePool.getInvestmentPoolId(investment.address);
+
             timeStamp = dateToSeconds("2100/09/15");
             await investment.setTimestamp(timeStamp);
+            await governancePool.setTimestamp(timeStamp);
             await governancePool.connect(investorA).unlockVotingTokens(investment.address);
 
             // Approve the governance pool contract to spend investor's tokens
             await votingToken.connect(investorA).setApprovalForAll(governancePool.address, true);
+
             await expect(
-                governancePool
-                    .connect(investorA)
-                    .voteAgainst(fakeInvestmentPool1.address, votesAgainst)
-            )
-                .to.emit(governancePool, "FinishVoting")
-                .withArgs(fakeInvestmentPool1.address)
-                .to.emit(governancePool, "VoteAgainstProject")
-                .withArgs(fakeInvestmentPool1.address, investorA.address, votesAgainst);
+                governancePool.connect(investorA).voteAgainst(investment.address, votesAgainst)
+            ).to.emit(investment, "Cancel");
         });
     });
-    */
 });

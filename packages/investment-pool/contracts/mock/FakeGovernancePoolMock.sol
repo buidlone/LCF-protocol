@@ -4,8 +4,13 @@
 pragma solidity ^0.8.9;
 
 import {IGovernancePool} from "../interfaces/IGovernancePool.sol";
+import {IInvestmentPool} from "../interfaces/IInvestmentPool.sol";
 
 contract FakeGovernancePoolMock is IGovernancePool {
+    function cancelDuringMilestones(address _investment) external {
+        IInvestmentPool(_investment).cancelDuringMilestones();
+    }
+
     function activateInvestmentPool(address _investmentPool) external {}
 
     function mintVotingTokens(

@@ -164,7 +164,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
             TokensLocked memory votingTokens = lockedTokens[i];
 
             // Transfer only tokens that haven't been claimed and unlock time was reached
-            if (!votingTokens.claimed && votingTokens.unlockTime <= uint48(block.timestamp)) {
+
+            if (!votingTokens.claimed && votingTokens.unlockTime <= uint48(_getNow())) {
                 tokensLocked[_msgSender()][investmentPoolId][i].claimed = true;
 
                 uint256 amount = votingTokens.amount;
@@ -375,5 +376,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         IInvestmentPool(_investmentPool).cancelDuringMilestones();
 
         emit FinishVoting(_investmentPool);
+    }
+
+    function _getNow() internal view virtual returns (uint256) {
+        // solhint-disable-next-line not-rely-on-time
+        return block.timestamp;
     }
 }

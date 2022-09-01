@@ -1,7 +1,7 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {ethers, network} from "hardhat";
 import {assert, expect} from "chai";
-import {VotingToken, GovernancePoolMock} from "../../typechain-types";
+import {VotingToken, GovernancePoolMock, FakeInvestmentPoolMockV2} from "../../typechain-types";
 import traveler from "ganache-time-traveler";
 import {BigNumber} from "ethers";
 
@@ -17,6 +17,7 @@ describe("Governance Pool", async () => {
 
     let votingToken: VotingToken;
     let governancePool: GovernancePoolMock;
+    let fakeInvestmentPoolMock: FakeInvestmentPoolMockV2;
 
     const getInvestmentPoolStatus = async (address: string): Promise<number> => {
         const investmentPoolId = await governancePool.getInvestmentPoolId(address);
@@ -847,17 +848,37 @@ describe("Governance Pool", async () => {
             it("[GP][8.1.3] Should update investment pool status if treshold was reached", async () => {
                 const votesAgainst = ethers.utils.parseEther("0.6");
 
+                // Deploy Fake governance pool mock which can mint tokens
+                const fakeInvestmentPoolMockDep = await ethers.getContractFactory(
+                    "FakeInvestmentPoolMockV2",
+                    deployer
+                );
+                fakeInvestmentPoolMock = await fakeInvestmentPoolMockDep.deploy(
+                    governancePool.address
+                );
+                await fakeInvestmentPoolMock.deployed();
+
+                await governancePool
+                    .connect(fakeInvestmentPoolFactory)
+                    .activateInvestmentPool(fakeInvestmentPoolMock.address);
+
+                await fakeInvestmentPoolMock.mintVotingTokens(investorA.address, tokensToMint, 0);
+
+                await governancePool
+                    .connect(investorA)
+                    .unlockVotingTokens(fakeInvestmentPoolMock.address);
+
                 await expect(
                     governancePool
                         .connect(investorA)
-                        .voteAgainst(fakeInvestmentPool1.address, votesAgainst)
+                        .voteAgainst(fakeInvestmentPoolMock.address, votesAgainst)
                 )
                     .to.emit(governancePool, "FinishVoting")
-                    .withArgs(fakeInvestmentPool1.address)
+                    .withArgs(fakeInvestmentPoolMock.address)
                     .to.emit(governancePool, "VoteAgainstProject")
-                    .withArgs(fakeInvestmentPool1.address, investorA.address, votesAgainst);
+                    .withArgs(fakeInvestmentPoolMock.address, investorA.address, votesAgainst);
 
-                const status = await getInvestmentPoolStatus(fakeInvestmentPool1.address);
+                const status = await getInvestmentPoolStatus(fakeInvestmentPoolMock.address);
 
                 assert.equal(status, 2); // Voted Against
             });
@@ -1066,17 +1087,25 @@ describe("Governance Pool", async () => {
             it("[GP][8.2.9] Should be able to vote with all of the tokens", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
 
-                await governancePool
-                    .connect(fakeInvestmentPoolFactory)
-                    .activateInvestmentPool(fakeInvestmentPool1.address);
+                // Deploy Fake governance pool mock which can mint tokens
+                const fakeInvestmentPoolMockDep = await ethers.getContractFactory(
+                    "FakeInvestmentPoolMockV2",
+                    deployer
+                );
+                fakeInvestmentPoolMock = await fakeInvestmentPoolMockDep.deploy(
+                    governancePool.address
+                );
+                await fakeInvestmentPoolMock.deployed();
 
                 await governancePool
-                    .connect(fakeInvestmentPool1)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+                    .connect(fakeInvestmentPoolFactory)
+                    .activateInvestmentPool(fakeInvestmentPoolMock.address);
+
+                await fakeInvestmentPoolMock.mintVotingTokens(investorA.address, tokensToMint, 0);
 
                 await governancePool
                     .connect(investorA)
-                    .unlockVotingTokens(fakeInvestmentPool1.address);
+                    .unlockVotingTokens(fakeInvestmentPoolMock.address);
 
                 // Approve the governance pool contract to spend investor's tokens
                 await votingToken
@@ -1086,7 +1115,7 @@ describe("Governance Pool", async () => {
                 await expect(
                     governancePool
                         .connect(investorA)
-                        .voteAgainst(fakeInvestmentPool1.address, tokensToMint)
+                        .voteAgainst(fakeInvestmentPoolMock.address, tokensToMint)
                 ).not.to.be.reverted;
             });
         });

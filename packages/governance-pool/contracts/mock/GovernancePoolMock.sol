@@ -8,12 +8,23 @@ import {GovernancePool} from "../GovernancePool.sol";
 import {VotingToken} from "../VotingToken.sol";
 
 contract GovernancePoolMock is GovernancePool {
+    uint256 timestamp = 0;
+
     constructor(
         VotingToken _votingToken,
         address _investmentPoolFactory,
         uint8 _treshold,
         uint8 _maxInvestments
     ) GovernancePool(_votingToken, _investmentPoolFactory, _treshold, _maxInvestments) {}
+
+    function setTimestamp(uint256 _timestamp) public {
+        timestamp = _timestamp;
+    }
+
+    function _getNow() internal view virtual override returns (uint256) {
+        // solhint-disable-next-line not-rely-on-time
+        return timestamp == 0 ? block.timestamp : timestamp;
+    }
 
     function updateInvestmentPoolStatusToUnavailable(address _investmentPool) public {
         uint256 id = getInvestmentPoolId(_investmentPool);

@@ -432,7 +432,7 @@ describe("Investment Pool Factory", async () => {
                 );
             });
 
-            it("[IPF][2.1.5] Reverts creation if accepted token address is zero", async () => {
+            it("[IPF][2.1.3] Reverts creation if accepted token address is zero", async () => {
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -464,7 +464,7 @@ describe("Investment Pool Factory", async () => {
                 );
             });
 
-            it("[IPF][2.1.6] Reverts creation if soft cap is greater than hard cap", async () => {
+            it("[IPF][2.1.4] Reverts creation if soft cap is greater than hard cap", async () => {
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("1000");
 
@@ -498,7 +498,7 @@ describe("Investment Pool Factory", async () => {
                     .withArgs(softCap, hardCap);
             });
 
-            it("[IPF][2.1.7] Fundraiser interval cannot be retrospective", async () => {
+            it("[IPF][2.1.5] Fundraiser interval cannot be retrospective", async () => {
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -534,7 +534,7 @@ describe("Investment Pool Factory", async () => {
                 );
             });
 
-            it("[IPF][2.1.8] Reverts creation if fundraiser campaign ends before it starts", async () => {
+            it("[IPF][2.1.6] Reverts creation if fundraiser campaign ends before it starts", async () => {
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -567,7 +567,7 @@ describe("Investment Pool Factory", async () => {
                 );
             });
 
-            it("[IPF][2.1.9] Reverts creation if fundraiser period is longer than MAX duration (90 days)", async () => {
+            it("[IPF][2.1.7] Reverts creation if fundraiser period is longer than MAX duration (90 days)", async () => {
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -599,7 +599,7 @@ describe("Investment Pool Factory", async () => {
                 );
             });
 
-            it("[IPF][2.1.10] Reverts creation if fundraiser period is shorter than MIN duration (30 days)", async () => {
+            it("[IPF][2.1.8] Reverts creation if fundraiser period is shorter than MIN duration (30 days)", async () => {
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -631,7 +631,7 @@ describe("Investment Pool Factory", async () => {
                 );
             });
 
-            it("[IPF][2.1.11] Reverts creation if milestones list is empty", async () => {
+            it("[IPF][2.1.9] Reverts creation if milestones list is empty", async () => {
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -654,7 +654,7 @@ describe("Investment Pool Factory", async () => {
                 );
             });
 
-            it("[IPF][2.1.12] Reverts creation if exceeds MAX milestones count", async () => {
+            it("[IPF][2.1.10] Reverts creation if exceeds MAX milestones count", async () => {
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -686,7 +686,7 @@ describe("Investment Pool Factory", async () => {
                 );
             });
 
-            it("[IPF][2.1.13] Can create multiple milestones", async () => {
+            it("[IPF][2.1.11] Can create multiple milestones", async () => {
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -718,7 +718,7 @@ describe("Investment Pool Factory", async () => {
                 ).not.to.be.reverted;
             });
 
-            it("[IPF][2.1.14] Reverts creation if first milestone starts before fundraiser ends", async () => {
+            it("[IPF][2.1.12] Reverts creation if first milestone starts before fundraiser ends", async () => {
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -751,7 +751,7 @@ describe("Investment Pool Factory", async () => {
                 );
             });
 
-            it("[IPF][2.1.15] Reverts creation if milestone ends before it starts", async () => {
+            it("[IPF][2.1.13] Reverts creation if milestone ends before it starts", async () => {
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -784,7 +784,7 @@ describe("Investment Pool Factory", async () => {
                 );
             });
 
-            it("[IPF][2.1.16] Reverts creation if milestone is shorter than MIN duration (30days)", async () => {
+            it("[IPF][2.1.14] Reverts creation if milestone is shorter than MIN duration (30days)", async () => {
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -816,7 +816,7 @@ describe("Investment Pool Factory", async () => {
                 );
             });
 
-            it("[IPF][2.1.17] Reverts creation if milestone is longer than MAX duration (90 days)", async () => {
+            it("[IPF][2.1.15] Reverts creation if milestone is longer than MAX duration (90 days)", async () => {
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -848,7 +848,7 @@ describe("Investment Pool Factory", async () => {
                 );
             });
 
-            it("[IPF][2.1.18] Reverts creation if milestone are not adjacent in time", async () => {
+            it("[IPF][2.1.16] Reverts creation if milestone are not adjacent in time", async () => {
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -888,7 +888,7 @@ describe("Investment Pool Factory", async () => {
                 );
             });
 
-            it("[IPF][2.1.19] Reverts creation if milestone percentages are not adding up", async () => {
+            it("[IPF][2.1.17] Reverts creation if milestone percentages are not adding up", async () => {
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
