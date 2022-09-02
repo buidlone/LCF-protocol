@@ -7,7 +7,7 @@ import {
     InvestmentPoolFactoryMock,
     InvestmentPoolMock,
     GelatoOpsMock,
-    FakeGovernancePoolMock,
+    GovernancePoolMockForIntegration,
 } from "../typechain-types";
 
 const fTokenAbi = require("./abis/fTokenAbi");
@@ -32,7 +32,7 @@ let sf: Framework;
 let investmentPoolFactory: InvestmentPoolFactoryMock;
 let investmentPool: InvestmentPoolMock;
 let gelatoOpsMock: GelatoOpsMock;
-let governancePool: FakeGovernancePoolMock;
+let governancePoolMock: GovernancePoolMockForIntegration;
 
 let percentageDivider = BigNumber.from(0);
 let percent5InIpBigNumber: BigNumber;
@@ -250,6 +250,25 @@ describe("Investment Pool Factory", async () => {
                     "InvestmentPoolFactory__ImplementationContractAddressIsZero"
                 );
             });
+
+            it("[IPF][1.2.4] Should successfully create a clone contract", async () => {
+                // Create investment pool factory contract
+                const investmentPoolDepFactory = await ethers.getContractFactory(
+                    "InvestmentPoolFactoryMock",
+                    buidl1Admin
+                );
+                investmentPoolFactory = await investmentPoolDepFactory.deploy(
+                    sf.settings.config.hostAddress,
+                    gelatoOpsMock.address,
+                    investmentPool.address
+                );
+                await investmentPoolFactory.deployed();
+
+                const investmentPoolClone = await investmentPoolFactory.callStatic.deployClone();
+
+                // New address was created
+                assert.isTrue(ethers.utils.isAddress(investmentPoolClone));
+            });
         });
     });
 
@@ -281,16 +300,16 @@ describe("Investment Pool Factory", async () => {
 
             // Create governance pool mock
             const governancePoolDep = await ethers.getContractFactory(
-                "FakeGovernancePoolMock",
+                "GovernancePoolMockForIntegration",
                 buidl1Admin
             );
-            governancePool = await governancePoolDep.deploy();
-            await governancePool.deployed();
+            governancePoolMock = await governancePoolDep.deploy();
+            await governancePoolMock.deployed();
 
             // Set governance pool in investment pool factory
             await investmentPoolFactory
                 .connect(buidl1Admin)
-                .setGovernancePool(governancePool.address);
+                .setGovernancePool(governancePoolMock.address);
         });
 
         describe("2.1 Interactions", () => {
@@ -920,6 +939,35 @@ describe("Investment Pool Factory", async () => {
                         "InvestmentPoolFactory__PercentagesAreNotAddingUp"
                     )
                     .withArgs(percent95InIpBigNumber, percentageDivider);
+            });
+
+            it("[IPF][2.1.18] Shouldn't be able to create other type of contract than CLONE_PROXY", async () => {
+                const softCap = ethers.utils.parseEther("1500");
+                const hardCap = ethers.utils.parseEther("15000");
+
+                const milestoneStartDate = dateToSeconds("2100/09/01");
+                const milestoneEndDate = dateToSeconds("2100/10/01");
+                const campaignStartDate = dateToSeconds("2100/07/01");
+                const campaignEndDate = dateToSeconds("2100/08/01");
+
+                await expect(
+                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                        fUSDTx.address,
+                        softCap,
+                        hardCap,
+                        campaignStartDate,
+                        campaignEndDate,
+                        1, // CLONE-PROXY
+                        [
+                            {
+                                startDate: milestoneStartDate,
+                                endDate: milestoneEndDate,
+                                intervalSeedPortion: percent10InIpBigNumber,
+                                intervalStreamingPortion: percent90InIpBigNumber,
+                            },
+                        ]
+                    )
+                ).revertedWith("[IPF]: only CLONE_PROXY is supported");
             });
         });
     });

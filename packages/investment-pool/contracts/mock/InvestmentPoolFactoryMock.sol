@@ -39,4 +39,8 @@ contract InvestmentPoolFactoryMock is InvestmentPoolFactory {
         p.setTimestamp(timestamp);
         return p;
     }
+
+    function deployClone() public returns (IInitializableInvestmentPool pool) {
+        pool = _deployClone();
+    }
 }

@@ -23,32 +23,21 @@ import {IGelatoOps} from "./interfaces/IGelatoOps.sol";
 error InvestmentPool__InvalidToken();
 /// @dev Thrown when the `msg.sender` of the app callbacks is not the Superfluid host.
 error InvestmentPool__Unauthorized();
+
 /// @notice InvestmentPool ERRORS
-error InvestmentPool__CampaignCanceled();
-error InvestmentPool__SoftCapNotReached();
-error InvestmentPool__FundraiserAlreadyStarted();
-error InvestmentPool__FundraiserNotStartedYet();
-error InvestmentPool__NotInFundraiserPeriod();
-error InvestmentPool__InFundraiserPeriod();
-error InvestmentPool__FundraiserNotFailed();
-error InvestmentPool__FundraiserFailed();
 error InvestmentPool__NotCreator();
 error InvestmentPool__NotGelatoOps();
 error InvestmentPool__NotGovernancePool();
+error InvestmentPool__NotGovernancePoolOrGelato();
 error InvestmentPool__MilestoneStillLocked();
 error InvestmentPool__MilestoneStreamTerminationUnavailable();
 error InvestmentPool__GelatoMilestoneStreamTerminationUnavailable();
-error InvestmentPool__RefundNotAvailable();
 error InvestmentPool__NoMoneyInvested();
 error InvestmentPool__AlreadyStreamingForMilestone(uint256 milestone);
 error InvestmentPool__GelatoEthTransferFailed();
 error InvestmentPool__CannotInvestAboveHardCap();
-error InvestmentPool__InLastMilestone();
 error InvestmentPool__ZeroAmountProvided();
 error InvestmentPool__AmountIsGreaterThanInvested(uint256 givenAmount, uint256 investedAmount);
-error InvestmentPool__MilestoneAlreadyStarted();
-error InvestmentPool__FundraiserAlreadyEnded();
-error InvestmentPool__AlreadyPaidSeedAmountForMilestone(uint256 milestoneId);
 error InvestmentPool__CurrentStateIsNotAllowed(uint256 currentStateByteValue);
 error InvestmentPool__NoSeedAmountDedicated();
 
@@ -170,32 +159,15 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         _;
     }
 
-    modifier onlyGovernancePool() virtual {
-        if (address(governancePool) != _msgSender()) revert InvestmentPool__NotGovernancePool();
+    modifier onlyGovernancePoolOrGelato() virtual {
+        if (address(governancePool) != _msgSender() && address(gelatoOps) != _msgSender())
+            revert InvestmentPool__NotGovernancePoolOrGelato();
         _;
     }
 
     /// @notice Ensures that given amount is not zero
     modifier notZeroAmount(uint256 _amount) {
         if (_amount == 0) revert InvestmentPool__ZeroAmountProvided();
-        _;
-    }
-
-    /// @notice Confirms that the fundraiser has reached a soft cap
-    modifier softCapReached() {
-        if (!isSoftCapReached()) revert InvestmentPool__SoftCapNotReached();
-        _;
-    }
-
-    /// @notice Ensures that the fundraiser period for a given campaign is ongoing
-    modifier fundraiserOngoingNow() {
-        if (!isFundraiserOngoingNow()) revert InvestmentPool__NotInFundraiserPeriod();
-        _;
-    }
-
-    /// @notice Ensures that the fundraiser has failed
-    modifier failedFundraiser() {
-        if (!isFailedFundraiser()) revert InvestmentPool__FundraiserNotFailed();
         _;
     }
 
@@ -434,13 +406,15 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         emit Cancel();
     }
 
+    /** PUBLIC FUNCTIONS */
+
     /**
      * @notice Cancel project during milestone periods.
      * @notice Should only be called by the governane pool
      */
     function cancelDuringMilestones()
-        external
-        onlyGovernancePool
+        public
+        onlyGovernancePoolOrGelato
         allowedProjectStates(NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE | LAST_MILESTONE_BYTE_VALUE)
     {
         emergencyTerminationTimestamp = uint48(_getNow());
@@ -481,8 +455,6 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             claim(curMil + 1);
         }
     }
-
-    /** PUBLIC FUNCTIONS */
 
     /**
      * @notice Allows the pool creator to start streaming/receive funds for a certain milestone
@@ -681,11 +653,6 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         } else {
             return NO_STATE_BYTE_VALUE;
         }
-    }
-
-    /// @notice Get milestone duration in seconds (start date - end date)
-    function getMilestoneDuration(uint256 _milestoneId) public view returns (uint256) {
-        return milestones[_milestoneId].endDate - milestones[_milestoneId].startDate;
     }
 
     /// @notice Check if milestone can be terminated
@@ -943,7 +910,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         onlyGelatoOps
         canGelatoTerminateMilestoneFinal(_milestoneId)
     {
-        milestoneJumpOrFinalProjectTermination();
+        cancelDuringMilestones();
 
         (uint256 fee, address feeToken) = gelatoOps.getFeeDetails();
         _gelatoTransfer(fee, feeToken);

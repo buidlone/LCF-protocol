@@ -161,7 +161,7 @@ const createInvestmentWithTwoMilestones = async () => {
     investment = await getInvestmentFromTx(creationRes);
 };
 
-describe.only("Governance Pool integration with Investment Pool Factory and Investment Pool", async () => {
+describe("Governance Pool integration with Investment Pool Factory and Investment Pool", async () => {
     before(async () => {
         accounts = await ethers.getSigners();
         deployer = accounts[0];

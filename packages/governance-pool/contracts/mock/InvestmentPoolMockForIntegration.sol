@@ -3,10 +3,9 @@
 
 pragma solidity ^0.8.9;
 
-import {FakeInvestmentPoolMock} from "@buidlone/investment-pool/contracts/mock/FakeInvestmentPoolMock.sol";
 import {IGovernancePool} from "@buidlone/investment-pool/contracts/interfaces/IGovernancePool.sol";
 
-contract FakeInvestmentPoolMockV2 is FakeInvestmentPoolMock {
+contract InvestmentPoolMockForIntegration {
     IGovernancePool public governancePool;
 
     constructor(IGovernancePool _governancePool) {
@@ -20,4 +19,6 @@ contract FakeInvestmentPoolMockV2 is FakeInvestmentPoolMock {
     ) public {
         governancePool.mintVotingTokens(_investor, _amount, _unlockTime);
     }
+
+    function cancelDuringMilestones() external pure {}
 }
