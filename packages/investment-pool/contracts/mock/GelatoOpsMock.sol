@@ -31,7 +31,7 @@ contract GelatoOpsMock is IGelatoOps {
         return (payable(address(0)));
     }
 
-    function terminateMilestoneStream(uint256 _id) public {
+    function gelatoTerminateMilestoneStream(uint256 _id) public {
         executor.gelatoTerminateMilestoneStreamFinal(_id);
     }
 }

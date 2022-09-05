@@ -1,19 +1,17 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {Framework, WrapperSuperToken} from "@superfluid-finance/sdk-core";
 import {BigNumber, ContractTransaction, constants} from "ethers";
-import {ethers, web3, network} from "hardhat";
+import {ethers, web3} from "hardhat";
 import {assert, expect} from "chai";
 import {
     InvestmentPoolFactoryMock,
     InvestmentPoolMock,
     GelatoOpsMock,
-    VotingToken,
-    GovernancePoolMock,
+    GovernancePoolMockForIntegration,
 } from "../typechain-types";
 import traveler from "ganache-time-traveler";
 
 // const { toWad } = require("@decentral.ee/web3-helpers");
-// const { assert, should, expect } = require("chai");
 const fTokenAbi = require("./abis/fTokenAbi");
 
 const deployFramework = require("@superfluid-finance/ethereum-contracts/scripts/deploy-framework");
@@ -45,8 +43,7 @@ let foreignActor: SignerWithAddress;
 let sf: Framework;
 let investmentPoolFactory: InvestmentPoolFactoryMock;
 let investment: InvestmentPoolMock;
-let votingToken: VotingToken;
-let governancePool: GovernancePoolMock;
+let governancePoolMock: GovernancePoolMockForIntegration;
 
 let snapshotId: string;
 
@@ -134,27 +131,13 @@ const defineProjectStateByteValues = async (investment: InvestmentPoolMock) => {
     noStateByteValue = await investment.NO_STATE_BYTE_VALUE();
 };
 
-const deployGovernancePool = async () => {
-    const votingTokensFactory = await ethers.getContractFactory("VotingToken", buidl1Admin);
-    votingToken = await votingTokensFactory.deploy();
-    await votingToken.deployed();
-
-    // Governance Pool deployment
+const deployGovernancePoolMock = async () => {
     const governancePoolFactory = await ethers.getContractFactory(
-        "GovernancePoolMock",
+        "GovernancePoolMockForIntegration",
         buidl1Admin
     );
-
-    governancePool = await governancePoolFactory.deploy(
-        votingToken.address,
-        investmentPoolFactory.address,
-        51, // Votes treshold
-        10 // Max investments for investor per investment pool
-    );
-    await governancePool.deployed();
-
-    // Transfer ownership to governance pool
-    await votingToken.transferOwnership(governancePool.address);
+    governancePoolMock = await governancePoolFactory.deploy();
+    await governancePoolMock.deployed();
 };
 
 const createInvestmentWithTwoMilestones = async () => {
@@ -301,8 +284,10 @@ describe("Investment Pool", async () => {
         await investmentPoolFactory.deployed();
 
         // Assign governance pool
-        await deployGovernancePool();
-        await investmentPoolFactory.connect(buidl1Admin).setGovernancePool(governancePool.address);
+        await deployGovernancePoolMock();
+        await investmentPoolFactory
+            .connect(buidl1Admin)
+            .setGovernancePool(governancePoolMock.address);
 
         // Get percentage divider and byte values from contract constant variables
         definePercentageDivider(investmentPoolFactory);
@@ -965,7 +950,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2100/09/15
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
-                await investment.cancelDuringMilestones();
+                await governancePoolMock.cancelDuringMilestones(investment.address);
 
                 // Give token approval
                 await fUSDTx
@@ -1088,33 +1073,6 @@ describe("Investment Pool", async () => {
 
                 const softCapRaised = await investment.isSoftCapReached();
                 assert.isTrue(softCapRaised);
-            });
-        });
-
-        describe("3.3 Interactions with other contracts", () => {
-            it("[IP][3.3.1] Governance pool should mint voting tokens on investment", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("100");
-
-                // NOTE: Time traveling to 2100/07/15
-                const timeStamp = dateToSeconds("2100/07/15");
-                await investment.setTimestamp(timeStamp);
-
-                // Approve and invest money
-                await investMoney(fUSDTx, investment, investorA, investedAmount);
-
-                const investmentPoolId = await governancePool.getInvestmentPoolId(
-                    investment.address
-                );
-                const lockedTokens = await governancePool.tokensLocked(
-                    investorA.address,
-                    investmentPoolId,
-                    0
-                );
-                const unlockTime = (await investment.milestones(0)).startDate;
-
-                assert.deepEqual(lockedTokens.unlockTime, BigNumber.from(unlockTime));
-                assert.deepEqual(lockedTokens.amount, investedAmount);
-                assert.isFalse(lockedTokens.claimed);
             });
         });
     });
@@ -1460,7 +1418,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2100/09/15
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
-                await investment.cancelDuringMilestones();
+                await governancePoolMock.cancelDuringMilestones(investment.address);
 
                 await expect(investment.connect(investorB).unpledge(investedAmount))
                     .to.be.revertedWithCustomError(
@@ -1727,7 +1685,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2100/09/15
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
-                await investment.cancelDuringMilestones();
+                await governancePoolMock.cancelDuringMilestones(investment.address);
 
                 await investment.connect(investorA).refund();
 
@@ -1762,7 +1720,7 @@ describe("Investment Pool", async () => {
                     })
                 );
 
-                await investment.cancelDuringMilestones();
+                await governancePoolMock.cancelDuringMilestones(investment.address);
                 await investment.connect(investorB).refund();
 
                 const investorBalance = BigNumber.from(
@@ -1795,7 +1753,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await investMoney(fUSDTx, investment, investorB, investedAmount);
 
-                await investment.cancelDuringMilestones();
+                await governancePoolMock.cancelDuringMilestones(investment.address);
 
                 await expect(investment.connect(investorB).refund())
                     .to.emit(investment, "Refund")
@@ -1948,7 +1906,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2100/09/15
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
-                await investment.cancelDuringMilestones();
+                await governancePoolMock.cancelDuringMilestones(investment.address);
 
                 await expect(investment.connect(investorB).refund()).to.be.revertedWithCustomError(
                     investment,
@@ -2163,7 +2121,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2100/09/15
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
-                await investment.cancelDuringMilestones();
+                await governancePoolMock.cancelDuringMilestones(investment.address);
 
                 await investment.connect(creator).claim(0);
 
@@ -2182,7 +2140,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2100/09/15
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
-                await investment.cancelDuringMilestones();
+                await governancePoolMock.cancelDuringMilestones(investment.address);
 
                 await investment.connect(creator).claim(0);
 
@@ -2215,7 +2173,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2100/09/15
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
-                await investment.cancelDuringMilestones();
+                await governancePoolMock.cancelDuringMilestones(investment.address);
 
                 await investment.connect(creator).claim(0);
 
@@ -2247,7 +2205,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2100/09/15
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
-                await investment.cancelDuringMilestones();
+                await governancePoolMock.cancelDuringMilestones(investment.address);
 
                 await expect(investment.connect(creator).claim(0))
                     .to.emit(investment, "ClaimFunds")
@@ -2672,7 +2630,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2100/09/15
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
-                await investment.cancelDuringMilestones();
+                await governancePoolMock.cancelDuringMilestones(investment.address);
 
                 await investment.connect(creator).claim(0);
 
@@ -2693,7 +2651,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2100/09/15
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
-                await investment.cancelDuringMilestones();
+                await governancePoolMock.cancelDuringMilestones(investment.address);
 
                 await investment.increaseMilestone();
                 // NOTE: Time traveling to 2100/10/15
@@ -3240,7 +3198,7 @@ describe("Investment Pool", async () => {
             });
             it("[IP][11.1.5] Gelato shouldn't be able to terminate stream if not in auto termination window", async () => {
                 await expect(
-                    gelatoOpsMock.terminateMilestoneStream(0)
+                    gelatoOpsMock.gelatoTerminateMilestoneStream(0)
                 ).to.be.revertedWithCustomError(
                     investment,
                     "InvestmentPool__GelatoMilestoneStreamTerminationUnavailable"
@@ -3265,7 +3223,9 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.cancelDuringMilestones()).to.emit(investment, "Cancel");
+                await expect(
+                    governancePoolMock.cancelDuringMilestones(investment.address)
+                ).to.emit(investment, "Cancel");
 
                 const emergencyTerminationTimestamp =
                     await investment.emergencyTerminationTimestamp();
@@ -3288,7 +3248,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2100/09/20
                 timeStamp = dateToSeconds("2100/09/20");
                 await investment.setTimestamp(timeStamp);
-                await investment.cancelDuringMilestones();
+                await governancePoolMock.cancelDuringMilestones(investment.address);
 
                 const flowInfo = await sf.cfaV1.getFlow({
                     superToken: fUSDTx.address,
@@ -3317,7 +3277,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2100/09/20
                 timeStamp = dateToSeconds("2100/09/20");
                 await investment.setTimestamp(timeStamp);
-                await investment.cancelDuringMilestones();
+                await governancePoolMock.cancelDuringMilestones(investment.address);
 
                 const milestone = await investment.milestones(0);
 
@@ -3342,7 +3302,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2100/09/30
                 timeStamp = dateToSeconds("2100/09/30");
                 await investment.setTimestamp(timeStamp);
-                await investment.cancelDuringMilestones();
+                await governancePoolMock.cancelDuringMilestones(investment.address);
 
                 const milestone = await investment.milestones(0);
 
@@ -3356,7 +3316,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await investment.connect(creator).cancelBeforeFundraiserStart();
 
-                await expect(investment.cancelDuringMilestones())
+                await expect(governancePoolMock.cancelDuringMilestones(investment.address))
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
@@ -3369,7 +3329,7 @@ describe("Investment Pool", async () => {
                 let timeStamp = dateToSeconds("2100/06/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.cancelDuringMilestones())
+                await expect(governancePoolMock.cancelDuringMilestones(investment.address))
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
@@ -3382,7 +3342,7 @@ describe("Investment Pool", async () => {
                 let timeStamp = dateToSeconds("2100/07/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.cancelDuringMilestones())
+                await expect(governancePoolMock.cancelDuringMilestones(investment.address))
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
@@ -3397,7 +3357,7 @@ describe("Investment Pool", async () => {
                 let timeStamp = dateToSeconds("2100/08/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.cancelDuringMilestones())
+                await expect(governancePoolMock.cancelDuringMilestones(investment.address))
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
@@ -3417,7 +3377,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/08/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.cancelDuringMilestones())
+                await expect(governancePoolMock.cancelDuringMilestones(investment.address))
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
@@ -3436,9 +3396,9 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2100/09/15
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
-                await investment.cancelDuringMilestones();
+                await governancePoolMock.cancelDuringMilestones(investment.address);
 
-                await expect(investment.cancelDuringMilestones())
+                await expect(governancePoolMock.cancelDuringMilestones(investment.address))
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
@@ -3458,12 +3418,29 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/12/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.cancelDuringMilestones())
+                await expect(governancePoolMock.cancelDuringMilestones(investment.address))
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
                     .withArgs(noStateByteValue);
+            });
+
+            it("[IP][12.2.8] Project can't be canceled if caller isn't a governance pool", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2100/07/15
+                let timeStamp = dateToSeconds("2100/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2100/12/15
+                timeStamp = dateToSeconds("2100/12/15");
+                await investment.setTimestamp(timeStamp);
+
+                await expect(
+                    investment.connect(foreignActor).cancelDuringMilestones()
+                ).to.be.revertedWithCustomError(investment, "InvestmentPool__NotGovernancePool");
             });
         });
     });
@@ -3709,7 +3686,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2100/09/15
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
-                await investment.cancelDuringMilestones();
+                await governancePoolMock.cancelDuringMilestones(investment.address);
 
                 await expect(investment.connect(creator).milestoneJumpOrFinalProjectTermination())
                     .to.be.revertedWithCustomError(

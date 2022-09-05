@@ -13,7 +13,7 @@ import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {IInvestmentPool, IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
 import {IInvestmentPoolFactory} from "./interfaces/IInvestmentPoolFactory.sol";
 import {IGelatoOps} from "./interfaces/IGelatoOps.sol";
-import {IGovernancePool} from "@buidlone/governance-pool/contracts/interfaces/IGovernancePool.sol";
+import {IGovernancePool} from "./interfaces/IGovernancePool.sol";
 import {InvestmentPool} from "./InvestmentPool.sol";
 
 error InvestmentPoolFactory__ImplementationContractAddressIsZero();
@@ -57,7 +57,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     // TODO: Arbitrary choice, set this later to something that makes sense
     uint32 public constant MAX_MILESTONE_COUNT = 10;
 
-    IGovernancePool public GOVERNANCE_POOL;
+    IGovernancePool public governancePool;
 
     /* WARNING: NEVER RE-ORDER VARIABLES! Always double-check that new
        variables are added APPEND-ONLY. Re-ordering variables can
@@ -132,11 +132,11 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
             TERMINATION_WINDOW,
             AUTOMATED_TERMINATION_WINDOW,
             _milestones,
-            GOVERNANCE_POOL
+            governancePool
         );
 
         // After creating investment pool, call governance pool with investment pool address
-        GOVERNANCE_POOL.activateInvestmentPool(address(invPool));
+        governancePool.activateInvestmentPool(address(invPool));
 
         // Final level is required by the Superfluid's spec right now
         // We only really care about termination callbacks, others - noop
@@ -154,8 +154,8 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     }
 
     function setGovernancePool(address _governancePool) public onlyOwner {
-        if (address(GOVERNANCE_POOL) == address(0)) {
-            GOVERNANCE_POOL = IGovernancePool(_governancePool);
+        if (address(governancePool) == address(0)) {
+            governancePool = IGovernancePool(_governancePool);
         } else {
             revert InvestmentPoolFactory__GovernancePoolAlreadyDefined();
         }
@@ -176,7 +176,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         uint96 _fundraiserEndAt,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
     ) internal view {
-        if (address(GOVERNANCE_POOL) == address(0))
+        if (address(governancePool) == address(0))
             revert InvestmentPoolFactory__GovernancePoolNotDefined();
 
         if (address(_superToken) == address(0))
