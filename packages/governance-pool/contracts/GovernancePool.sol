@@ -23,14 +23,14 @@ error GovernancePool__amountIsGreaterThanDelegatedVotes(uint256 amount, uint256 
 error GovernancePool__totalSupplyIsZero();
 error GovernancePool__totalSupplyIsSmallerThanVotesAgainst(uint256 totalSupply, uint256 votes);
 error GovernancePool__noVotingTokensAvailableForClaim();
-error GovernancePool__tresholdNumberIsGreaterThan100();
+error GovernancePool__thresholdNumberIsGreaterThan100();
 
 /// @title Governance Pool contract.
 contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     // ERC1155 contract where all voting tokens are stored
     VotingToken public immutable VOTING_TOKEN;
     address public immutable INVESTMENT_POOL_FACTORY_ADDRESS;
-    uint8 public immutable VOTES_PERCENTAGE_TRESHOLD;
+    uint8 public immutable VOTES_PERCENTAGE_THRESHOLD;
     uint8 public immutable MAX_INVESTMENTS_FOR_INVESTOR_PER_POOL;
 
     /// @notice mapping from investment pool id => status
@@ -61,20 +61,20 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @dev Is called by DEPLOYER.
      *  @param _votingToken address of ERC1155 token, which will be used for voting.
      *  @param _investmentPoolFactory address of investment pool factory, which will deploy all investment pools.
-     *  @param _treshold number as percentage for votes treshold. Max value is 100.
+     *  @param _threshold number as percentage for votes threshold. Max value is 100.
      *  @param _maxInvestments number of how many investments can one investor make for one investment pool.
-     *  @dev Reverts if _treshold is greater than 100 (%).
+     *  @dev Reverts if _threshold is greater than 100 (%).
      */
     constructor(
         VotingToken _votingToken,
         address _investmentPoolFactory,
-        uint8 _treshold,
+        uint8 _threshold,
         uint8 _maxInvestments
     ) {
-        if (_treshold > 100) revert GovernancePool__tresholdNumberIsGreaterThan100();
+        if (_threshold > 100) revert GovernancePool__thresholdNumberIsGreaterThan100();
         VOTING_TOKEN = _votingToken;
         INVESTMENT_POOL_FACTORY_ADDRESS = _investmentPoolFactory;
-        VOTES_PERCENTAGE_TRESHOLD = _treshold;
+        VOTES_PERCENTAGE_THRESHOLD = _threshold;
         MAX_INVESTMENTS_FOR_INVESTOR_PER_POOL = _maxInvestments;
     }
 
@@ -186,7 +186,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @notice Before calling this function investor needs to approve spender with 'votingToken.setApprovalForAll(governancePoolAddress, true)'.
      *  @dev Is called by INVESTOR.
      *  @dev Reverts if status is not active voting, if amount is zero, if investor doesn't own any tokens, if amount is greater than token balance.
-     *  @dev Emits VoteAgainstProject with investment pool address, sender, amount. If treshold reached emit FinishVoting with investment pool address.Voting Token contract emits TransferSingle event.
+     *  @dev Emits VoteAgainstProject with investment pool address, sender, amount. If threshold reached emit FinishVoting with investment pool address.Voting Token contract emits TransferSingle event.
      *  @param _investmentPool investment pool address, to which investor transfers tokens by voting against it.
      *  @param _amount tokens amount investor wants to vote with.
      */
@@ -207,7 +207,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
 
         // Check if new votes amount specified by investor will reach 51%
-        bool tresholdWillBeReached = willInvestorReachTreshold(_investmentPool, _amount);
+        bool thresholdWillBeReached = willInvestorReachThreshold(_investmentPool, _amount);
 
         // Update votes mappings
         votesAmount[_msgSender()][investmentPoolId] += _amount;
@@ -218,8 +218,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
 
         emit VoteAgainstProject(_investmentPool, _msgSender(), _amount);
 
-        // If treshold is reached, it means that project needs to be ended
-        if (tresholdWillBeReached) {
+        // If threshold is reached, it means that project needs to be ended
+        if (thresholdWillBeReached) {
             _endProject(_investmentPool);
         }
     }
@@ -284,12 +284,12 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         return percentage;
     }
 
-    /** @notice Check if investor votes amount will reach the treshold needed for terminating the project
+    /** @notice Check if investor votes amount will reach the threshold needed for terminating the project
      *  @param _investmentPool investment pool address
      *  @param _investorVotesCount amount of tokens investor votes with.
-     *  @return bool -> if treshold will be reached or not
+     *  @return bool -> if threshold will be reached or not
      */
-    function willInvestorReachTreshold(address _investmentPool, uint256 _investorVotesCount)
+    function willInvestorReachThreshold(address _investmentPool, uint256 _investorVotesCount)
         public
         view
         returns (bool)
@@ -305,9 +305,9 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
             newCountVotesAgainst
         );
 
-        // Check if investors money will reach treshold percent or more
+        // Check if investors money will reach threshold percent or more
         // Percentages is going to be rounded down. That means no matter how high decimals are, they will be ignored.
-        if (newPercentageAgainst >= VOTES_PERCENTAGE_TRESHOLD) {
+        if (newPercentageAgainst >= VOTES_PERCENTAGE_THRESHOLD) {
             return true;
         } else {
             return false;
@@ -354,7 +354,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     }
 
     /**
-     * @notice If project reaches treshold, this function sends request to the investment pool for terminating project
+     * @notice If project reaches threshold, this function sends request to the investment pool for terminating project
      * @param _investmentPool Address of the pool, which needs to be terminated
      */
     function _endProject(address _investmentPool) private {

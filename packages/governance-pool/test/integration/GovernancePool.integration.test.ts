@@ -290,7 +290,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             governancePool = await governancePoolFactory.deploy(
                 votingToken.address,
                 investmentPoolFactory.address,
-                51, // Votes treshold
+                51, // Votes threshold
                 10 // Max investments for investor per investment pool
             );
             await governancePool.deployed();
@@ -395,7 +395,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             governancePool = await governancePoolFactory.deploy(
                 votingToken.address,
                 investmentPoolFactory.address,
-                51, // Votes treshold
+                51, // Votes threshold
                 10 // Max investments for investor per investment pool
             );
             await governancePool.deployed();
@@ -467,7 +467,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             governancePool = await governancePoolFactory.deploy(
                 votingToken.address,
                 investmentPoolFactory.address,
-                51, // Votes treshold
+                51, // Votes threshold
                 10 // Max investments for investor per investment pool
             );
             await governancePool.deployed();
@@ -508,7 +508,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
     });
 
     describe("4. GP request to terminate project (in IP)", () => {
-        it("[GP-IP][4.1] If treshold was reached, should call investment pool and cancel the project", async () => {
+        it("[GP-IP][4.1] If threshold was reached, should call investment pool and cancel the project", async () => {
             // Create investment pool implementation contract
             const investmentPoolDep = await ethers.getContractFactory(
                 "InvestmentPoolMock",
@@ -542,7 +542,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             governancePool = await governancePoolFactory.deploy(
                 votingToken.address,
                 investmentPoolFactory.address,
-                51, // Votes treshold
+                51, // Votes threshold
                 10 // Max investments for investor per investment pool
             );
             await governancePool.deployed();

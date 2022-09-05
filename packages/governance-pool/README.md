@@ -19,8 +19,8 @@
 3. Investors will be able to unlock the tokens after unlock time is reached.
 4. To vote against the project, investors will need to deposit voting tokens into the Governance pool with project's id.
 5. If investor wants the project to continue, he/she does not need to do anything.
-6. The Governance pool will then hold the funds until voting reaches the treshold percentage, which will terminate the project.
-7. Investor can retract votes and transfer back the tokens if treshold was not reached yet.
+6. The Governance pool will then hold the funds until voting reaches the threshold percentage, which will terminate the project.
+7. Investor can retract votes and transfer back the tokens if threshold was not reached yet.
 
 ## Generate documentation for smart contracts
 

@@ -48,7 +48,7 @@ interface IGovernancePool {
         view
         returns (uint8);
 
-    function willInvestorReachTreshold(address _investmentPool, uint256 _investorVotesCount)
+    function willInvestorReachThreshold(address _investmentPool, uint256 _investorVotesCount)
         external
         view
         returns (bool);

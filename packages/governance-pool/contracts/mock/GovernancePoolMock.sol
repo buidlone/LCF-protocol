@@ -13,9 +13,9 @@ contract GovernancePoolMock is GovernancePool {
     constructor(
         VotingToken _votingToken,
         address _investmentPoolFactory,
-        uint8 _treshold,
+        uint8 _threshold,
         uint8 _maxInvestments
-    ) GovernancePool(_votingToken, _investmentPoolFactory, _treshold, _maxInvestments) {}
+    ) GovernancePool(_votingToken, _investmentPoolFactory, _threshold, _maxInvestments) {}
 
     function setTimestamp(uint256 _timestamp) public {
         timestamp = _timestamp;
