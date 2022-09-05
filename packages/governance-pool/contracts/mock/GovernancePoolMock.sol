@@ -26,11 +26,6 @@ contract GovernancePoolMock is GovernancePool {
         return timestamp == 0 ? block.timestamp : timestamp;
     }
 
-    function updateInvestmentPoolStatusToUnavailable(address _investmentPool) public {
-        uint256 id = getInvestmentPoolId(_investmentPool);
-        investmentPoolStatus[id] = IGovernancePool.InvestmentPoolStatus.Unavailable;
-    }
-
     function updateInvestmentPoolStatusToActiveVoting(address _investmentPool) public {
         uint256 id = getInvestmentPoolId(_investmentPool);
         investmentPoolStatus[id] = IGovernancePool.InvestmentPoolStatus.ActiveVoting;

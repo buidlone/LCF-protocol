@@ -162,7 +162,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     }
 
     function _deployClone() internal virtual returns (IInitializableInvestmentPool pool) {
-        pool = IInitializableInvestmentPool(investmentPoolImplementation.clone());
+        pool = IInitializableInvestmentPool(payable(investmentPoolImplementation.clone()));
     }
 
     function _assertPoolInitArguments(

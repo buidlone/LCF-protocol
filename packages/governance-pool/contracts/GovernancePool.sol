@@ -91,12 +91,6 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         _;
     }
 
-    modifier onVotedAgainstInvestmentPool(address _investmentPool) {
-        if (!isInvestmentPoolVotingFinished(_investmentPool))
-            revert GovernancePool__statusIsNotVotedAgainst();
-        _;
-    }
-
     modifier onlyInvestmentPoolFactory() {
         if (_msgSender() != INVESTMENT_POOL_FACTORY_ADDRESS)
             revert GovernancePool__notInvestmentPoolFactory();
@@ -328,11 +322,6 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     function isInvestmentPoolVotingActive(address _investmentPool) public view returns (bool) {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         return investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.ActiveVoting;
-    }
-
-    function isInvestmentPoolVotingFinished(address _investmentPool) public view returns (bool) {
-        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        return investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.VotedAgainst;
     }
 
     /** @notice Get tokens supply for investment pool token

@@ -35,7 +35,7 @@ contract InvestmentPoolFactoryMock is InvestmentPoolFactory {
     }
 
     function _deployClone() internal virtual override returns (IInitializableInvestmentPool pool) {
-        InvestmentPoolMock p = InvestmentPoolMock(investmentPoolImplementation.clone());
+        InvestmentPoolMock p = InvestmentPoolMock(payable(investmentPoolImplementation.clone()));
         p.setTimestamp(timestamp);
         return p;
     }

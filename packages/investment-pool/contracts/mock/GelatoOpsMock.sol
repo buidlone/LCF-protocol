@@ -11,6 +11,8 @@ contract GelatoOpsMock is IGelatoOps {
 
     event RegisterGelatoTask();
 
+    receive() external payable {}
+
     function createTaskNoPrepayment(
         address _execAddress,
         bytes4, /*_execSelector*/
@@ -23,12 +25,12 @@ contract GelatoOpsMock is IGelatoOps {
         task = bytes32("");
     }
 
-    function getFeeDetails() public pure returns (uint256, address) {
-        return (uint256(0), address(0));
+    function getFeeDetails() public pure returns (uint256 fee, address feeToken) {
+        return (0.01 ether, 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
     }
 
-    function gelato() public pure returns (address payable) {
-        return (payable(address(0)));
+    function gelato() public view returns (address payable) {
+        return (payable(address(this)));
     }
 
     function gelatoTerminateMilestoneStream(uint256 _id) public {

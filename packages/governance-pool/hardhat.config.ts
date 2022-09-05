@@ -50,6 +50,9 @@ const config: HardhatUserConfig = {
         runOnCompile: false,
         only: ["contracts/GovernancePool.sol", "contracts/VotingToken.sol"],
     },
+    mocha: {
+        timeout: 200000,
+    },
 };
 
 export default config;

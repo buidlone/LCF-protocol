@@ -3204,6 +3204,111 @@ describe("Investment Pool", async () => {
                     "InvestmentPool__GelatoMilestoneStreamTerminationUnavailable"
                 );
             });
+
+            it("[IP][11.1.6] Investment pool should emit transfer event", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+                await foreignActor.sendTransaction({
+                    to: investment.address,
+                    value: ethers.utils.parseEther("0.1"),
+                });
+
+                // NOTE: Time traveling to 2100/07/15
+                let timeStamp = dateToSeconds("2100/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2100/09/15 when the milestone is active
+                timeStamp = dateToSeconds("2100/09/15");
+                // NOTE: Here we we want explicitly the chain reported time
+                await investment.setTimestamp(0);
+                await timeTravelToDate(timeStamp);
+
+                await investment.connect(creator).claim(0);
+
+                const automatedTerminationWindow = await investment.automatedTerminationWindow();
+                timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
+                // NOTE: Here we we want explicitly the chain reported time
+                await timeTravelToDate(timeStamp);
+
+                const feeDetails = await gelatoOpsMock.getFeeDetails();
+
+                await expect(gelatoOpsMock.gelatoTerminateMilestoneStream(0))
+                    .to.emit(investment, "GelatoFeeTransfer")
+                    .withArgs(feeDetails.fee, feeDetails.feeToken);
+            });
+
+            it("[IP][11.1.7] Investment pool should transfer fee to Gelato", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+                // Send Ether to Investment Pool for gelato task
+                await foreignActor.sendTransaction({
+                    to: investment.address,
+                    value: ethers.utils.parseEther("0.1"),
+                });
+
+                const investmentPoolPriorBalance = await ethers.provider.getBalance(
+                    investment.address
+                );
+                const gelatoPriorBalance = await ethers.provider.getBalance(gelatoOpsMock.address);
+
+                // NOTE: Time traveling to 2100/07/15
+                let timeStamp = dateToSeconds("2100/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2100/09/15 when the milestone is active
+                timeStamp = dateToSeconds("2100/09/15");
+                // NOTE: Here we we want explicitly the chain reported time
+                await investment.setTimestamp(0);
+                await timeTravelToDate(timeStamp);
+
+                await investment.connect(creator).claim(0);
+
+                const automatedTerminationWindow = await investment.automatedTerminationWindow();
+                timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
+                // NOTE: Here we we want explicitly the chain reported time
+                await timeTravelToDate(timeStamp);
+
+                await gelatoOpsMock.gelatoTerminateMilestoneStream(0);
+
+                const investmentPoolBalance = await ethers.provider.getBalance(investment.address);
+                const gelatoBalance = await ethers.provider.getBalance(gelatoOpsMock.address);
+                const feeDetails = await gelatoOpsMock.getFeeDetails();
+
+                assert.deepEqual(
+                    investmentPoolPriorBalance.sub(feeDetails.fee),
+                    investmentPoolBalance
+                );
+                assert.deepEqual(gelatoPriorBalance.add(feeDetails.fee), gelatoBalance);
+            });
+
+            it("[IP][11.1.8] Investment pool shouldn't be able to transfer fee to Gelato if not enough tokens", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                // NOTE: Time traveling to 2100/07/15
+                let timeStamp = dateToSeconds("2100/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2100/09/15 when the milestone is active
+                timeStamp = dateToSeconds("2100/09/15");
+                // NOTE: Here we we want explicitly the chain reported time
+                await investment.setTimestamp(0);
+                await timeTravelToDate(timeStamp);
+
+                await investment.connect(creator).claim(0);
+
+                const automatedTerminationWindow = await investment.automatedTerminationWindow();
+                timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
+                // NOTE: Here we we want explicitly the chain reported time
+                await timeTravelToDate(timeStamp);
+
+                await expect(
+                    gelatoOpsMock.gelatoTerminateMilestoneStream(0)
+                ).to.be.revertedWithCustomError(
+                    investment,
+                    "InvestmentPool__GelatoEthTransferFailed"
+                );
+            });
         });
 
         // TODO: Test termination by 3P system (patricians, plebs, pirates) in case we wouldn't stop it in time, what happens then?
@@ -3440,7 +3545,10 @@ describe("Investment Pool", async () => {
 
                 await expect(
                     investment.connect(foreignActor).cancelDuringMilestones()
-                ).to.be.revertedWithCustomError(investment, "InvestmentPool__NotGovernancePool");
+                ).to.be.revertedWithCustomError(
+                    investment,
+                    "InvestmentPool__NotGovernancePoolOrGelato"
+                );
             });
         });
     });

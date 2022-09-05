@@ -34,8 +34,6 @@ interface IGovernancePool {
 
     function isInvestmentPoolVotingActive(address _investmentPool) external view returns (bool);
 
-    function isInvestmentPoolVotingFinished(address _investmentPool) external view returns (bool);
-
     function getInvestmentPoolId(address _investmentPool) external pure returns (uint256);
 
     function getVotingTokensSupply(address _investmentPool) external view returns (uint256);
