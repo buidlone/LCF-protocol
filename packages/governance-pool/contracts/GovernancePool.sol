@@ -31,6 +31,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     VotingToken public immutable VOTING_TOKEN;
     address public immutable INVESTMENT_POOL_FACTORY_ADDRESS;
     uint8 public immutable VOTES_PERCENTAGE_THRESHOLD;
+    /// @dev Currently isn't used. Should be provided by the investment pool factory contract
     uint8 public immutable MAX_INVESTMENTS_FOR_INVESTOR_PER_POOL;
 
     /// @notice mapping from investment pool id => status
