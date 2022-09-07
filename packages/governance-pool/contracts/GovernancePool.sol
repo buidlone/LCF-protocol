@@ -24,15 +24,16 @@ error GovernancePool__totalSupplyIsZero();
 error GovernancePool__totalSupplyIsSmallerThanVotesAgainst(uint256 totalSupply, uint256 votes);
 error GovernancePool__noVotingTokensAvailableForClaim();
 error GovernancePool__thresholdNumberIsGreaterThan100();
+error GovernancePool__maxInvestmentsCountReached();
 
 /// @title Governance Pool contract.
 contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
+    uint32 public constant MAX_INVESTMENTS_FOR_INVESTOR_PER_POOL = 10;
+
     // ERC1155 contract where all voting tokens are stored
     VotingToken public immutable VOTING_TOKEN;
     address public immutable INVESTMENT_POOL_FACTORY_ADDRESS;
     uint8 public immutable VOTES_PERCENTAGE_THRESHOLD;
-    /// @dev Currently isn't used. Should be provided by the investment pool factory contract
-    uint8 public immutable MAX_INVESTMENTS_FOR_INVESTOR_PER_POOL;
 
     /// @notice mapping from investment pool id => status
     mapping(uint256 => InvestmentPoolStatus) public investmentPoolStatus;
@@ -63,20 +64,17 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @param _votingToken address of ERC1155 token, which will be used for voting.
      *  @param _investmentPoolFactory address of investment pool factory, which will deploy all investment pools.
      *  @param _threshold number as percentage for votes threshold. Max value is 100.
-     *  @param _maxInvestments number of how many investments can one investor make for one investment pool.
      *  @dev Reverts if _threshold is greater than 100 (%).
      */
     constructor(
         VotingToken _votingToken,
         address _investmentPoolFactory,
-        uint8 _threshold,
-        uint8 _maxInvestments
+        uint8 _threshold
     ) {
         if (_threshold > 100) revert GovernancePool__thresholdNumberIsGreaterThan100();
         VOTING_TOKEN = _votingToken;
         INVESTMENT_POOL_FACTORY_ADDRESS = _investmentPoolFactory;
         VOTES_PERCENTAGE_THRESHOLD = _threshold;
-        MAX_INVESTMENTS_FOR_INVESTOR_PER_POOL = _maxInvestments;
     }
 
     modifier onUnavailableInvestmentPool(address _investmentPool) {
@@ -132,6 +130,11 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
 
         if (_amount == 0) revert GovernancePool__amountIsZero();
         uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
+
+        if (
+            tokensLocked[_investor][investmentPoolId].length >=
+            MAX_INVESTMENTS_FOR_INVESTOR_PER_POOL
+        ) revert GovernancePool__maxInvestmentsCountReached();
 
         // Push new locked tokens info to mapping and mint them. Tokens will be held by governance pool until unlock time.
         tokensLocked[_investor][investmentPoolId].push(TokensLocked(_unlockTime, _amount, false));

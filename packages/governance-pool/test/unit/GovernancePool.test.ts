@@ -41,8 +41,7 @@ describe("Governance Pool", async () => {
         governancePool = await governancePoolFactory.deploy(
             votingToken.address,
             investmentPoolFactoryAsUser.address,
-            51, // Votes threshold
-            10 // Max investments for investor per investment pool
+            51 // Votes threshold
         );
         await governancePool.deployed();
 
@@ -79,8 +78,7 @@ describe("Governance Pool", async () => {
                 governancePool = await governancePoolFactory.deploy(
                     votingToken.address,
                     investmentPoolFactoryAsUser.address,
-                    51, // Votes threshold
-                    10 // Max investments for investor per investment pool
+                    51 // Votes threshold
                 );
                 await governancePool.deployed();
 
@@ -421,6 +419,32 @@ describe("Governance Pool", async () => {
 
                 const expectedTotalSupply = tokensToMint.mul(2);
                 assert.equal(expectedTotalSupply.toString(), totalSupply.toString());
+            });
+
+            it("[GP][4.2.8] Shouldn't be able to mint tokens more times than max investments count", async () => {
+                tokensToMint = ethers.utils.parseEther("10");
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolAsUser.address);
+
+                const maxInvestmentsCount =
+                    await governancePool.MAX_INVESTMENTS_FOR_INVESTOR_PER_POOL();
+
+                // Approve and invest money
+                for (let i = 0; i < maxInvestmentsCount; i++) {
+                    await governancePool
+                        .connect(investmentPoolAsUser)
+                        .mintVotingTokens(investorA.address, tokensToMint, 0);
+                }
+
+                await expect(
+                    governancePool
+                        .connect(investmentPoolAsUser)
+                        .mintVotingTokens(investorA.address, tokensToMint, 0)
+                ).to.be.revertedWithCustomError(
+                    governancePool,
+                    "GovernancePool__maxInvestmentsCountReached"
+                );
             });
         });
     });

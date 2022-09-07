@@ -45,17 +45,14 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     // Assign all Clones library functions to addresses
     using Clones for address;
 
+    uint32 public constant MAX_MILESTONE_COUNT = 10;
     uint48 public constant TERMINATION_WINDOW = 12 hours;
     uint48 public constant AUTOMATED_TERMINATION_WINDOW = 1 hours;
-    uint public constant MILESTONE_MIN_DURATION = 30 days;
-    uint public constant MILESTONE_MAX_DURATION = 90 days;
-    uint public constant FUNDRAISER_MIN_DURATION = 30 days;
-    uint public constant FUNDRAISER_MAX_DURATION = 90 days;
-
+    uint256 public constant MILESTONE_MIN_DURATION = 30 days;
+    uint256 public constant MILESTONE_MAX_DURATION = 90 days;
+    uint256 public constant FUNDRAISER_MIN_DURATION = 30 days;
+    uint256 public constant FUNDRAISER_MAX_DURATION = 90 days;
     uint256 public constant PERCENTAGE_DIVIDER = 10**6;
-
-    // TODO: Arbitrary choice, set this later to something that makes sense
-    uint32 public constant MAX_MILESTONE_COUNT = 10;
 
     IGovernancePool public governancePool;
 

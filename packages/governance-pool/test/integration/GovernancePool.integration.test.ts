@@ -290,8 +290,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             governancePool = await governancePoolFactory.deploy(
                 votingToken.address,
                 investmentPoolFactory.address,
-                51, // Votes threshold
-                10 // Max investments for investor per investment pool
+                51 // Votes threshold
             );
             await governancePool.deployed();
 
@@ -395,8 +394,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             governancePool = await governancePoolFactory.deploy(
                 votingToken.address,
                 investmentPoolFactory.address,
-                51, // Votes threshold
-                10 // Max investments for investor per investment pool
+                51 // Votes threshold
             );
             await governancePool.deployed();
         });
@@ -467,8 +465,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             governancePool = await governancePoolFactory.deploy(
                 votingToken.address,
                 investmentPoolFactory.address,
-                51, // Votes threshold
-                10 // Max investments for investor per investment pool
+                51 // Votes threshold
             );
             await governancePool.deployed();
 
@@ -542,8 +539,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             governancePool = await governancePoolFactory.deploy(
                 votingToken.address,
                 investmentPoolFactory.address,
-                51, // Votes threshold
-                10 // Max investments for investor per investment pool
+                51 // Votes threshold
             );
             await governancePool.deployed();
 
