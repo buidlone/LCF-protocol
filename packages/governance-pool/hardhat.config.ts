@@ -1,5 +1,5 @@
-import "dotenv/config";
 import {HardhatUserConfig, task} from "hardhat/config";
+import "dotenv/config";
 import "@nomicfoundation/hardhat-toolbox";
 import "@nomiclabs/hardhat-web3";
 import "hardhat-gas-reporter";
@@ -32,9 +32,10 @@ const config: HardhatUserConfig = {
     defaultNetwork: "hardhat",
     networks: {
         hardhat: {},
-        ropsten: {
-            url: process.env.ROPSTEN_URL || "",
+        goerli: {
+            url: process.env.GOERLI_URL || "",
             accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+            chainId: 5,
         },
     },
     gasReporter: {
@@ -49,6 +50,9 @@ const config: HardhatUserConfig = {
         clear: true,
         runOnCompile: false,
         only: ["contracts/GovernancePool.sol", "contracts/VotingToken.sol"],
+    },
+    mocha: {
+        timeout: 200000,
     },
 };
 

@@ -13,9 +13,9 @@ contract GovernancePoolMock is GovernancePool {
     constructor(
         VotingToken _votingToken,
         address _investmentPoolFactory,
-        uint8 _treshold,
+        uint8 _threshold,
         uint8 _maxInvestments
-    ) GovernancePool(_votingToken, _investmentPoolFactory, _treshold, _maxInvestments) {}
+    ) GovernancePool(_votingToken, _investmentPoolFactory, _threshold, _maxInvestments) {}
 
     function setTimestamp(uint256 _timestamp) public {
         timestamp = _timestamp;
@@ -24,11 +24,6 @@ contract GovernancePoolMock is GovernancePool {
     function _getNow() internal view virtual override returns (uint256) {
         // solhint-disable-next-line not-rely-on-time
         return timestamp == 0 ? block.timestamp : timestamp;
-    }
-
-    function updateInvestmentPoolStatusToUnavailable(address _investmentPool) public {
-        uint256 id = getInvestmentPoolId(_investmentPool);
-        investmentPoolStatus[id] = IGovernancePool.InvestmentPoolStatus.Unavailable;
     }
 
     function updateInvestmentPoolStatusToActiveVoting(address _investmentPool) public {

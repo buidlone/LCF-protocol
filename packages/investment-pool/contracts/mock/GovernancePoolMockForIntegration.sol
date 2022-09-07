@@ -10,11 +10,13 @@ contract GovernancePoolMockForIntegration {
         IInvestmentPool(_investment).cancelDuringMilestones();
     }
 
-    function activateInvestmentPool(address _investmentPool) external pure {}
+    function activateInvestmentPool(
+        address /*_investmentPool*/
+    ) external pure {}
 
     function mintVotingTokens(
-        address _investor,
-        uint256 _amount,
-        uint48 _unlockTime
+        address, /*_investor*/
+        uint256, /*_amount*/
+        uint48 /*_unlockTime*/
     ) external pure {}
 }

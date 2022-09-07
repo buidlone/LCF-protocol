@@ -41,7 +41,7 @@ describe("Governance Pool", async () => {
         governancePool = await governancePoolFactory.deploy(
             votingToken.address,
             investmentPoolFactoryAsUser.address,
-            51, // Votes treshold
+            51, // Votes threshold
             10 // Max investments for investor per investment pool
         );
         await governancePool.deployed();
@@ -79,7 +79,7 @@ describe("Governance Pool", async () => {
                 governancePool = await governancePoolFactory.deploy(
                     votingToken.address,
                     investmentPoolFactoryAsUser.address,
-                    51, // Votes treshold
+                    51, // Votes threshold
                     10 // Max investments for investor per investment pool
                 );
                 await governancePool.deployed();
@@ -502,7 +502,7 @@ describe("Governance Pool", async () => {
         });
     });
 
-    describe("6. Treshold checking", () => {
+    describe("6. Threshold checking", () => {
         beforeEach(async () => {
             await deployContracts();
         });
@@ -519,25 +519,25 @@ describe("Governance Pool", async () => {
                     .mintVotingTokens(investorA.address, tokensToMint, 0);
             });
 
-            it("[GP][6.1.1] Should reach a treshold", async () => {
-                const tresholdAmount = ethers.utils.parseEther("1.1");
+            it("[GP][6.1.1] Should reach a threshold", async () => {
+                const thresholdAmount = ethers.utils.parseEther("1.1");
 
-                const tresholdReached = await governancePool.willInvestorReachTreshold(
+                const thresholdReached = await governancePool.willInvestorReachThreshold(
                     investmentPoolAsUser.address,
-                    tresholdAmount
+                    thresholdAmount
                 );
-                assert.equal(tresholdReached, true);
+                assert.equal(thresholdReached, true);
             });
 
-            it("[GP][6.1.2] Should not reach a treshold", async () => {
-                const notTresholdAmount = ethers.utils.parseEther("1");
+            it("[GP][6.1.2] Should not reach a threshold", async () => {
+                const notThresholdAmount = ethers.utils.parseEther("1");
 
-                const tresholdReached = await governancePool.willInvestorReachTreshold(
+                const thresholdReached = await governancePool.willInvestorReachThreshold(
                     investmentPoolAsUser.address,
-                    notTresholdAmount
+                    notThresholdAmount
                 );
 
-                assert.equal(tresholdReached, false);
+                assert.equal(thresholdReached, false);
             });
         });
     });
@@ -618,7 +618,7 @@ describe("Governance Pool", async () => {
                 );
             });
 
-            it("[GP][7.2.3] Should not be able to unlock tokens for investment pool which reached votes treshold", async () => {
+            it("[GP][7.2.3] Should not be able to unlock tokens for investment pool which reached votes threshold", async () => {
                 // Simulate the state with mock function
                 await governancePool.updateInvestmentPoolStatusToVotedAgainst(
                     investmentPoolAsUser.address
@@ -847,7 +847,7 @@ describe("Governance Pool", async () => {
                 assert.equal(totalVotesAmount.toString(), votesAgainst.toString());
             });
 
-            it("[GP][8.1.3] Should update investment pool status if treshold was reached", async () => {
+            it("[GP][8.1.3] Should update investment pool status if threshold was reached", async () => {
                 const votesAgainst = ethers.utils.parseEther("0.6");
 
                 // Deploy Fake governance pool mock which can mint tokens
@@ -885,7 +885,7 @@ describe("Governance Pool", async () => {
                 assert.equal(status, 2); // Voted Against
             });
 
-            it("[GP][8.1.4] Should not update investment pool status if treshold was not reached", async () => {
+            it("[GP][8.1.4] Should not update investment pool status if threshold was not reached", async () => {
                 const votesAgainst = ethers.utils.parseEther("0.4");
 
                 await expect(
@@ -944,7 +944,7 @@ describe("Governance Pool", async () => {
                 );
             });
 
-            it("[GP][8.2.3] Should not be able to vote for investment pool which reached votes treshold", async () => {
+            it("[GP][8.2.3] Should not be able to vote for investment pool which reached votes threshold", async () => {
                 const votesAgainst = ethers.utils.parseEther("1");
 
                 // Simulate the state with mock function
@@ -1232,7 +1232,7 @@ describe("Governance Pool", async () => {
                 );
             });
 
-            it("[GP][9.2.3] Should not be able to retract votes from investment pool which reached votes treshold", async () => {
+            it("[GP][9.2.3] Should not be able to retract votes from investment pool which reached votes threshold", async () => {
                 const votesToRetract = ethers.utils.parseEther("1");
 
                 // Simulate the state with mock function

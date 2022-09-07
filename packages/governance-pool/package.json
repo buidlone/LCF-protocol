@@ -8,7 +8,8 @@
     "lint": "npx eslint '**/*.{js,ts}' --fix",
     "node": "npx hardhat node",
     "solhint": "npx solhint 'contracts/**/*.sol'",
-    "prettier": "prettier --write 'contracts/**/*.sol'"
+    "prettier": "prettier --write 'contracts/**/*.sol'",
+    "deploy:goerli": "yarn hardhat run scripts/deploy.ts --network goerli"
   },
   "devDependencies": {
     "@ethersproject/abi": "^5.4.7",

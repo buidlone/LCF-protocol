@@ -129,6 +129,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     );
     event Refund(address indexed caller, uint256 amount);
     event TerminateStream(uint256 milestoneId);
+    event GelatoFeeTransfer(uint256 fee, address feeToken);
 
     /** MODIFIERS */
 
@@ -192,6 +193,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             revert InvestmentPool__CurrentStateIsNotAllowed(currentState);
         _;
     }
+
+    receive() external payable {}
 
     /** EXTERNAL FUNCTIONS */
 
@@ -678,14 +681,6 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         return (memInvAmount * milestones[_milestoneId].intervalSeedPortion) / PERCENTAGE_DIVIDER;
     }
 
-    /// @notice get stream amount dedicated to the milestone
-    function getMilestoneStreamAmount(uint256 _milestoneId) public view returns (uint256) {
-        uint256 memInvAmount = memMilestoneInvestments[_milestoneId];
-        return
-            (memInvAmount * milestones[_milestoneId].intervalStreamingPortion) /
-            PERCENTAGE_DIVIDER;
-    }
-
     /// @notice Calculate the real funds allocation for the milestone
     function getTotalMilestoneTokenAllocation(uint _milestoneId) public returns (uint256) {
         uint256 memInvAmount = memMilestoneInvestments[_milestoneId];
@@ -885,7 +880,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     /// @dev This function is called by Gelato network to check if automated termination is needed.
     /// @return canExec : whether Gelato should execute the task.
     /// @return execPayload :  data that executors should use for the execution.
-    function gelatoChecker() external view returns (bool canExec, bytes memory execPayload) {
+    function gelatoChecker() public view returns (bool canExec, bytes memory execPayload) {
         uint256 currentMilestoneIndex = _getCurrentMilestoneIndex();
 
         // Check if gelato can terminate stream of current milestone
@@ -927,5 +922,6 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             // Else it is ERC20 token
             SafeERC20.safeTransfer(IERC20(_paymentToken), gelato, _amount);
         }
+        emit GelatoFeeTransfer(_amount, _paymentToken);
     }
 }

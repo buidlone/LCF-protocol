@@ -34,8 +34,6 @@ interface IGovernancePool {
 
     function isInvestmentPoolVotingActive(address _investmentPool) external view returns (bool);
 
-    function isInvestmentPoolVotingFinished(address _investmentPool) external view returns (bool);
-
     function getInvestmentPoolId(address _investmentPool) external pure returns (uint256);
 
     function getVotingTokensSupply(address _investmentPool) external view returns (uint256);
@@ -50,7 +48,7 @@ interface IGovernancePool {
         view
         returns (uint8);
 
-    function willInvestorReachTreshold(address _investmentPool, uint256 _investorVotesCount)
+    function willInvestorReachThreshold(address _investmentPool, uint256 _investorVotesCount)
         external
         view
         returns (bool);
