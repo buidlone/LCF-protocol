@@ -59,6 +59,8 @@ let campaignEndDate: BigNumber;
 let creationRes: ContractTransaction;
 let gelatoOpsMock: GelatoOpsMock;
 
+let gelatoFeeAllocation: BigNumber;
+
 // Percentages (in divider format)
 let percentageDivider: BigNumber = BigNumber.from(0);
 let percent5InIpBigNumber: BigNumber;
@@ -131,6 +133,10 @@ const defineProjectStateByteValues = async (investment: InvestmentPoolMock) => {
     noStateByteValue = await investment.NO_STATE_BYTE_VALUE();
 };
 
+const defineGelatoFeeAllocation = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
+    gelatoFeeAllocation = await investmentPoolFactory.GELATO_FEE_ALLOCATION_PER_PROJECT();
+};
+
 const deployGovernancePoolMock = async () => {
     const governancePoolFactory = await ethers.getContractFactory(
         "GovernancePoolMockForIntegration",
@@ -170,7 +176,8 @@ const createInvestmentWithTwoMilestones = async () => {
                 intervalSeedPortion: percent5InIpBigNumber,
                 intervalStreamingPortion: percent20InIpBigNumber,
             },
-        ]
+        ],
+        {value: gelatoFeeAllocation}
     );
 
     investment = await getInvestmentFromTx(creationRes);
@@ -208,7 +215,7 @@ const timeTravelByIncreasingSeconds = async (seconds: number | BigNumber) => {
     await traveler.advanceTimeAndBlock(seconds);
 };
 
-describe("Investment Pool", async () => {
+describe.only("Investment Pool", async () => {
     before(async () => {
         // get accounts from hardhat
         accounts = await ethers.getSigners();
@@ -291,6 +298,7 @@ describe("Investment Pool", async () => {
 
         // Get percentage divider and byte values from contract constant variables
         definePercentageDivider(investmentPoolFactory);
+        defineGelatoFeeAllocation(investmentPoolFactory);
         defineProjectStateByteValues(investmentPool);
 
         // Enforce a starting timestamp to avoid time based bugs
@@ -2123,7 +2131,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await governancePoolMock.cancelDuringMilestones(investment.address);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const milestone = await investment.milestones(0);
                 assert.isTrue(milestone.seedAmountPaid);
@@ -2142,7 +2150,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await governancePoolMock.cancelDuringMilestones(investment.address);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const milestone = await investment.milestones(0);
                 const seedAmount = await investment.getMilestoneSeedAmount(0);
@@ -2175,7 +2183,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await governancePoolMock.cancelDuringMilestones(investment.address);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const creatorBalance = BigNumber.from(
                     await fUSDTx.balanceOf({
@@ -2207,7 +2215,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await governancePoolMock.cancelDuringMilestones(investment.address);
 
-                await expect(investment.connect(creator).claim(0))
+                await expect(investment.connect(creator).startFirstFundsStream())
                     .to.emit(investment, "ClaimFunds")
                     .withArgs(0, true, false, false);
             });
@@ -2224,7 +2232,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const milestone = await investment.milestones(0);
                 assert.isTrue(milestone.seedAmountPaid);
@@ -2242,7 +2250,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const milestone = await investment.milestones(0);
                 const seedAmount = await investment.getMilestoneSeedAmount(0);
@@ -2275,7 +2283,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(0);
                 await timeTravelToDate(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 // timeStamp = dateToSeconds("2100/09/16");
                 await timeTravelByIncreasingSeconds(60);
@@ -2311,7 +2319,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.connect(creator).claim(0))
+                await expect(investment.connect(creator).startFirstFundsStream())
                     .to.emit(investment, "ClaimFunds")
                     .withArgs(0, true, false, false);
             });
@@ -2328,7 +2336,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/10/01", false) as number;
                 await investment.setTimestamp(timeStamp - 120);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const milestone = await investment.milestones(0);
                 assert.isTrue(milestone.paid);
@@ -2352,7 +2360,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/10/01", false) as number;
                 await investment.setTimestamp(timeStamp - 120);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const creatorBalance = BigNumber.from(
                     await fUSDTx.balanceOf({
@@ -2393,7 +2401,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/10/01", false) as number;
                 await investment.setTimestamp(timeStamp - 120);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const creatorBalance = BigNumber.from(
                     await fUSDTx.balanceOf({
@@ -2426,7 +2434,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/10/01", false) as number;
                 await investment.setTimestamp(timeStamp - 120);
 
-                await expect(investment.connect(creator).claim(0))
+                await expect(investment.connect(creator).startFirstFundsStream())
                     .to.emit(investment, "ClaimFunds")
                     .withArgs(0, false, true, false);
             });
@@ -2443,7 +2451,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const milestone = await investment.milestones(0);
                 assert.isTrue(milestone.streamOngoing);
@@ -2461,7 +2469,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.connect(creator).claim(0))
+                await expect(investment.connect(creator).startFirstFundsStream())
                     .to.emit(investment, "ClaimFunds")
                     .withArgs(0, false, false, true);
             });
@@ -2482,7 +2490,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
 
                 await expect(
-                    investment.connect(foreignActor).claim(0)
+                    investment.connect(foreignActor).startFirstFundsStream()
                 ).to.be.revertedWithCustomError(investment, "InvestmentPool__NotCreator");
             });
 
@@ -2492,7 +2500,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await investment.connect(creator).cancelBeforeFundraiserStart();
 
-                await expect(investment.connect(creator).claim(0))
+                await expect(investment.connect(creator).startFirstFundsStream())
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
@@ -2505,7 +2513,7 @@ describe("Investment Pool", async () => {
                 let timeStamp = dateToSeconds("2100/06/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.connect(creator).claim(0))
+                await expect(investment.connect(creator).startFirstFundsStream())
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
@@ -2518,7 +2526,7 @@ describe("Investment Pool", async () => {
                 let timeStamp = dateToSeconds("2100/07/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.connect(creator).claim(0))
+                await expect(investment.connect(creator).startFirstFundsStream())
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
@@ -2531,7 +2539,7 @@ describe("Investment Pool", async () => {
                 let timeStamp = dateToSeconds("2100/08/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.connect(creator).claim(0))
+                await expect(investment.connect(creator).startFirstFundsStream())
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
@@ -2551,7 +2559,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/08/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.connect(creator).claim(0))
+                await expect(investment.connect(creator).startFirstFundsStream())
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
@@ -2571,7 +2579,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/12/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.connect(creator).claim(1))
+                await expect(investment.connect(creator).startFirstFundsStream())
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
@@ -2609,9 +2617,9 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
-                await expect(investment.connect(creator).claim(0))
+                await expect(investment.connect(creator).startFirstFundsStream())
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__AlreadyStreamingForMilestone"
@@ -2632,9 +2640,11 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await governancePoolMock.cancelDuringMilestones(investment.address);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
-                await expect(investment.connect(creator).claim(0)).to.be.revertedWithCustomError(
+                await expect(
+                    investment.connect(creator).startFirstFundsStream()
+                ).to.be.revertedWithCustomError(
                     investment,
                     "InvestmentPool__NoSeedAmountDedicated"
                 );
@@ -2682,7 +2692,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/10/15");
                 await investment.setTimestamp(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const creatorBalance = BigNumber.from(
                     await fUSDTx.balanceOf({
@@ -2712,7 +2722,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(0);
                 await timeTravelToDate(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 /**
                  * NOTE: even though we cannot get precise time with the traveler,
@@ -2774,7 +2784,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/09/15");
                 await timeTravelToDate(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 timeStamp = dateToSeconds("2100/09/16");
                 await timeTravelToDate(timeStamp);
@@ -2822,7 +2832,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/09/15");
                 await timeTravelToDate(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const terminationWindow = BigNumber.from(await investment.terminationWindow());
 
@@ -2886,7 +2896,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/09/15");
                 await timeTravelToDate(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 // Advance in time a little
                 timeStamp = dateToSeconds("2100/09/20");
@@ -2913,7 +2923,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/09/25");
                 await timeTravelToDate(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const flowInfo = await sf.cfaV1.getFlow({
                     superToken: fUSDTx.address,
@@ -2955,7 +2965,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/09/15");
                 await timeTravelToDate(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 // Advance in time a little
                 timeStamp = dateToSeconds("2100/09/20");
@@ -2975,7 +2985,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/09/25");
                 await timeTravelToDate(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
                 const terminationWindow = BigNumber.from(await investment.terminationWindow());
 
                 // Let's make sure we are in the termination window
@@ -3030,7 +3040,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/09/15");
                 await timeTravelToDate(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 // Advance in time a little
                 timeStamp = dateToSeconds("2100/09/20");
@@ -3050,7 +3060,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/09/25");
                 await timeTravelToDate(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 // Let's make sure we are in the termination window
                 const terminationWindow = BigNumber.from(await investment.terminationWindow());
@@ -3122,7 +3132,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(0);
                 await timeTravelToDate(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const terminationWindow = await investment.terminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
@@ -3180,7 +3190,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(0);
                 await timeTravelToDate(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const automatedTerminationWindow = await investment.automatedTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
@@ -3223,7 +3233,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(0);
                 await timeTravelToDate(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const automatedTerminationWindow = await investment.automatedTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
@@ -3261,7 +3271,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(0);
                 await timeTravelToDate(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const automatedTerminationWindow = await investment.automatedTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
@@ -3295,7 +3305,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(0);
                 await timeTravelToDate(timeStamp);
 
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const automatedTerminationWindow = await investment.automatedTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
@@ -3348,7 +3358,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2100/09/15
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 // NOTE: Time traveling to 2100/09/20
                 timeStamp = dateToSeconds("2100/09/20");
@@ -3377,7 +3387,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2100/09/15
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 // NOTE: Time traveling to 2100/09/20
                 timeStamp = dateToSeconds("2100/09/20");
@@ -3400,7 +3410,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Time traveling to 2100/09/15
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const priorMilestone = await investment.milestones(0);
 
@@ -3576,7 +3586,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Here we we want explicitly the chain reported time
                 await investment.setTimestamp(0);
                 await timeTravelToDate(timeStamp);
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const priorFlowInfo = await sf.cfaV1.getFlow({
                     superToken: fUSDTx.address,
@@ -3621,7 +3631,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Here we we want explicitly the chain reported time
                 await investment.setTimestamp(0);
                 await timeTravelToDate(timeStamp);
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const terminationWindow = await investment.terminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
@@ -3647,7 +3657,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Here we we want explicitly the chain reported time
                 await investment.setTimestamp(0);
                 await timeTravelToDate(timeStamp);
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const terminationWindow = await investment.terminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
@@ -3674,7 +3684,7 @@ describe("Investment Pool", async () => {
                 // NOTE: Here we we want explicitly the chain reported time
                 await investment.setTimestamp(0);
                 await timeTravelToDate(timeStamp);
-                await investment.connect(creator).claim(0);
+                await investment.connect(creator).startFirstFundsStream();
 
                 const terminationWindow = await investment.terminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;

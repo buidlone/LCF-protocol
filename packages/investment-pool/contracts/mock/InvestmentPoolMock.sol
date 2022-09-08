@@ -42,4 +42,8 @@ contract InvestmentPoolMock is InvestmentPool {
     function terminateMilestoneStreamFinal(uint256 _id) public {
         _terminateMilestoneStreamFinal(_id);
     }
+
+    function claim(uint256 _id) public {
+        _claim(_id);
+    }
 }
