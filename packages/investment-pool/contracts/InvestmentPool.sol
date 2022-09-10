@@ -42,6 +42,8 @@ error InvestmentPool__AmountIsGreaterThanInvested(uint256 givenAmount, uint256 i
 error InvestmentPool__CurrentStateIsNotAllowed(uint256 currentStateByteValue);
 error InvestmentPool__NoSeedAmountDedicated();
 error InvestmentPool__NotInFirstMilestonePeriod();
+error InvestmentPool__EthTransferFailed();
+error InvestmentPool__NoEthLeftToWithdraw();
 
 contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, Initializable {
     using CFAv1Library for CFAv1Library.InitData;
@@ -64,7 +66,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     uint256 public constant NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE = 32;
     uint256 public constant LAST_MILESTONE_BYTE_VALUE = 64;
     uint256 public constant TERMINATED_BY_VOTING_BYTE_VALUE = 128;
-    uint256 public constant NO_STATE_BYTE_VALUE = 256;
+    uint256 public constant SUCCESSFULLY_ENDED_BYTE_VALUE = 256;
+    uint256 public constant NO_STATE_BYTE_VALUE = 512;
+
+    address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     /* WARNING: NEVER RE-ORDER VARIABLES! Always double-check that new
        variables are added APPEND-ONLY. Re-ordering variables can
@@ -197,8 +202,6 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     }
 
     receive() external payable {}
-
-    fallback() external payable {}
 
     /** EXTERNAL FUNCTIONS */
 
@@ -410,6 +413,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
                 TERMINATED_BY_VOTING_BYTE_VALUE
         )
     {
+        if (!isMilestoneOngoingNow(0)) revert InvestmentPool__NotInFirstMilestonePeriod();
+
         _claim(0);
     }
 
@@ -450,9 +455,14 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             CANCELED_PROJECT_BYTE_VALUE |
                 FAILED_FUNDRAISER_BYTE_VALUE |
                 TERMINATED_BY_VOTING_BYTE_VALUE |
-                NO_STATE_BYTE_VALUE
+                SUCCESSFULLY_ENDED_BYTE_VALUE
         )
-    {}
+    {
+        if (address(this).balance == 0) revert InvestmentPool__NoEthLeftToWithdraw();
+
+        (bool success, ) = creator.call{value: address(this).balance}("");
+        if (!success) revert InvestmentPool__EthTransferFailed();
+    }
 
     /** PUBLIC FUNCTIONS */
 
@@ -554,7 +564,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     function didProjectEnd() public view returns (bool) {
         return
             _getNow() > milestones[milestoneCount - 1].endDate &&
-            currentMilestone == milestoneCount - 1;
+            _getCurrentMilestoneIndex() == milestoneCount - 1;
     }
 
     /**
@@ -589,6 +599,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         } else if (isCanceledDuringMilestones() && !isFailedFundraiser()) {
             return TERMINATED_BY_VOTING_BYTE_VALUE;
         } else if (didProjectEnd() && !isEmergencyTerminated() && !isFailedFundraiser()) {
+            return SUCCESSFULLY_ENDED_BYTE_VALUE;
+        } else {
             return NO_STATE_BYTE_VALUE;
         }
     }
@@ -929,7 +941,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             this.gelatoTerminateMilestoneStreamFinal.selector,
             address(this),
             abi.encodeWithSelector(this.gelatoChecker.selector),
-            0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE
+            ETH
         );
     }
 
@@ -947,7 +959,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     // TODO: Ensure that this wouldn't clash with our logic
     // Introduce limits and checks to prevent gelato from taking too much
     function _gelatoTransfer(uint256 _amount, address _paymentToken) internal {
-        if (_paymentToken == 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE) {
+        if (_paymentToken == ETH) {
             // If ETH address
             (bool success, ) = gelato.call{value: _amount}("");
             if (!success) revert InvestmentPool__GelatoEthTransferFailed();

@@ -279,6 +279,33 @@ describe("Investment Pool Factory", async () => {
                 // New address was created
                 assert.isTrue(ethers.utils.isAddress(investmentPoolClone));
             });
+
+            it("[IPF][1.2.5] Should be able to receive ETH", async () => {
+                const ethAmountToReceive = ethers.utils.parseEther("1");
+
+                // Create investment pool factory contract
+                const investmentPoolDepFactory = await ethers.getContractFactory(
+                    "InvestmentPoolFactoryMock",
+                    buidl1Admin
+                );
+                investmentPoolFactory = await investmentPoolDepFactory.deploy(
+                    sf.settings.config.hostAddress,
+                    gelatoOpsMock.address,
+                    investmentPool.address
+                );
+                await investmentPoolFactory.deployed();
+
+                await buidl1Admin.sendTransaction({
+                    to: investmentPoolFactory.address,
+                    value: ethAmountToReceive,
+                });
+
+                const contractBalance = await ethers.provider.getBalance(
+                    investmentPoolFactory.address
+                );
+
+                assert.deepEqual(ethAmountToReceive, contractBalance);
+            });
         });
     });
 
@@ -995,7 +1022,40 @@ describe("Investment Pool Factory", async () => {
                         ],
                         {value: gelatoFeeAllocation}
                     )
-                ).revertedWith("[IPF]: only CLONE_PROXY is supported");
+                ).to.be.revertedWith("[IPF]: only CLONE_PROXY is supported");
+            });
+
+            it("[IPF][2.1.19] Shouldn't be able to create CLONE_PROXY if not enough value for gelato fee is sent", async () => {
+                const softCap = ethers.utils.parseEther("1500");
+                const hardCap = ethers.utils.parseEther("15000");
+
+                const milestoneStartDate = dateToSeconds("2100/09/01");
+                const milestoneEndDate = dateToSeconds("2100/10/01");
+                const campaignStartDate = dateToSeconds("2100/07/01");
+                const campaignEndDate = dateToSeconds("2100/08/01");
+
+                await expect(
+                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                        fUSDTx.address,
+                        softCap,
+                        hardCap,
+                        campaignStartDate,
+                        campaignEndDate,
+                        0, // CLONE-PROXY
+                        [
+                            {
+                                startDate: milestoneStartDate,
+                                endDate: milestoneEndDate,
+                                intervalSeedPortion: percent10InIpBigNumber,
+                                intervalStreamingPortion: percent90InIpBigNumber,
+                            },
+                        ],
+                        {value: gelatoFeeAllocation.sub(1)}
+                    )
+                ).to.be.revertedWithCustomError(
+                    investmentPoolFactory,
+                    "InvestmentPoolFactory__NotEnoughEthValue"
+                );
             });
         });
     });

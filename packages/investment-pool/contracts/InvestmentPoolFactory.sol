@@ -91,8 +91,6 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
 
     receive() external payable {}
 
-    fallback() external payable {}
-
     function createInvestmentPool(
         ISuperToken _acceptedToken,
         uint96 _softCap,
