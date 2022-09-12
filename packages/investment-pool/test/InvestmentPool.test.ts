@@ -304,10 +304,10 @@ describe("Investment Pool", async () => {
             .setGovernancePool(governancePoolMock.address);
 
         // Get percentage divider and byte values from contract constant variables
-        definePercentageDivider(investmentPoolFactory);
-        defineGelatoFeeAllocation(investmentPoolFactory);
-        defineProjectStateByteValues(investmentPool);
-        defineEthAddress(investmentPool);
+        await definePercentageDivider(investmentPoolFactory);
+        await defineGelatoFeeAllocation(investmentPoolFactory);
+        await defineProjectStateByteValues(investmentPool);
+        await defineEthAddress(investmentPool);
 
         // Enforce a starting timestamp to avoid time based bugs
         const time = dateToSeconds("2100/06/01");

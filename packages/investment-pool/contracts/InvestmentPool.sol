@@ -68,6 +68,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     uint256 public constant TERMINATED_BY_VOTING_BYTE_VALUE = 128;
     uint256 public constant SUCCESSFULLY_ENDED_BYTE_VALUE = 256;
     uint256 public constant NO_STATE_BYTE_VALUE = 512;
+    uint256 public constant ANY_ACTIVE_MILESTONE_BYTE_VALUE =
+        NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE | LAST_MILESTONE_BYTE_VALUE;
 
     address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
@@ -303,7 +305,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
         // Mint voting tokens in governance pool
         uint48 unlockTime = milestones[investToMilestoneId].startDate;
-        governancePool.mintVotingTokens(_msgSender(), _amount, unlockTime);
+        governancePool.mintVotingTokens(investToMilestoneId, _msgSender(), _amount, unlockTime);
 
         emit Invest(_msgSender(), _amount);
     }
@@ -407,11 +409,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     function startFirstFundsStream()
         external
         onlyCreator
-        allowedProjectStates(
-            NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE |
-                LAST_MILESTONE_BYTE_VALUE |
-                TERMINATED_BY_VOTING_BYTE_VALUE
-        )
+        allowedProjectStates(ANY_ACTIVE_MILESTONE_BYTE_VALUE | TERMINATED_BY_VOTING_BYTE_VALUE)
     {
         if (!isMilestoneOngoingNow(0)) revert InvestmentPool__NotInFirstMilestonePeriod();
 
@@ -437,7 +435,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     function milestoneJumpOrFinalProjectTermination()
         external
         onlyCreator
-        allowedProjectStates(NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE | LAST_MILESTONE_BYTE_VALUE)
+        allowedProjectStates(ANY_ACTIVE_MILESTONE_BYTE_VALUE)
     {
         uint curMil = _getCurrentMilestoneIndex();
         _terminateMilestoneStreamFinal(curMil);
@@ -473,7 +471,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     function cancelDuringMilestones()
         public
         onlyGovernancePoolOrGelato
-        allowedProjectStates(NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE | LAST_MILESTONE_BYTE_VALUE)
+        allowedProjectStates(ANY_ACTIVE_MILESTONE_BYTE_VALUE)
     {
         emergencyTerminationTimestamp = uint48(_getNow());
 
@@ -651,11 +649,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     function _claim(uint256 _milestoneId)
         internal
         onlyCreator
-        allowedProjectStates(
-            NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE |
-                LAST_MILESTONE_BYTE_VALUE |
-                TERMINATED_BY_VOTING_BYTE_VALUE
-        )
+        allowedProjectStates(ANY_ACTIVE_MILESTONE_BYTE_VALUE | TERMINATED_BY_VOTING_BYTE_VALUE)
     {
         Milestone storage milestone = milestones[_milestoneId];
 

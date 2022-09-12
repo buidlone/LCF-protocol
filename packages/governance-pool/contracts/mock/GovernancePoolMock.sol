@@ -37,10 +37,10 @@ contract GovernancePoolMock is GovernancePool {
 
     function setTokensClaimedStatus(
         address _investmentPool,
-        uint256 _listId,
+        uint256 _milestoneId,
         bool _isClaimed
     ) public {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        tokensLocked[_msgSender()][investmentPoolId][_listId].claimed = _isClaimed;
+        tokensLocked[_msgSender()][investmentPoolId][_milestoneId].claimed = _isClaimed;
     }
 }

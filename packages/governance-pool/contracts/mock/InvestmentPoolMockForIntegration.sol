@@ -13,11 +13,12 @@ contract InvestmentPoolMockForIntegration {
     }
 
     function mintVotingTokens(
+        uint256 _milestoneId,
         address _investor,
         uint256 _amount,
         uint48 _unlockTime
     ) public {
-        governancePool.mintVotingTokens(_investor, _amount, _unlockTime);
+        governancePool.mintVotingTokens(_milestoneId, _investor, _amount, _unlockTime);
     }
 
     function cancelDuringMilestones() external pure {}

@@ -19,12 +19,13 @@ interface IGovernancePool {
     function activateInvestmentPool(address _investmentPool) external;
 
     function mintVotingTokens(
+        uint256 _milestoneId,
         address _investor,
         uint256 _amount,
         uint48 _unlockTime
     ) external;
 
-    function unlockVotingTokens(address _investmentPool) external;
+    function unlockVotingTokens(address _investmentPool, uint256 _milestoneId) external;
 
     function voteAgainst(address _investmentPool, uint256 _amount) external;
 
