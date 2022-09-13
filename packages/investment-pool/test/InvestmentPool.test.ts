@@ -137,7 +137,7 @@ const defineProjectStateByteValues = async (investment: InvestmentPoolMock) => {
 };
 
 const defineGelatoFeeAllocation = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
-    gelatoFeeAllocation = await investmentPoolFactory.GELATO_FEE_ALLOCATION_PER_PROJECT();
+    gelatoFeeAllocation = await investmentPoolFactory.gelatoFeeAllocationForProject();
 };
 
 const defineEthAddress = async (investmentPool: InvestmentPoolMock) => {

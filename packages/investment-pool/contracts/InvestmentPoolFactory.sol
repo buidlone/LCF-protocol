@@ -48,16 +48,22 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     using Clones for address;
 
     uint32 public constant MAX_MILESTONE_COUNT = 10;
-    uint48 public constant TERMINATION_WINDOW = 12 hours;
-    uint48 public constant AUTOMATED_TERMINATION_WINDOW = 1 hours;
-    uint256 public constant MILESTONE_MIN_DURATION = 30 days;
-    uint256 public constant MILESTONE_MAX_DURATION = 90 days;
-    uint256 public constant FUNDRAISER_MIN_DURATION = 30 days;
-    uint256 public constant FUNDRAISER_MAX_DURATION = 90 days;
     uint256 public constant PERCENTAGE_DIVIDER = 10**6;
+    uint48 public TERMINATION_WINDOW = 12 hours;
+    uint48 public AUTOMATED_TERMINATION_WINDOW = 1 hours;
+    uint256 public MILESTONE_MIN_DURATION = 30 days;
+    uint256 public MILESTONE_MAX_DURATION = 90 days;
+    uint256 public FUNDRAISER_MIN_DURATION = 30 days;
+    uint256 public FUNDRAISER_MAX_DURATION = 90 days;
 
-    // TODO set this to something that is calculated more precisely
-    uint256 public constant GELATO_FEE_ALLOCATION_PER_PROJECT = 0.1 ether;
+    /**
+     * @notice Amount that will be used to cover transaction fee for gelato automation
+     * @dev 108,328 (gas used for calls inside gelato network)
+     * @dev 353,912 (gas used for termination in investment pool)
+     * @dev 108,328 + 353,912 = 462,240 (gas amount needed for gelato termination)
+     * @dev If gas price is 200 Gwei, the total fee is 0,092448
+     */
+    uint256 public gelatoFeeAllocationForProject = 0.1 ether;
 
     IGovernancePool public governancePool;
 
@@ -100,7 +106,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         ProxyType _proxyType,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
     ) external payable returns (IInvestmentPool) {
-        if (msg.value < GELATO_FEE_ALLOCATION_PER_PROJECT)
+        if (msg.value < gelatoFeeAllocationForProject)
             revert InvestmentPoolFactory__NotEnoughEthValue();
 
         IInitializableInvestmentPool invPool;
@@ -160,12 +166,16 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         return invPool;
     }
 
-    function setGovernancePool(address _governancePool) public onlyOwner {
+    function setGovernancePool(address _governancePool) external onlyOwner {
         if (address(governancePool) == address(0)) {
             governancePool = IGovernancePool(_governancePool);
         } else {
             revert InvestmentPoolFactory__GovernancePoolAlreadyDefined();
         }
+    }
+
+    function setGelatoFeeAllocation(uint256 _newAmount) external onlyOwner {
+        gelatoFeeAllocationForProject = _newAmount;
     }
 
     function _deployClone() internal virtual returns (IInitializableInvestmentPool pool) {
@@ -251,7 +261,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
 
     function _validateMilestoneInterval(IInvestmentPool.MilestoneInterval memory milestone)
         internal
-        pure
+        view
         returns (bool)
     {
         return (milestone.endDate > milestone.startDate &&

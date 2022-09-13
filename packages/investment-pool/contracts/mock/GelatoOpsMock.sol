@@ -22,7 +22,7 @@ contract GelatoOpsMock is IGelatoOps {
     ) public returns (bytes32 task) {
         executor = IInvestmentPool(_execAddress);
         emit RegisterGelatoTask();
-        task = bytes32("");
+        task = bytes32("abc");
     }
 
     function getFeeDetails() public pure returns (uint256 fee, address feeToken) {
@@ -36,4 +36,8 @@ contract GelatoOpsMock is IGelatoOps {
     function gelatoTerminateMilestoneStream(uint256 _id) public {
         executor.gelatoTerminateMilestoneStreamFinal(_id);
     }
+
+    function cancelTask(
+        bytes32 /*_taskId*/
+    ) external pure {}
 }

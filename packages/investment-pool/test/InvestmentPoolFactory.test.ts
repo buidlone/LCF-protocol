@@ -9,6 +9,7 @@ import {
     GelatoOpsMock,
     GovernancePoolMockForIntegration,
 } from "../typechain-types";
+import {formatEther} from "ethers/lib/utils";
 
 const fTokenAbi = require("./abis/fTokenAbi");
 
@@ -110,7 +111,7 @@ const definePercentageDivider = async (investmentPoolFactory: InvestmentPoolFact
 };
 
 const defineGelatoFeeAllocation = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
-    gelatoFeeAllocation = await investmentPoolFactory.GELATO_FEE_ALLOCATION_PER_PROJECT();
+    gelatoFeeAllocation = await investmentPoolFactory.gelatoFeeAllocationForProject();
 };
 
 describe("Investment Pool Factory", async () => {
@@ -305,6 +306,152 @@ describe("Investment Pool Factory", async () => {
                 );
 
                 assert.deepEqual(ethAmountToReceive, contractBalance);
+            });
+
+            it("[IPF][1.2.6] Deployer should be able to update gelato fee allocation value", async () => {
+                const newEthFee = ethers.utils.parseEther("0.321");
+
+                // Create investment pool factory contract
+                const investmentPoolDepFactory = await ethers.getContractFactory(
+                    "InvestmentPoolFactoryMock",
+                    buidl1Admin
+                );
+                investmentPoolFactory = await investmentPoolDepFactory.deploy(
+                    sf.settings.config.hostAddress,
+                    gelatoOpsMock.address,
+                    investmentPool.address
+                );
+                await investmentPoolFactory.deployed();
+
+                await expect(
+                    investmentPoolFactory.connect(buidl1Admin).setGelatoFeeAllocation(newEthFee)
+                ).not.to.be.reverted;
+
+                const gelatoFee = await investmentPoolFactory.gelatoFeeAllocationForProject();
+                assert.deepEqual(newEthFee, gelatoFee);
+            });
+
+            it("[IPF][1.2.7] Bad actor shouldn't be able to update gelato fee allocation value", async () => {
+                const newEthFee = ethers.utils.parseEther("0.321");
+
+                // Create investment pool factory contract
+                const investmentPoolDepFactory = await ethers.getContractFactory(
+                    "InvestmentPoolFactoryMock",
+                    buidl1Admin
+                );
+                investmentPoolFactory = await investmentPoolDepFactory.deploy(
+                    sf.settings.config.hostAddress,
+                    gelatoOpsMock.address,
+                    investmentPool.address
+                );
+                await investmentPoolFactory.deployed();
+
+                await expect(
+                    investmentPoolFactory.connect(foreignActor).setGelatoFeeAllocation(newEthFee)
+                ).to.be.revertedWith("Ownable: caller is not the owner");
+
+                const gelatoFee = await investmentPoolFactory.gelatoFeeAllocationForProject();
+                assert.deepEqual(gelatoFee, gelatoFeeAllocation);
+            });
+
+            it("[IPF][1.2.8] Deployer should be able to update governance pool address", async () => {
+                // Create investment pool factory contract
+                const investmentPoolDepFactory = await ethers.getContractFactory(
+                    "InvestmentPoolFactoryMock",
+                    buidl1Admin
+                );
+                investmentPoolFactory = await investmentPoolDepFactory.deploy(
+                    sf.settings.config.hostAddress,
+                    gelatoOpsMock.address,
+                    investmentPool.address
+                );
+                await investmentPoolFactory.deployed();
+
+                // Create governance pool mock
+                const governancePoolDep = await ethers.getContractFactory(
+                    "GovernancePoolMockForIntegration",
+                    buidl1Admin
+                );
+                governancePoolMock = await governancePoolDep.deploy();
+                await governancePoolMock.deployed();
+
+                // Set governance pool in investment pool factory
+                await expect(
+                    investmentPoolFactory
+                        .connect(buidl1Admin)
+                        .setGovernancePool(governancePoolMock.address)
+                ).not.to.be.reverted;
+
+                const updatedGovernancePool = await investmentPoolFactory.governancePool();
+                assert.equal(governancePoolMock.address, updatedGovernancePool);
+            });
+
+            it("[IPF][1.2.9] Deployer shouldn't be able to update governance pool address if it exists already", async () => {
+                // Create investment pool factory contract
+                const investmentPoolDepFactory = await ethers.getContractFactory(
+                    "InvestmentPoolFactoryMock",
+                    buidl1Admin
+                );
+                investmentPoolFactory = await investmentPoolDepFactory.deploy(
+                    sf.settings.config.hostAddress,
+                    gelatoOpsMock.address,
+                    investmentPool.address
+                );
+                await investmentPoolFactory.deployed();
+
+                // Create governance pool mock
+                const governancePoolDep = await ethers.getContractFactory(
+                    "GovernancePoolMockForIntegration",
+                    buidl1Admin
+                );
+                governancePoolMock = await governancePoolDep.deploy();
+                await governancePoolMock.deployed();
+
+                // Set governance pool in investment pool factory
+                await investmentPoolFactory
+                    .connect(buidl1Admin)
+                    .setGovernancePool(governancePoolMock.address);
+
+                await expect(
+                    investmentPoolFactory
+                        .connect(buidl1Admin)
+                        .setGovernancePool(governancePoolMock.address)
+                ).to.be.revertedWithCustomError(
+                    investmentPoolFactory,
+                    "InvestmentPoolFactory__GovernancePoolAlreadyDefined"
+                );
+            });
+
+            it("[IPF][1.2.10] Bad actor shouldn't be able to update governance pool address", async () => {
+                // Create investment pool factory contract
+                const investmentPoolDepFactory = await ethers.getContractFactory(
+                    "InvestmentPoolFactoryMock",
+                    buidl1Admin
+                );
+                investmentPoolFactory = await investmentPoolDepFactory.deploy(
+                    sf.settings.config.hostAddress,
+                    gelatoOpsMock.address,
+                    investmentPool.address
+                );
+                await investmentPoolFactory.deployed();
+
+                // Create governance pool mock
+                const governancePoolDep = await ethers.getContractFactory(
+                    "GovernancePoolMockForIntegration",
+                    buidl1Admin
+                );
+                governancePoolMock = await governancePoolDep.deploy();
+                await governancePoolMock.deployed();
+
+                // Set governance pool in investment pool factory
+                await expect(
+                    investmentPoolFactory
+                        .connect(foreignActor)
+                        .setGovernancePool(governancePoolMock.address)
+                ).to.be.revertedWith("Ownable: caller is not the owner");
+
+                const updatedGovernancePool = await investmentPoolFactory.governancePool();
+                assert.equal(constants.AddressZero, updatedGovernancePool);
             });
         });
     });
