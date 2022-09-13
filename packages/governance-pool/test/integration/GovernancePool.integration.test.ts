@@ -43,6 +43,7 @@ let governancePool: GovernancePoolMock;
 let votingToken: VotingToken;
 
 let snapshotId: string;
+let gelatoFeeAllocation: BigNumber;
 
 let softCap: BigNumber;
 let hardCap: BigNumber;
@@ -81,29 +82,38 @@ const percentToIpBigNumber = (percent: number): BigNumber => {
     return percentageDivider.mul(percent).div(100);
 };
 
-const definePercentageDivider = async () => {
+const defineVariablesFromIPF = async () => {
     const investmentPoolDep = await ethers.getContractFactory("InvestmentPoolMock", deployer);
-    investment = await investmentPoolDep.deploy();
-    await investment.deployed();
+    const invPool = await investmentPoolDep.deploy();
+    await invPool.deployed();
 
     const investmentPoolDepFactory = await ethers.getContractFactory(
         "InvestmentPoolFactoryMock",
         deployer
     );
-    investmentPoolFactory = await investmentPoolDepFactory.deploy(
+    const invPoolFactory = await investmentPoolDepFactory.deploy(
         sf.settings.config.hostAddress,
         gelatoOpsMock.address,
-        investment.address
+        invPool.address
     );
-    await investmentPoolFactory.deployed();
+    await invPoolFactory.deployed();
 
-    percentageDivider = await investmentPoolFactory.PERCENTAGE_DIVIDER();
+    await definePercentageDivider(invPoolFactory);
+    await defineGelatoFeeAllocation(invPoolFactory);
+};
+
+const definePercentageDivider = async (invPoolFactory: InvestmentPoolFactoryMock) => {
+    percentageDivider = await invPoolFactory.PERCENTAGE_DIVIDER();
     percent5InIpBigNumber = percentToIpBigNumber(5);
     percent10InIpBigNumber = percentToIpBigNumber(10);
     percent20InIpBigNumber = percentToIpBigNumber(20);
     percent70InIpBigNumber = percentToIpBigNumber(70);
     percent90InIpBigNumber = percentToIpBigNumber(90);
     percent95InIpBigNumber = percentToIpBigNumber(95);
+};
+
+const defineGelatoFeeAllocation = async (invPoolFactory: InvestmentPoolFactoryMock) => {
+    gelatoFeeAllocation = await invPoolFactory.GELATO_FEE_ALLOCATION_PER_PROJECT();
 };
 
 const investMoney = async (
@@ -134,7 +144,7 @@ const getInvestmentFromTx = async (tx: ContractTransaction): Promise<InvestmentP
     return pool;
 };
 
-const createInvestmentWithTwoMilestones = async () => {
+const createInvestmentWithTwoMilestones = async (feeAmount: BigNumber = gelatoFeeAllocation) => {
     creationRes = await investmentPoolFactory.connect(creator).createInvestmentPool(
         fUSDTx.address,
         softCap,
@@ -155,7 +165,8 @@ const createInvestmentWithTwoMilestones = async () => {
                 intervalSeedPortion: percent5InIpBigNumber,
                 intervalStreamingPortion: percent20InIpBigNumber,
             },
-        ]
+        ],
+        {value: feeAmount}
     );
 
     investment = await getInvestmentFromTx(creationRes);
@@ -233,8 +244,8 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
 
         await sf.batchCall(operations).exec(deployer);
 
-        // It just deploys the factory contract and gets the percentage divider value for other tests
-        await definePercentageDivider();
+        // It just deploys the factory contract and gets the variabe values that will be needed
+        await defineVariablesFromIPF();
 
         milestoneStartDate = dateToSeconds("2100/09/01") as BigNumber;
         milestoneEndDate = dateToSeconds("2100/10/01") as BigNumber;
@@ -290,8 +301,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             governancePool = await governancePoolFactory.deploy(
                 votingToken.address,
                 investmentPoolFactory.address,
-                51, // Votes threshold
-                10 // Max investments for investor per investment pool
+                51 // Votes threshold
             );
             await governancePool.deployed();
 
@@ -317,7 +327,8 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
                         intervalSeedPortion: percent10InIpBigNumber,
                         intervalStreamingPortion: percent90InIpBigNumber,
                     },
-                ]
+                ],
+                {value: gelatoFeeAllocation}
             );
 
             const poolAddress = (await creationRes.wait(1)).events?.find(
@@ -346,7 +357,8 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
                             intervalSeedPortion: percent10InIpBigNumber,
                             intervalStreamingPortion: percent90InIpBigNumber,
                         },
-                    ]
+                    ],
+                    {value: gelatoFeeAllocation}
                 )
             ).to.be.revertedWithCustomError(
                 investmentPoolFactory,
@@ -395,8 +407,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             governancePool = await governancePoolFactory.deploy(
                 votingToken.address,
                 investmentPoolFactory.address,
-                51, // Votes threshold
-                10 // Max investments for investor per investment pool
+                51 // Votes threshold
             );
             await governancePool.deployed();
         });
@@ -467,8 +478,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             governancePool = await governancePoolFactory.deploy(
                 votingToken.address,
                 investmentPoolFactory.address,
-                51, // Votes threshold
-                10 // Max investments for investor per investment pool
+                51 // Votes threshold
             );
             await governancePool.deployed();
 
@@ -542,8 +552,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             governancePool = await governancePoolFactory.deploy(
                 votingToken.address,
                 investmentPoolFactory.address,
-                51, // Votes threshold
-                10 // Max investments for investor per investment pool
+                51 // Votes threshold
             );
             await governancePool.deployed();
 
@@ -576,7 +585,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             timeStamp = dateToSeconds("2100/09/15");
             await investment.setTimestamp(timeStamp);
             await governancePool.setTimestamp(timeStamp);
-            await governancePool.connect(investorA).unlockVotingTokens(investment.address);
+            await governancePool.connect(investorA).unlockVotingTokens(investment.address, 0);
 
             // Approve the governance pool contract to spend investor's tokens
             await votingToken.connect(investorA).setApprovalForAll(governancePool.address, true);

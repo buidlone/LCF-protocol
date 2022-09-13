@@ -31,15 +31,13 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     VotingToken public immutable VOTING_TOKEN;
     address public immutable INVESTMENT_POOL_FACTORY_ADDRESS;
     uint8 public immutable VOTES_PERCENTAGE_THRESHOLD;
-    /// @dev Currently isn't used. Should be provided by the investment pool factory contract
-    uint8 public immutable MAX_INVESTMENTS_FOR_INVESTOR_PER_POOL;
 
     /// @notice mapping from investment pool id => status
     mapping(uint256 => InvestmentPoolStatus) public investmentPoolStatus;
     /// @notice mapping from investor address => investment pool id => voting tokens asmount
     mapping(address => mapping(uint256 => uint256)) public votesAmount;
-    /// @notice mapping from investor address => investment pool id => list of structs with unlock time and amount
-    mapping(address => mapping(uint256 => TokensLocked[])) public tokensLocked;
+    /// @notice mapping from investor address => investment pool id => milestone id => token portion details
+    mapping(address => mapping(uint256 => mapping(uint256 => TokensLocked))) public tokensLocked;
     /// @notice mapping from investment pool id => total votes amount
     mapping(uint256 => uint256) public totalVotesAmount; // total contract balance is not only votes it holds but investors tokens which will be unlocked in the future
 
@@ -47,7 +45,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     event UnlockVotingTokens(
         address indexed investmentPool,
         address indexed investor,
-        uint8 indexed listId,
+        uint256 indexed milestoneId,
         uint256 amount
     );
     event VoteAgainstProject(
@@ -63,20 +61,17 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @param _votingToken address of ERC1155 token, which will be used for voting.
      *  @param _investmentPoolFactory address of investment pool factory, which will deploy all investment pools.
      *  @param _threshold number as percentage for votes threshold. Max value is 100.
-     *  @param _maxInvestments number of how many investments can one investor make for one investment pool.
      *  @dev Reverts if _threshold is greater than 100 (%).
      */
     constructor(
         VotingToken _votingToken,
         address _investmentPoolFactory,
-        uint8 _threshold,
-        uint8 _maxInvestments
+        uint8 _threshold
     ) {
         if (_threshold > 100) revert GovernancePool__thresholdNumberIsGreaterThan100();
         VOTING_TOKEN = _votingToken;
         INVESTMENT_POOL_FACTORY_ADDRESS = _investmentPoolFactory;
         VOTES_PERCENTAGE_THRESHOLD = _threshold;
-        MAX_INVESTMENTS_FOR_INVESTOR_PER_POOL = _maxInvestments;
     }
 
     modifier onUnavailableInvestmentPool(address _investmentPool) {
@@ -124,6 +119,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @param _unlockTime time until newly minted tokens will be locked in governance pool. No checks for time are applied. It can be in the past, which means tokens are unlock instantly.
      */
     function mintVotingTokens(
+        uint256 _milestoneId,
         address _investor,
         uint256 _amount,
         uint48 _unlockTime
@@ -133,8 +129,14 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         if (_amount == 0) revert GovernancePool__amountIsZero();
         uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
 
-        // Push new locked tokens info to mapping and mint them. Tokens will be held by governance pool until unlock time.
-        tokensLocked[_investor][investmentPoolId].push(TokensLocked(_unlockTime, _amount, false));
+        // Push new locked tokens info to mapping and mint them. Tokens will be held by governance pool until unlock times
+        tokensLocked[_investor][investmentPoolId][_milestoneId] = TokensLocked({
+            unlockTime: _unlockTime,
+            amount: tokensLocked[_investor][investmentPoolId][_milestoneId].amount + _amount,
+            claimed: false
+        });
+
+        // Tokens will never be minted for the milestones that already passed because this is called only by IP in invest function
         VOTING_TOKEN.mint(address(this), investmentPoolId, _amount, "");
     }
 
@@ -144,29 +146,22 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @dev Emits UnlockVotingTokens event with investment pool address, sender, id, amount. Voting Token contract emits TransferSingle event.
      *  @param _investmentPool investment pool address. Investor tries to unlock tokens for this investment pool.
      */
-    function unlockVotingTokens(address _investmentPool)
+    function unlockVotingTokens(address _investmentPool, uint256 _milestoneId)
         external
         onActiveInvestmentPool(_investmentPool)
     {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        TokensLocked[] memory lockedTokens = tokensLocked[_msgSender()][investmentPoolId];
-        uint8 investmentsCount = uint8(lockedTokens.length);
-
-        if (investmentsCount == 0) revert GovernancePool__noIvestmentsMade();
         uint256 owedTokens = 0;
+        TokensLocked memory lockedTokens = tokensLocked[_msgSender()][investmentPoolId][
+            _milestoneId
+        ];
 
-        for (uint8 i = 0; i < investmentsCount; i++) {
-            TokensLocked memory votingTokens = lockedTokens[i];
+        if (lockedTokens.amount == 0) revert GovernancePool__noIvestmentsMade();
 
-            // Transfer only tokens that haven't been claimed and unlock time was reached
-
-            if (!votingTokens.claimed && votingTokens.unlockTime <= uint48(_getNow())) {
-                tokensLocked[_msgSender()][investmentPoolId][i].claimed = true;
-
-                uint256 amount = votingTokens.amount;
-                owedTokens += amount;
-                emit UnlockVotingTokens(_investmentPool, _msgSender(), i, amount);
-            }
+        // Transfer only tokens that haven't been claimed and unlock time was reached
+        if (!lockedTokens.claimed && lockedTokens.unlockTime <= uint48(_getNow())) {
+            tokensLocked[_msgSender()][investmentPoolId][_milestoneId].claimed = true;
+            owedTokens = lockedTokens.amount;
         }
 
         if (owedTokens > 0) {
@@ -178,6 +173,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
                 owedTokens,
                 ""
             );
+
+            emit UnlockVotingTokens(_investmentPool, _msgSender(), _milestoneId, owedTokens);
         } else {
             revert GovernancePool__noVotingTokensAvailableForClaim();
         }

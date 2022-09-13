@@ -54,11 +54,11 @@ interface IInvestmentPool is ISuperApp {
 
     function refund() external;
 
-    function claim(uint256 _milestoneId) external;
-
     function cancelBeforeFundraiserStart() external;
 
     function cancelDuringMilestones() external;
+
+    function startFirstFundsStream() external;
 
     function milestoneJumpOrFinalProjectTermination() external;
 
@@ -97,5 +97,5 @@ interface IInitializableInvestmentPool is IInvestmentPool {
         uint48 _automatedTerminationWindow,
         MilestoneInterval[] calldata _milestones,
         IGovernancePool _governancePool
-    ) external;
+    ) external payable;
 }

@@ -34,6 +34,7 @@ let investmentPool: InvestmentPoolMock;
 let gelatoOpsMock: GelatoOpsMock;
 let governancePoolMock: GovernancePoolMockForIntegration;
 
+let gelatoFeeAllocation: BigNumber;
 let percentageDivider = BigNumber.from(0);
 let percent5InIpBigNumber: BigNumber;
 let percent10InIpBigNumber: BigNumber;
@@ -80,7 +81,7 @@ const errorHandler = (err: any) => {
     if (err) throw err;
 };
 
-const definePercentageDivider = async () => {
+const getConstantVariablesFromContract = async () => {
     const investmentPoolDep = await ethers.getContractFactory("InvestmentPoolMock", buidl1Admin);
     investmentPool = await investmentPoolDep.deploy();
     await investmentPool.deployed();
@@ -96,11 +97,20 @@ const definePercentageDivider = async () => {
     );
     await investmentPoolFactory.deployed();
 
+    await definePercentageDivider(investmentPoolFactory);
+    await defineGelatoFeeAllocation(investmentPoolFactory);
+};
+
+const definePercentageDivider = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
     percentageDivider = await investmentPoolFactory.PERCENTAGE_DIVIDER();
     percent5InIpBigNumber = percentToIpBigNumber(5);
     percent10InIpBigNumber = percentToIpBigNumber(10);
     percent90InIpBigNumber = percentToIpBigNumber(90);
     percent95InIpBigNumber = percentToIpBigNumber(95);
+};
+
+const defineGelatoFeeAllocation = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
+    gelatoFeeAllocation = await investmentPoolFactory.GELATO_FEE_ALLOCATION_PER_PROJECT();
 };
 
 describe("Investment Pool Factory", async () => {
@@ -154,7 +164,7 @@ describe("Investment Pool Factory", async () => {
         fUSDT = new ethers.Contract(underlyingAddr, fTokenAbi, admin);
 
         // It just deploys the factory contract and gets the percentage divider value for other tests
-        await definePercentageDivider();
+        await getConstantVariablesFromContract();
     });
 
     describe("1. Investment pool factory creation", () => {
@@ -269,6 +279,33 @@ describe("Investment Pool Factory", async () => {
                 // New address was created
                 assert.isTrue(ethers.utils.isAddress(investmentPoolClone));
             });
+
+            it("[IPF][1.2.5] Should be able to receive ETH", async () => {
+                const ethAmountToReceive = ethers.utils.parseEther("1");
+
+                // Create investment pool factory contract
+                const investmentPoolDepFactory = await ethers.getContractFactory(
+                    "InvestmentPoolFactoryMock",
+                    buidl1Admin
+                );
+                investmentPoolFactory = await investmentPoolDepFactory.deploy(
+                    sf.settings.config.hostAddress,
+                    gelatoOpsMock.address,
+                    investmentPool.address
+                );
+                await investmentPoolFactory.deployed();
+
+                await buidl1Admin.sendTransaction({
+                    to: investmentPoolFactory.address,
+                    value: ethAmountToReceive,
+                });
+
+                const contractBalance = await ethers.provider.getBalance(
+                    investmentPoolFactory.address
+                );
+
+                assert.deepEqual(ethAmountToReceive, contractBalance);
+            });
         });
     });
 
@@ -338,7 +375,8 @@ describe("Investment Pool Factory", async () => {
                                 intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion: percent90InIpBigNumber,
                             },
-                        ]
+                        ],
+                        {value: gelatoFeeAllocation}
                     );
 
                 const creationEvent = (await creationRes.wait(1)).events?.find(
@@ -374,7 +412,8 @@ describe("Investment Pool Factory", async () => {
                                 intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion: percent90InIpBigNumber,
                             },
-                        ]
+                        ],
+                        {value: gelatoFeeAllocation}
                     );
 
                 const poolAddress = (await creationRes.wait(1)).events?.find(
@@ -475,7 +514,8 @@ describe("Investment Pool Factory", async () => {
                                 intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion: percent90InIpBigNumber,
                             },
-                        ]
+                        ],
+                        {value: gelatoFeeAllocation}
                     )
                 ).to.be.revertedWithCustomError(
                     investmentPoolFactory,
@@ -507,7 +547,8 @@ describe("Investment Pool Factory", async () => {
                                 intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion: percent90InIpBigNumber,
                             },
-                        ]
+                        ],
+                        {value: gelatoFeeAllocation}
                     )
                 )
                     .to.be.revertedWithCustomError(
@@ -545,7 +586,8 @@ describe("Investment Pool Factory", async () => {
                                 intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion: percent90InIpBigNumber,
                             },
-                        ]
+                        ],
+                        {value: gelatoFeeAllocation}
                     )
                 ).to.be.revertedWithCustomError(
                     investmentPoolFactory,
@@ -578,7 +620,8 @@ describe("Investment Pool Factory", async () => {
                                 intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion: percent90InIpBigNumber,
                             },
-                        ]
+                        ],
+                        {value: gelatoFeeAllocation}
                     )
                 ).to.be.revertedWithCustomError(
                     investmentPoolFactory,
@@ -610,7 +653,8 @@ describe("Investment Pool Factory", async () => {
                                 intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion: percent90InIpBigNumber,
                             },
-                        ]
+                        ],
+                        {value: gelatoFeeAllocation}
                     )
                 ).to.be.revertedWithCustomError(
                     investmentPoolFactory,
@@ -642,7 +686,8 @@ describe("Investment Pool Factory", async () => {
                                 intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion: percent90InIpBigNumber,
                             },
-                        ]
+                        ],
+                        {value: gelatoFeeAllocation}
                     )
                 ).to.be.revertedWithCustomError(
                     investmentPoolFactory,
@@ -665,7 +710,8 @@ describe("Investment Pool Factory", async () => {
                         campaignStartDate,
                         campaignEndDate,
                         0, // CLONE-PROXY
-                        []
+                        [],
+                        {value: gelatoFeeAllocation}
                     )
                 ).to.be.revertedWithCustomError(
                     investmentPoolFactory,
@@ -697,7 +743,8 @@ describe("Investment Pool Factory", async () => {
                             milestoneStartDate,
                             milestoneDuration,
                             maxMilestones + 1 // Intentionally provoke reverting
-                        )
+                        ),
+                        {value: gelatoFeeAllocation}
                     )
                 ).to.be.revertedWithCustomError(
                     investmentPoolFactory,
@@ -732,7 +779,8 @@ describe("Investment Pool Factory", async () => {
                         campaignStartDate,
                         campaignEndDate,
                         0, // CLONE-PROXY
-                        milestones
+                        milestones,
+                        {value: gelatoFeeAllocation}
                     )
                 ).not.to.be.reverted;
             });
@@ -762,7 +810,8 @@ describe("Investment Pool Factory", async () => {
                                 intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion: percent90InIpBigNumber,
                             },
-                        ]
+                        ],
+                        {value: gelatoFeeAllocation}
                     )
                 ).to.be.revertedWithCustomError(
                     investmentPoolFactory,
@@ -795,7 +844,8 @@ describe("Investment Pool Factory", async () => {
                                 intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion: percent90InIpBigNumber,
                             },
-                        ]
+                        ],
+                        {value: gelatoFeeAllocation}
                     )
                 ).to.be.revertedWithCustomError(
                     investmentPoolFactory,
@@ -827,7 +877,8 @@ describe("Investment Pool Factory", async () => {
                                 intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion: percent90InIpBigNumber,
                             },
-                        ]
+                        ],
+                        {value: gelatoFeeAllocation}
                     )
                 ).to.be.revertedWithCustomError(
                     investmentPoolFactory,
@@ -859,7 +910,8 @@ describe("Investment Pool Factory", async () => {
                                 intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion: percent90InIpBigNumber,
                             },
-                        ]
+                        ],
+                        {value: gelatoFeeAllocation}
                     )
                 ).to.be.revertedWithCustomError(
                     investmentPoolFactory,
@@ -899,7 +951,8 @@ describe("Investment Pool Factory", async () => {
                                 intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion: percent90InIpBigNumber,
                             },
-                        ]
+                        ],
+                        {value: gelatoFeeAllocation}
                     )
                 ).to.be.revertedWithCustomError(
                     investmentPoolFactory,
@@ -931,7 +984,8 @@ describe("Investment Pool Factory", async () => {
                                 intervalSeedPortion: percent5InIpBigNumber,
                                 intervalStreamingPortion: percent90InIpBigNumber,
                             },
-                        ]
+                        ],
+                        {value: gelatoFeeAllocation}
                     )
                 )
                     .to.be.revertedWithCustomError(
@@ -965,9 +1019,43 @@ describe("Investment Pool Factory", async () => {
                                 intervalSeedPortion: percent10InIpBigNumber,
                                 intervalStreamingPortion: percent90InIpBigNumber,
                             },
-                        ]
+                        ],
+                        {value: gelatoFeeAllocation}
                     )
-                ).revertedWith("[IPF]: only CLONE_PROXY is supported");
+                ).to.be.revertedWith("[IPF]: only CLONE_PROXY is supported");
+            });
+
+            it("[IPF][2.1.19] Shouldn't be able to create CLONE_PROXY if not enough value for gelato fee is sent", async () => {
+                const softCap = ethers.utils.parseEther("1500");
+                const hardCap = ethers.utils.parseEther("15000");
+
+                const milestoneStartDate = dateToSeconds("2100/09/01");
+                const milestoneEndDate = dateToSeconds("2100/10/01");
+                const campaignStartDate = dateToSeconds("2100/07/01");
+                const campaignEndDate = dateToSeconds("2100/08/01");
+
+                await expect(
+                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                        fUSDTx.address,
+                        softCap,
+                        hardCap,
+                        campaignStartDate,
+                        campaignEndDate,
+                        0, // CLONE-PROXY
+                        [
+                            {
+                                startDate: milestoneStartDate,
+                                endDate: milestoneEndDate,
+                                intervalSeedPortion: percent10InIpBigNumber,
+                                intervalStreamingPortion: percent90InIpBigNumber,
+                            },
+                        ],
+                        {value: gelatoFeeAllocation.sub(1)}
+                    )
+                ).to.be.revertedWithCustomError(
+                    investmentPoolFactory,
+                    "InvestmentPoolFactory__NotEnoughEthValue"
+                );
             });
         });
     });

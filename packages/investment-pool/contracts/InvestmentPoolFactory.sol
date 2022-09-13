@@ -40,22 +40,24 @@ error InvestmentPoolFactory__MilestonesAreNotAdjacentInTime(
 );
 error InvestmentPoolFactory__GovernancePoolAlreadyDefined();
 error InvestmentPoolFactory__GovernancePoolNotDefined();
+error InvestmentPoolFactory__NotEnoughEthValue();
+error InvestmentPoolFactory__FailedToSendEthToInvestmentPool();
 
 contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     // Assign all Clones library functions to addresses
     using Clones for address;
 
+    uint32 public constant MAX_MILESTONE_COUNT = 10;
     uint48 public constant TERMINATION_WINDOW = 12 hours;
     uint48 public constant AUTOMATED_TERMINATION_WINDOW = 1 hours;
-    uint public constant MILESTONE_MIN_DURATION = 30 days;
-    uint public constant MILESTONE_MAX_DURATION = 90 days;
-    uint public constant FUNDRAISER_MIN_DURATION = 30 days;
-    uint public constant FUNDRAISER_MAX_DURATION = 90 days;
-
+    uint256 public constant MILESTONE_MIN_DURATION = 30 days;
+    uint256 public constant MILESTONE_MAX_DURATION = 90 days;
+    uint256 public constant FUNDRAISER_MIN_DURATION = 30 days;
+    uint256 public constant FUNDRAISER_MAX_DURATION = 90 days;
     uint256 public constant PERCENTAGE_DIVIDER = 10**6;
 
-    // TODO: Arbitrary choice, set this later to something that makes sense
-    uint32 public constant MAX_MILESTONE_COUNT = 10;
+    // TODO set this to something that is calculated more precisely
+    uint256 public constant GELATO_FEE_ALLOCATION_PER_PROJECT = 0.1 ether;
 
     IGovernancePool public governancePool;
 
@@ -87,6 +89,8 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         investmentPoolImplementation = _implementationContract;
     }
 
+    receive() external payable {}
+
     function createInvestmentPool(
         ISuperToken _acceptedToken,
         uint96 _softCap,
@@ -95,7 +99,10 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         uint48 _fundraiserEndAt,
         ProxyType _proxyType,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
-    ) external returns (IInvestmentPool) {
+    ) external payable returns (IInvestmentPool) {
+        if (msg.value < GELATO_FEE_ALLOCATION_PER_PROJECT)
+            revert InvestmentPoolFactory__NotEnoughEthValue();
+
         IInitializableInvestmentPool invPool;
 
         _assertPoolInitArguments(
@@ -123,7 +130,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
             _fundraiserEndAt
         );
 
-        invPool.initialize(
+        invPool.initialize{value: msg.value}(
             HOST,
             _acceptedToken,
             _msgSender(),

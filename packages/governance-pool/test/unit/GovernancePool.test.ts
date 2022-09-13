@@ -9,47 +9,52 @@ import {
 import traveler from "ganache-time-traveler";
 import {BigNumber} from "ethers";
 
-describe("Governance Pool", async () => {
-    let accounts: SignerWithAddress[];
-    let deployer: SignerWithAddress;
-    let investmentPoolAsUser: SignerWithAddress;
-    let investorA: SignerWithAddress;
-    let investorB: SignerWithAddress;
-    let investmentPoolFactoryAsUser: SignerWithAddress;
-    let foreignActor: SignerWithAddress;
+let accounts: SignerWithAddress[];
+let deployer: SignerWithAddress;
+let investmentPoolAsUser: SignerWithAddress;
+let investorA: SignerWithAddress;
+let investorB: SignerWithAddress;
+let investmentPoolFactoryAsUser: SignerWithAddress;
+let foreignActor: SignerWithAddress;
 
-    let votingToken: VotingToken;
-    let governancePool: GovernancePoolMock;
-    let investmentPoolMock: InvestmentPoolMockForIntegration;
+let votingToken: VotingToken;
+let governancePool: GovernancePoolMock;
+let investmentPoolMock: InvestmentPoolMockForIntegration;
 
-    const getInvestmentPoolStatus = async (address: string): Promise<number> => {
-        const investmentPoolId = await governancePool.getInvestmentPoolId(address);
-        const investmentPoolStatus = await governancePool.investmentPoolStatus(investmentPoolId);
-        return investmentPoolStatus;
-    };
+const getInvestmentPoolStatus = async (address: string): Promise<number> => {
+    const investmentPoolId = await governancePool.getInvestmentPoolId(address);
+    const investmentPoolStatus = await governancePool.investmentPoolStatus(investmentPoolId);
+    return investmentPoolStatus;
+};
 
-    const deployContracts = async () => {
-        const votingTokensFactory = await ethers.getContractFactory("VotingToken", deployer);
-        votingToken = await votingTokensFactory.deploy();
-        await votingToken.deployed();
+const deployContracts = async () => {
+    const votingTokensFactory = await ethers.getContractFactory("VotingToken", deployer);
+    votingToken = await votingTokensFactory.deploy();
+    await votingToken.deployed();
 
-        // Governance Pool deployment
-        const governancePoolFactory = await ethers.getContractFactory(
-            "GovernancePoolMock",
-            deployer
-        );
-        governancePool = await governancePoolFactory.deploy(
-            votingToken.address,
-            investmentPoolFactoryAsUser.address,
-            51, // Votes threshold
-            10 // Max investments for investor per investment pool
-        );
-        await governancePool.deployed();
+    // Governance Pool deployment
+    const governancePoolFactory = await ethers.getContractFactory("GovernancePoolMock", deployer);
+    governancePool = await governancePoolFactory.deploy(
+        votingToken.address,
+        investmentPoolFactoryAsUser.address,
+        51 // Votes threshold
+    );
+    await governancePool.deployed();
 
-        // Transfer ownership to governance pool
-        await votingToken.transferOwnership(governancePool.address);
-    };
+    // Transfer ownership to governance pool
+    await votingToken.transferOwnership(governancePool.address);
+};
 
+const dateToSeconds = (date: string, isBigNumber: boolean = true): BigNumber | number => {
+    const convertedDate = new Date(date).getTime() / 1000;
+    if (isBigNumber) {
+        return BigNumber.from(convertedDate);
+    } else {
+        return convertedDate;
+    }
+};
+
+describe.only("Governance Pool", async () => {
     before(async () => {
         accounts = await ethers.getSigners();
         deployer = accounts[0];
@@ -79,8 +84,7 @@ describe("Governance Pool", async () => {
                 governancePool = await governancePoolFactory.deploy(
                     votingToken.address,
                     investmentPoolFactoryAsUser.address,
-                    51, // Votes threshold
-                    10 // Max investments for investor per investment pool
+                    51 // Votes threshold
                 );
                 await governancePool.deployed();
 
@@ -225,11 +229,11 @@ describe("Governance Pool", async () => {
             it("[GP][4.1.1] Should update tokens supply", async () => {
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMintA, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMintA, 0);
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorB.address, tokensToMintB, 0);
+                    .mintVotingTokens(0, investorB.address, tokensToMintB, 0);
 
                 const totalSupply = await governancePool.getVotingTokensSupply(
                     investmentPoolAsUser.address
@@ -242,11 +246,11 @@ describe("Governance Pool", async () => {
             it("[GP][4.1.2] Should update governance pool balances", async () => {
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMintA, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMintA, 0);
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorB.address, tokensToMintB, 0);
+                    .mintVotingTokens(0, investorB.address, tokensToMintB, 0);
 
                 const governancePoolBalance = await governancePool.getVotingTokenBalance(
                     investmentPoolAsUser.address,
@@ -262,11 +266,11 @@ describe("Governance Pool", async () => {
             it("[GP][4.1.3] Should not update investors balances", async () => {
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMintA, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMintA, 0);
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorB.address, tokensToMintB, 0);
+                    .mintVotingTokens(0, investorB.address, tokensToMintB, 0);
 
                 const balanceOfinvestorA = await governancePool.getVotingTokenBalance(
                     investmentPoolAsUser.address,
@@ -289,28 +293,24 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMintA, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMintA, 0);
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMintB, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMintB, 0);
 
-                const lockedTokens1 = await governancePool.tokensLocked(
+                const lockedTokens = await governancePool.tokensLocked(
                     investorA.address,
                     investmentPoolId,
                     0
                 );
-                const lockedTokens2 = await governancePool.tokensLocked(
-                    investorA.address,
-                    investmentPoolId,
-                    1
+
+                assert.equal(lockedTokens.unlockTime.toString(), "0");
+                assert.equal(
+                    lockedTokens.amount.toString(),
+                    tokensToMintA.add(tokensToMintB).toString()
                 );
-                assert.equal(lockedTokens1.unlockTime.toString(), "0");
-                assert.equal(lockedTokens1.amount.toString(), tokensToMintA.toString());
-                assert.equal(lockedTokens1.claimed, false);
-                assert.equal(lockedTokens2.unlockTime.toString(), "0");
-                assert.equal(lockedTokens2.amount.toString(), tokensToMintB.toString());
-                assert.equal(lockedTokens2.claimed, false);
+                assert.isFalse(lockedTokens.claimed);
             });
         });
 
@@ -325,7 +325,7 @@ describe("Governance Pool", async () => {
                 await expect(
                     governancePool
                         .connect(investmentPoolAsUser)
-                        .mintVotingTokens(investorA.address, tokensToMint, 0)
+                        .mintVotingTokens(0, investorA.address, tokensToMint, 0)
                 ).to.emit(votingToken, "TransferSingle");
             });
 
@@ -333,7 +333,7 @@ describe("Governance Pool", async () => {
                 await expect(
                     governancePool
                         .connect(investmentPoolAsUser)
-                        .mintVotingTokens(investorA.address, tokensToMint, 0)
+                        .mintVotingTokens(0, investorA.address, tokensToMint, 0)
                 ).to.be.revertedWithCustomError(
                     governancePool,
                     "GovernancePool__statusIsNotActiveVoting"
@@ -349,7 +349,7 @@ describe("Governance Pool", async () => {
                 await expect(
                     governancePool
                         .connect(investmentPoolAsUser)
-                        .mintVotingTokens(investorA.address, tokensToMint, 0)
+                        .mintVotingTokens(0, investorA.address, tokensToMint, 0)
                 ).to.be.revertedWithCustomError(
                     governancePool,
                     "GovernancePool__statusIsNotActiveVoting"
@@ -365,7 +365,7 @@ describe("Governance Pool", async () => {
                 await expect(
                     governancePool
                         .connect(investorA)
-                        .mintVotingTokens(investorA.address, tokensToMint, 0)
+                        .mintVotingTokens(0, investorA.address, tokensToMint, 0)
                 ).to.be.revertedWithCustomError(
                     governancePool,
                     "GovernancePool__statusIsNotActiveVoting"
@@ -380,7 +380,7 @@ describe("Governance Pool", async () => {
                 await expect(
                     governancePool
                         .connect(investmentPoolAsUser)
-                        .mintVotingTokens(investorA.address, 0, 0)
+                        .mintVotingTokens(0, investorA.address, 0, 0)
                 ).to.be.revertedWithCustomError(governancePool, "GovernancePool__amountIsZero");
             });
 
@@ -393,7 +393,7 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
 
                 const totalSupply = await governancePool.getVotingTokensSupply(
                     investmentPoolAsUser.address
@@ -410,10 +410,10 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorB.address, tokensToMint, 0);
+                    .mintVotingTokens(0, investorB.address, tokensToMint, 0);
 
                 const totalSupply = await governancePool.getVotingTokensSupply(
                     investmentPoolAsUser.address
@@ -455,7 +455,7 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
 
                 const totalSupply = await governancePool.getVotingTokensSupply(
                     investmentPoolAsUser.address
@@ -485,7 +485,7 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
 
                 const percentageA = await governancePool.votesAgainstPercentageCount(
                     investmentPoolAsUser.address,
@@ -516,7 +516,7 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
             });
 
             it("[GP][6.1.1] Should reach a threshold", async () => {
@@ -526,7 +526,7 @@ describe("Governance Pool", async () => {
                     investmentPoolAsUser.address,
                     thresholdAmount
                 );
-                assert.equal(thresholdReached, true);
+                assert.isTrue(thresholdReached);
             });
 
             it("[GP][6.1.2] Should not reach a threshold", async () => {
@@ -537,27 +537,18 @@ describe("Governance Pool", async () => {
                     notThresholdAmount
                 );
 
-                assert.equal(thresholdReached, false);
+                assert.isFalse(thresholdReached);
             });
         });
     });
 
     describe("7. Unlock voting tokens", () => {
-        let snapshotId: string;
-
         beforeEach(async () => {
             await deployContracts();
-
-            let snapshot = await traveler.takeSnapshot();
-            snapshotId = snapshot["result"];
-        });
-
-        afterEach(async () => {
-            await traveler.revertToSnapshot(snapshotId);
         });
 
         describe("7.1 Public state", () => {
-            it("[GP][7.1.1] Should update locked tokens status", async () => {
+            it("[GP][7.1.1] Should update locked tokens status to claimed", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
                 const investmentPoolId = await governancePool.getInvestmentPoolId(
                     investmentPoolAsUser.address
@@ -569,12 +560,12 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
 
                 await expect(
                     governancePool
                         .connect(investorA)
-                        .unlockVotingTokens(investmentPoolAsUser.address)
+                        .unlockVotingTokens(investmentPoolAsUser.address, 0)
                 )
                     .to.emit(governancePool, "UnlockVotingTokens")
                     .withArgs(investmentPoolAsUser.address, investorA.address, 0, tokensToMint);
@@ -585,7 +576,7 @@ describe("Governance Pool", async () => {
                     0
                 );
 
-                assert.equal(lockedTokensClaimed.claimed, true);
+                assert.isTrue(lockedTokensClaimed.claimed);
             });
         });
         describe("7.2 Interactions", () => {
@@ -598,12 +589,12 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
 
                 await expect(
                     governancePool
                         .connect(investorA)
-                        .unlockVotingTokens(investmentPoolAsUser.address)
+                        .unlockVotingTokens(investmentPoolAsUser.address, 0)
                 ).not.to.be.reverted;
             });
 
@@ -611,7 +602,7 @@ describe("Governance Pool", async () => {
                 await expect(
                     governancePool
                         .connect(investorA)
-                        .unlockVotingTokens(investmentPoolAsUser.address)
+                        .unlockVotingTokens(investmentPoolAsUser.address, 0)
                 ).to.be.revertedWithCustomError(
                     governancePool,
                     "GovernancePool__statusIsNotActiveVoting"
@@ -627,7 +618,7 @@ describe("Governance Pool", async () => {
                 await expect(
                     governancePool
                         .connect(investorA)
-                        .unlockVotingTokens(investmentPoolAsUser.address)
+                        .unlockVotingTokens(investmentPoolAsUser.address, 0)
                 ).to.be.revertedWithCustomError(
                     governancePool,
                     "GovernancePool__statusIsNotActiveVoting"
@@ -642,7 +633,7 @@ describe("Governance Pool", async () => {
                 await expect(
                     governancePool
                         .connect(investorA)
-                        .unlockVotingTokens(investmentPoolAsUser.address)
+                        .unlockVotingTokens(investmentPoolAsUser.address, 0)
                 ).to.be.revertedWithCustomError(
                     governancePool,
                     "GovernancePool__noIvestmentsMade"
@@ -658,12 +649,12 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
 
                 await expect(
                     governancePool
                         .connect(investorA)
-                        .unlockVotingTokens(investmentPoolAsUser.address)
+                        .unlockVotingTokens(investmentPoolAsUser.address, 0)
                 ).to.emit(votingToken, "TransferSingle");
 
                 const governancePoolBalance = await governancePool.getVotingTokenBalance(
@@ -680,11 +671,9 @@ describe("Governance Pool", async () => {
                 assert.equal(investorBalance.toString(), tokensToMint.toString());
             });
 
-            it("[GP][7.2.6] Should only transfer tokens which reached unlock time", async () => {
+            it("[GP][7.2.6] If unlock time isn't reached, it should revert", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
-                const date = new Date();
-                const futureTime = Math.floor(date.setDate(date.getDate() + 1) / 1000);
-                const twoDays = 60 * 60 * 24 * 2;
+                const futureDate = dateToSeconds("3000/01/01") as BigNumber;
 
                 await governancePool
                     .connect(investmentPoolFactoryAsUser)
@@ -692,97 +681,71 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
-                await governancePool
-                    .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, futureTime);
+                    .mintVotingTokens(1, investorA.address, tokensToMint, futureDate);
 
                 await expect(
                     governancePool
                         .connect(investorA)
-                        .unlockVotingTokens(investmentPoolAsUser.address)
-                )
-                    .to.emit(governancePool, "UnlockVotingTokens")
-                    .withArgs(investmentPoolAsUser.address, investorA.address, 0, tokensToMint);
-
-                // Time travel 2 day to the future
-                await traveler.advanceTimeAndBlock(twoDays);
-
-                await expect(
-                    governancePool
-                        .connect(investorA)
-                        .unlockVotingTokens(investmentPoolAsUser.address)
-                )
-                    .to.emit(governancePool, "UnlockVotingTokens")
-                    .withArgs(investmentPoolAsUser.address, investorA.address, 1, tokensToMint);
-            });
-
-            it("[GP][7.2.7] Should only transfer tokens which are not claimed yet", async () => {
-                const tokensToMint = ethers.utils.parseEther("1");
-
-                await governancePool
-                    .connect(investmentPoolFactoryAsUser)
-                    .activateInvestmentPool(investmentPoolAsUser.address);
-
-                await governancePool
-                    .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
-
-                await governancePool
-                    .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
-
-                // Simulate that part of the total investment has already been claimed
-                await governancePool
-                    .connect(investorA)
-                    .setTokensClaimedStatus(investmentPoolAsUser.address, 0, true);
-
-                await expect(
-                    governancePool
-                        .connect(investorA)
-                        .unlockVotingTokens(investmentPoolAsUser.address)
-                )
-                    .to.emit(governancePool, "UnlockVotingTokens")
-                    .withArgs(investmentPoolAsUser.address, investorA.address, 1, tokensToMint);
-
-                // Simulate that part of the total investment hasn't been claimed
-                await governancePool
-                    .connect(investorA)
-                    .setTokensClaimedStatus(investmentPoolAsUser.address, 0, false);
-
-                await expect(
-                    governancePool
-                        .connect(investorA)
-                        .unlockVotingTokens(investmentPoolAsUser.address)
-                )
-                    .to.emit(governancePool, "UnlockVotingTokens")
-                    .withArgs(investmentPoolAsUser.address, investorA.address, 0, tokensToMint);
-            });
-
-            it("[GP][7.2.8] Should revert if no tokens are available for claiming", async () => {
-                const tokensToMint = ethers.utils.parseEther("1");
-
-                await governancePool
-                    .connect(investmentPoolFactoryAsUser)
-                    .activateInvestmentPool(investmentPoolAsUser.address);
-
-                await governancePool
-                    .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
-
-                // Simulate that part of the total investment has already been claimed
-                await governancePool
-                    .connect(investorA)
-                    .setTokensClaimedStatus(investmentPoolAsUser.address, 0, true);
-
-                await expect(
-                    governancePool
-                        .connect(investorA)
-                        .unlockVotingTokens(investmentPoolAsUser.address)
+                        .unlockVotingTokens(investmentPoolAsUser.address, 1)
                 ).to.be.revertedWithCustomError(
                     governancePool,
                     "GovernancePool__noVotingTokensAvailableForClaim"
                 );
+            });
+
+            it("[GP][7.2.7] Should revert if no tokens are available for claiming", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolAsUser.address);
+
+                await governancePool
+                    .connect(investmentPoolAsUser)
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
+
+                // Simulate that part of the total investment has already been claimed
+                await governancePool
+                    .connect(investorA)
+                    .setTokensClaimedStatus(investmentPoolAsUser.address, 0, true);
+
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .unlockVotingTokens(investmentPoolAsUser.address, 0)
+                ).to.be.revertedWithCustomError(
+                    governancePool,
+                    "GovernancePool__noVotingTokensAvailableForClaim"
+                );
+            });
+
+            it("[GP][7.2.8] Should only transfer tokens which are not claimed yet", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolAsUser.address);
+
+                await governancePool
+                    .connect(investmentPoolAsUser)
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
+
+                await governancePool
+                    .connect(investmentPoolAsUser)
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
+
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .unlockVotingTokens(investmentPoolAsUser.address, 0)
+                )
+                    .to.emit(governancePool, "UnlockVotingTokens")
+                    .withArgs(
+                        investmentPoolAsUser.address,
+                        investorA.address,
+                        0,
+                        tokensToMint.mul(2)
+                    );
             });
         });
     });
@@ -802,11 +765,11 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
 
                 await governancePool
                     .connect(investorA)
-                    .unlockVotingTokens(investmentPoolAsUser.address);
+                    .unlockVotingTokens(investmentPoolAsUser.address, 0);
 
                 // Approve the governance pool contract to spend investor's tokens
                 await votingToken
@@ -864,11 +827,11 @@ describe("Governance Pool", async () => {
                     .connect(investmentPoolFactoryAsUser)
                     .activateInvestmentPool(investmentPoolMock.address);
 
-                await investmentPoolMock.mintVotingTokens(investorA.address, tokensToMint, 0);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint, 0);
 
                 await governancePool
                     .connect(investorA)
-                    .unlockVotingTokens(investmentPoolMock.address);
+                    .unlockVotingTokens(investmentPoolMock.address, 0);
 
                 await expect(
                     governancePool
@@ -913,11 +876,11 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
 
                 await governancePool
                     .connect(investorA)
-                    .unlockVotingTokens(investmentPoolAsUser.address);
+                    .unlockVotingTokens(investmentPoolAsUser.address, 0);
 
                 // Approve the governance pool contract to spend investor's tokens
                 await votingToken
@@ -999,11 +962,11 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
 
                 await governancePool
                     .connect(investorA)
-                    .unlockVotingTokens(investmentPoolAsUser.address);
+                    .unlockVotingTokens(investmentPoolAsUser.address, 0);
 
                 const tokenBalance = await governancePool.getVotingTokenBalance(
                     investmentPoolAsUser.address,
@@ -1033,11 +996,11 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
 
                 await governancePool
                     .connect(investorA)
-                    .unlockVotingTokens(investmentPoolAsUser.address);
+                    .unlockVotingTokens(investmentPoolAsUser.address, 0);
 
                 // Approve the governance pool contract to spend investor's tokens
                 await votingToken
@@ -1074,11 +1037,11 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
 
                 await governancePool
                     .connect(investorA)
-                    .unlockVotingTokens(investmentPoolAsUser.address);
+                    .unlockVotingTokens(investmentPoolAsUser.address, 0);
 
                 await expect(
                     governancePool
@@ -1102,11 +1065,11 @@ describe("Governance Pool", async () => {
                     .connect(investmentPoolFactoryAsUser)
                     .activateInvestmentPool(investmentPoolMock.address);
 
-                await investmentPoolMock.mintVotingTokens(investorA.address, tokensToMint, 0);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint, 0);
 
                 await governancePool
                     .connect(investorA)
-                    .unlockVotingTokens(investmentPoolMock.address);
+                    .unlockVotingTokens(investmentPoolMock.address, 0);
 
                 // Approve the governance pool contract to spend investor's tokens
                 await votingToken
@@ -1140,11 +1103,11 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
 
                 await governancePool
                     .connect(investorA)
-                    .unlockVotingTokens(investmentPoolAsUser.address);
+                    .unlockVotingTokens(investmentPoolAsUser.address, 0);
 
                 // Approve the governance pool contract to spend investor's tokens
                 await votingToken
@@ -1195,11 +1158,11 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
 
                 await governancePool
                     .connect(investorA)
-                    .unlockVotingTokens(investmentPoolAsUser.address);
+                    .unlockVotingTokens(investmentPoolAsUser.address, 0);
 
                 // Approve the governance pool contract to spend investor's tokens
                 await votingToken
@@ -1291,11 +1254,11 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
 
                 await governancePool
                     .connect(investorA)
-                    .unlockVotingTokens(investmentPoolAsUser.address);
+                    .unlockVotingTokens(investmentPoolAsUser.address, 0);
 
                 // Approve the governance pool contract to spend investor's tokens
                 await votingToken
@@ -1336,11 +1299,11 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
 
                 await governancePool
                     .connect(investorA)
-                    .unlockVotingTokens(investmentPoolAsUser.address);
+                    .unlockVotingTokens(investmentPoolAsUser.address, 0);
 
                 // Approve the governance pool contract to spend investor's tokens
                 await votingToken
@@ -1370,6 +1333,7 @@ describe("Governance Pool", async () => {
                 assert.equal(governancePoolBalance.toString(), votesLeftInPool.toString());
                 assert.equal(investorBalance.toString(), votesLeftForInvestor.toString());
             });
+
             it("[GP][9.2.8] Should be able to retract all of the votes", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
                 const votesAgainst = ethers.utils.parseEther("0.4");
@@ -1380,11 +1344,11 @@ describe("Governance Pool", async () => {
 
                 await governancePool
                     .connect(investmentPoolAsUser)
-                    .mintVotingTokens(investorA.address, tokensToMint, 0);
+                    .mintVotingTokens(0, investorA.address, tokensToMint, 0);
 
                 await governancePool
                     .connect(investorA)
-                    .unlockVotingTokens(investmentPoolAsUser.address);
+                    .unlockVotingTokens(investmentPoolAsUser.address, 0);
 
                 // Approve the governance pool contract to spend investor's tokens
                 await votingToken

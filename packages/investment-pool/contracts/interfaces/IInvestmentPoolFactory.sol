@@ -26,5 +26,5 @@ interface IInvestmentPoolFactory {
         uint48 _fundraiserEndAt,
         ProxyType _proxyType,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
-    ) external returns (IInvestmentPool);
+    ) external payable returns (IInvestmentPool);
 }

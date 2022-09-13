@@ -19,10 +19,6 @@ contract InvestmentPoolMock is InvestmentPool {
         return timestamp == 0 ? block.timestamp : timestamp;
     }
 
-    function getTimeInContract() public view returns (uint256) {
-        return _getNow();
-    }
-
     function getMemMilestonePortions(uint256 _id) public view returns (uint256) {
         return memMilestonePortions[_id];
     }
@@ -31,15 +27,19 @@ contract InvestmentPoolMock is InvestmentPool {
         return memMilestoneInvestments[_id];
     }
 
-    function setCurrentMilestone(uint256 _id) public {
-        currentMilestone = _id;
-    }
-
     function increaseMilestone() public {
         currentMilestone++;
     }
 
     function terminateMilestoneStreamFinal(uint256 _id) public {
         _terminateMilestoneStreamFinal(_id);
+    }
+
+    function claim(uint256 _id) public {
+        _claim(_id);
+    }
+
+    function transferGelatoFee(uint256 _amount, address _paymentToken) public {
+        _gelatoTransfer(_amount, _paymentToken);
     }
 }
