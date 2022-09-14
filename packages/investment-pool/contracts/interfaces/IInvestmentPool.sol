@@ -62,15 +62,35 @@ interface IInvestmentPool is ISuperApp {
 
     function milestoneJumpOrFinalProjectTermination() external;
 
-    function isFundraiserOngoingNow() external view returns (bool);
+    function withdrawRemainingEth() external;
 
-    function isMilestoneOngoingNow(uint _id) external view returns (bool);
+    function isEmergencyTerminated() external view returns (bool);
+
+    function isCanceledBeforeFundraiserStart() external view returns (bool);
+
+    function isCanceledDuringMilestones() external view returns (bool);
 
     function isSoftCapReached() external view returns (bool);
 
     function didFundraiserPeriodEnd() external view returns (bool);
 
+    function isFundraiserNotStarted() external view returns (bool);
+
+    function isFundraiserOngoingNow() external view returns (bool);
+
+    function isFundraiserEndedButNoMilestoneIsActive() external view returns (bool);
+
+    function isMilestoneOngoingNow(uint _id) external view returns (bool);
+
+    function isAnyMilestoneOngoing() external view returns (bool);
+
+    function isLastMilestoneOngoing() external view returns (bool);
+
     function isFailedFundraiser() external view returns (bool);
+
+    function didProjectEnd() external view returns (bool);
+
+    function getProjectStateByteValue() external view returns (uint256 stateNumber);
 
     function canTerminateMilestoneStreamFinal(uint256 _milestoneId) external view returns (bool);
 
@@ -78,6 +98,10 @@ interface IInvestmentPool is ISuperApp {
         external
         view
         returns (bool);
+
+    function getMilestoneSeedAmount(uint256 _milestoneId) external view returns (uint256);
+
+    function getTotalMilestoneTokenAllocation(uint _milestoneId) external returns (uint256);
 
     function gelatoChecker() external view returns (bool canExec, bytes memory execPayload);
 

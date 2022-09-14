@@ -42,4 +42,8 @@ contract InvestmentPoolMock is InvestmentPool {
     function transferGelatoFee(uint256 _amount, address _paymentToken) public {
         _gelatoTransfer(_amount, _paymentToken);
     }
+
+    function deleteGelatoTask() public {
+        delete gelatoTask;
+    }
 }

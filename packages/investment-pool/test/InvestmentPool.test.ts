@@ -11,7 +11,6 @@ import {
 } from "../typechain-types";
 import traveler from "ganache-time-traveler";
 
-// const { toWad } = require("@decentral.ee/web3-helpers");
 const fTokenAbi = require("./abis/fTokenAbi");
 
 const deployFramework = require("@superfluid-finance/ethereum-contracts/scripts/deploy-framework");
@@ -3213,7 +3212,7 @@ describe("Investment Pool", async () => {
         // TODO: Test the ovestream case during a single milestone, probably results in internal contract undeflow, need to confirm
     });
 
-    describe("1 Money stream termination", () => {
+    describe("11. Money stream termination", () => {
         beforeEach(async () => {
             let snapshot = await traveler.takeSnapshot();
             snapshotId = snapshot["result"];
@@ -3327,7 +3326,37 @@ describe("Investment Pool", async () => {
                 );
             });
 
-            it("[IP][11.1.6] Investment pool should emit transfer event", async () => {
+            it("[IP][11.1.6] Gelato shouldn't be able to terminate stream if task id is not assigned", async () => {
+                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                await investment.deleteGelatoTask();
+
+                // NOTE: Time traveling to 2100/07/15
+                let timeStamp = dateToSeconds("2100/07/15");
+                await investment.setTimestamp(timeStamp);
+                await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                // NOTE: Time traveling to 2100/09/15 when the milestone is active
+                timeStamp = dateToSeconds("2100/09/15");
+                // NOTE: Here we we want explicitly the chain reported time
+                await investment.setTimestamp(0);
+                await timeTravelToDate(timeStamp);
+                await investment.connect(creator).startFirstFundsStream();
+
+                const automatedTerminationWindow = await investment.automatedTerminationWindow();
+                timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
+                // NOTE: Here we we want explicitly the chain reported time
+                await timeTravelToDate(timeStamp);
+
+                await expect(
+                    gelatoOpsMock.gelatoTerminateMilestoneStream(0)
+                ).to.be.revertedWithCustomError(
+                    investment,
+                    "InvestmentPool__GelatoMilestoneStreamTerminationUnavailable"
+                );
+            });
+
+            it("[IP][11.1.7] Investment pool should emit transfer event", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
                 // NOTE: Time traveling to 2100/07/15
@@ -3355,7 +3384,7 @@ describe("Investment Pool", async () => {
                     .withArgs(feeDetails.fee, feeDetails.feeToken);
             });
 
-            it("[IP][11.1.7] Investment pool should transfer fee to Gelato", async () => {
+            it("[IP][11.1.8] Investment pool should transfer fee to Gelato", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("2000");
                 // Send Ether to Investment Pool for gelato task
 
@@ -3395,7 +3424,7 @@ describe("Investment Pool", async () => {
                 assert.deepEqual(gelatoPriorBalance.add(feeDetails.fee), gelatoBalance);
             });
 
-            it("[IP][11.1.8] Investment pool shouldn't be able to transfer fee to Gelato if not enough tokens", async () => {
+            it("[IP][11.1.9] Investment pool shouldn't be able to transfer fee to Gelato if not enough tokens", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
                 // NOTE: Time traveling to 2100/07/15
@@ -3425,6 +3454,12 @@ describe("Investment Pool", async () => {
                     investment,
                     "InvestmentPool__GelatoEthTransferFailed"
                 );
+            });
+
+            it("[IP][11.1.10] gelatoChecker should not pass if not in auto termination window", async () => {
+                await investment.deleteGelatoTask();
+                const {canExec} = await investment.callStatic.gelatoChecker();
+                assert.isFalse(canExec);
             });
         });
 
@@ -3832,7 +3867,9 @@ describe("Investment Pool", async () => {
                 // NOTE: Here we we want explicitly the chain reported time
                 await timeTravelToDate(timeStamp);
 
-                await investment.connect(creator).milestoneJumpOrFinalProjectTermination();
+                await expect(
+                    investment.connect(creator).milestoneJumpOrFinalProjectTermination()
+                ).to.emit(gelatoOpsMock, "CancelGelatoTask");
 
                 const currentMilestone = await investment.currentMilestone();
                 const flowInfo = await sf.cfaV1.getFlow({
