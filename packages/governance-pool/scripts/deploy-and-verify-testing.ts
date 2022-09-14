@@ -4,13 +4,13 @@ import {verify} from "./verify";
 import {
     VotingToken,
     GovernancePool,
-    InvestmentPoolFactory,
+    InvestmentPoolFactoryTestMock,
     InvestmentPool,
 } from "../typechain-types";
 
 let gelatoOpsAddress: string;
 let superfluidHostAddress: string;
-let investmentPoolFactory: InvestmentPoolFactory;
+let investmentPoolFactory: InvestmentPoolFactoryTestMock;
 let investmentPool: InvestmentPool;
 let governancePool: GovernancePool;
 let votingToken: VotingToken;
@@ -40,7 +40,7 @@ async function main() {
     // Deploy investment pool factory contract
     console.log("Deploying investment pool factory...");
     const investmentPoolFactoryDep = await ethers.getContractFactory(
-        "InvestmentPoolFactory",
+        "InvestmentPoolFactoryTestMock",
         deployer
     );
     investmentPoolFactory = await investmentPoolFactoryDep.deploy(

@@ -15,4 +15,6 @@ interface IGelatoOps {
     function getFeeDetails() external view returns (uint256, address);
 
     function gelato() external view returns (address payable);
+
+    function cancelTask(bytes32 _taskId) external;
 }

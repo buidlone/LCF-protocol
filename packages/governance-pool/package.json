@@ -10,7 +10,9 @@
     "solhint": "npx solhint 'contracts/**/*.sol'",
     "prettier": "prettier --write 'contracts/**/*.sol'",
     "deploy:goerli": "yarn hardhat run scripts/deploy.ts --network goerli",
-    "deploy_verify:goerli": "yarn hardhat run scripts/deploy-and-verify.ts --network goerli"
+    "deploy_verify:goerli": "yarn hardhat run scripts/deploy-and-verify.ts --network goerli",
+    "deploy_verify_testing:goerli": "yarn hardhat run scripts/deploy-and-verify-testing.ts --network goerli",
+    "deploy_testing:goerli": "yarn hardhat run scripts/deploy-testing.ts --network goerli"
   },
   "devDependencies": {
     "@ethersproject/abi": "^5.4.7",

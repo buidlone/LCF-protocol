@@ -113,7 +113,7 @@ const definePercentageDivider = async (invPoolFactory: InvestmentPoolFactoryMock
 };
 
 const defineGelatoFeeAllocation = async (invPoolFactory: InvestmentPoolFactoryMock) => {
-    gelatoFeeAllocation = await invPoolFactory.GELATO_FEE_ALLOCATION_PER_PROJECT();
+    gelatoFeeAllocation = await invPoolFactory.gelatoFeeAllocationForProject();
 };
 
 const investMoney = async (

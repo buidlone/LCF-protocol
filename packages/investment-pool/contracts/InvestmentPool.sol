@@ -86,6 +86,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     address public creator;
     IGelatoOps public gelatoOps;
     address payable public gelato;
+    bytes32 public gelatoTask;
     IGovernancePool public governancePool;
 
     // TODO: validate that uint96 for soft cap is enough
@@ -190,7 +191,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     /// @notice Ensures that the milestone stream can be terminated by gelato
     modifier canGelatoTerminateMilestoneFinal(uint _index) {
-        if (!canGelatoTerminateMilestoneStreamFinal(_index))
+        if (!canGelatoTerminateMilestoneStreamFinal(_index) || gelatoTask == bytes32(0))
             revert InvestmentPool__GelatoMilestoneStreamTerminationUnavailable();
         _;
     }
@@ -920,23 +921,27 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     /// @return canExec : whether Gelato should execute the task.
     /// @return execPayload :  data that executors should use for the execution.
     function gelatoChecker() public view returns (bool canExec, bytes memory execPayload) {
-        uint256 currentMilestoneIndex = _getCurrentMilestoneIndex();
+        if (gelatoTask != bytes32(0)) {
+            // Check if gelato can terminate stream of current milestone
+            canExec = canGelatoTerminateMilestoneStreamFinal(_getCurrentMilestoneIndex());
 
-        // Check if gelato can terminate stream of current milestone
-        canExec = canGelatoTerminateMilestoneStreamFinal(currentMilestoneIndex);
-
-        execPayload = abi.encodeWithSelector(this.gelatoTerminateMilestoneStreamFinal.selector);
+            execPayload = abi.encodeWithSelector(
+                this.gelatoTerminateMilestoneStreamFinal.selector
+            );
+        }
     }
 
     function startGelatoTask() public {
         // Register task to run it automatically
-        gelatoOps.createTaskNoPrepayment(
+        bytes32 taskId = gelatoOps.createTaskNoPrepayment(
             address(this),
             this.gelatoTerminateMilestoneStreamFinal.selector,
             address(this),
             abi.encodeWithSelector(this.gelatoChecker.selector),
             ETH
         );
+
+        gelatoTask = taskId;
     }
 
     function gelatoTerminateMilestoneStreamFinal(uint256 _milestoneId)
@@ -948,6 +953,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
         (uint256 fee, address feeToken) = gelatoOps.getFeeDetails();
         _gelatoTransfer(fee, feeToken);
+
+        gelatoOps.cancelTask(gelatoTask);
     }
 
     // TODO: Ensure that this wouldn't clash with our logic
