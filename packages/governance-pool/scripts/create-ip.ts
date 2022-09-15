@@ -25,7 +25,7 @@ async function main() {
     const hardCap: BigNumber = ethers.utils.parseEther("0.002");
     const gelatoFeeAllocation: BigNumber = ethers.utils.parseEther("0.1");
     const campaignStartDate: number = Math.round(new Date().getTime() / 1000) + 5 * 60; // current time + 5 minutes
-    const campaignEndDate: number = campaignStartDate + 10 * 60; // campaignStartDate + 10 minutes
+    const campaignEndDate: number = campaignStartDate + 8 * 60; // campaignStartDate + 8 minutes
     const milestone1StartDate: number = campaignEndDate; // = campaignStartDate
     const milestone1EndDate: number = milestone1StartDate + 15 * 60; // milestone1StartDate + 15 minutes
     const milestone2StartDate: number = milestone1EndDate; // = milestone1EndDate
@@ -33,7 +33,7 @@ async function main() {
 
     investmentPoolFactory = await ethers.getContractAt(
         "InvestmentPoolFactoryTestMock",
-        "0x241F31c2E6E8e540DE7B2a10345b2F3e2aD1D1B2"
+        "0xA11a48249C953F9F6982fdD0D2C156Ec7cad8192"
     );
 
     const creationTx = await investmentPoolFactory.connect(deployer).createInvestmentPool(
@@ -64,6 +64,13 @@ async function main() {
     const poolAddress = receipt.events?.find((e) => e.event === "Created")?.args?.pool;
 
     console.log("Created Investment Pool at address: ", poolAddress);
+    console.log("---Timeline---");
+    console.log("Fundraiser start date: ", new Date(campaignStartDate * 1000));
+    console.log("Fundraiser end date: ", new Date(campaignEndDate * 1000));
+    console.log("Milestone (id 0) start date: ", new Date(milestone1StartDate * 1000));
+    console.log("Milestone (id 0) end date: ", new Date(milestone1EndDate * 1000));
+    console.log("Milestone (id 1) start date: ", new Date(milestone2StartDate * 1000));
+    console.log("Milestone (id 1) end date: ", new Date(milestone2EndDate * 1000));
 }
 
 main().catch((error) => {
