@@ -8,8 +8,10 @@ import {IInvestmentPool} from "../interfaces/IInvestmentPool.sol";
 
 contract GelatoOpsMock is IGelatoOps {
     IInvestmentPool public executor;
+    string public gelatoTaskInText;
 
     event RegisterGelatoTask();
+    event CancelGelatoTask();
 
     receive() external payable {}
 
@@ -22,6 +24,7 @@ contract GelatoOpsMock is IGelatoOps {
     ) public returns (bytes32 task) {
         executor = IInvestmentPool(_execAddress);
         emit RegisterGelatoTask();
+        gelatoTaskInText = "abc";
         task = bytes32("abc");
     }
 
@@ -39,5 +42,7 @@ contract GelatoOpsMock is IGelatoOps {
 
     function cancelTask(
         bytes32 /*_taskId*/
-    ) external pure {}
+    ) external {
+        emit CancelGelatoTask();
+    }
 }

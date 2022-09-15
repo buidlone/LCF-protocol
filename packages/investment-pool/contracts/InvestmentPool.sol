@@ -444,6 +444,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         if (!isLastMilestoneOngoing()) {
             currentMilestone++;
             _claim(curMil + 1);
+        } else {
+            gelatoOps.cancelTask(gelatoTask);
         }
     }
 
@@ -924,11 +926,11 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         if (gelatoTask != bytes32(0)) {
             // Check if gelato can terminate stream of current milestone
             canExec = canGelatoTerminateMilestoneStreamFinal(_getCurrentMilestoneIndex());
-
-            execPayload = abi.encodeWithSelector(
-                this.gelatoTerminateMilestoneStreamFinal.selector
-            );
+        } else {
+            canExec = false;
         }
+
+        execPayload = abi.encodeWithSelector(this.gelatoTerminateMilestoneStreamFinal.selector);
     }
 
     function startGelatoTask() public {
@@ -964,10 +966,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             // If ETH address
             (bool success, ) = gelato.call{value: _amount}("");
             if (!success) revert InvestmentPool__GelatoEthTransferFailed();
-        } else {
-            // Else it is ERC20 token
-            SafeERC20.safeTransfer(IERC20(_paymentToken), gelato, _amount);
         }
+
         emit GelatoFeeTransfer(_amount, _paymentToken);
     }
 }

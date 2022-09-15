@@ -54,7 +54,7 @@ const dateToSeconds = (date: string, isBigNumber: boolean = true): BigNumber | n
     }
 };
 
-describe.only("Governance Pool", async () => {
+describe("Governance Pool", async () => {
     before(async () => {
         accounts = await ethers.getSigners();
         deployer = accounts[0];
