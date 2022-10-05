@@ -39,7 +39,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     /// @notice mapping from investor address => investment pool id => milestone id => token portion details
     mapping(address => mapping(uint256 => mapping(uint256 => TokensLocked))) public tokensLocked;
     /// @notice mapping from investment pool id => total votes amount
-    mapping(uint256 => uint256) public totalVotesAmount; // total contract balance is not only votes it holds but investors tokens which will be unlocked in the future
+    mapping(uint256 => uint256) public totalVotesAmount;
 
     event ActivateVoting(address indexed investmentPool);
     event UnlockVotingTokens(

@@ -5,6 +5,8 @@
     "description": "Buidl1 contracts monorepo.",
     "scripts": {},
     "workspaces": {
-        "packages": ["packages/*"]
+        "packages": [
+            "packages/*"
+        ]
     }
 }

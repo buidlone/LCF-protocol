@@ -42,6 +42,8 @@ error InvestmentPoolFactory__GovernancePoolAlreadyDefined();
 error InvestmentPoolFactory__GovernancePoolNotDefined();
 error InvestmentPoolFactory__NotEnoughEthValue();
 error InvestmentPoolFactory__FailedToSendEthToInvestmentPool();
+error InvestmentPoolFactory__SeedFundsAllocationGreaterThanTotal();
+error InvestmentPoolFactory__SeedFundsAllocationExceedsMax();
 
 contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     // Assign all Clones library functions to addresses
@@ -49,7 +51,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
 
     uint32 public constant MAX_MILESTONE_COUNT = 10;
     uint256 public constant PERCENTAGE_DIVIDER = 10**6;
-    uint48 public TERMINATION_WINDOW = 12 hours;
+    uint48 public TERMINATION_WINDOW = 3 days;
     uint48 public AUTOMATED_TERMINATION_WINDOW = 1 hours;
     uint256 public MILESTONE_MIN_DURATION = 30 days;
     uint256 public MILESTONE_MAX_DURATION = 90 days;
@@ -228,7 +230,15 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         if (!_validateMilestoneInterval(_milestones[0]))
             revert InvestmentPoolFactory__InvalidMilestoneInverval();
 
-        uint totalPercentage = _milestones[0].intervalSeedPortion +
+        // In first milestone seed funds can be up to 50% of total milestone funds
+        if (
+            !_validateMilestonePercentageAllocation(
+                _milestones[0],
+                (50 * PERCENTAGE_DIVIDER) / 100
+            )
+        ) revert InvestmentPoolFactory__SeedFundsAllocationExceedsMax();
+
+        uint256 totalPercentage = _milestones[0].intervalSeedPortion +
             _milestones[0].intervalStreamingPortion;
 
         // Starting at index 1, since the first milestone has been checked already
@@ -238,6 +248,17 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
                     _milestones[i - 1].endDate,
                     _milestones[i].startDate
                 );
+
+            if (!_validateMilestoneInterval(_milestones[i]))
+                revert InvestmentPoolFactory__InvalidMilestoneInverval();
+
+            // In other milestones seed funds can be up to 10% of total milestone funds
+            if (
+                !_validateMilestonePercentageAllocation(
+                    _milestones[0],
+                    (10 * PERCENTAGE_DIVIDER) / 100
+                )
+            ) revert InvestmentPoolFactory__SeedFundsAllocationExceedsMax();
 
             // TODO: Percentage limit validation for milestones
             // Meaning - limit max percentage of seeding, for each milestone
@@ -267,5 +288,19 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         return (milestone.endDate > milestone.startDate &&
             (milestone.endDate - milestone.startDate >= MILESTONE_MIN_DURATION) &&
             (milestone.endDate - milestone.startDate <= MILESTONE_MAX_DURATION));
+    }
+
+    function _validateMilestonePercentageAllocation(
+        IInvestmentPool.MilestoneInterval memory milestone,
+        uint256 allowedSeedFundsAllocation
+    ) internal pure returns (bool) {
+        if (allowedSeedFundsAllocation > PERCENTAGE_DIVIDER)
+            revert InvestmentPoolFactory__SeedFundsAllocationGreaterThanTotal();
+        uint milestoneMaxPercentages = milestone.intervalSeedPortion +
+            milestone.intervalStreamingPortion;
+
+        return
+            (milestone.intervalSeedPortion * PERCENTAGE_DIVIDER) / milestoneMaxPercentages <=
+            allowedSeedFundsAllocation;
     }
 }
