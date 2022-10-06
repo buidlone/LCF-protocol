@@ -22,11 +22,11 @@ interface IInvestmentPool is ISuperApp {
         uint48 endDate;
         // Describes the portion of the total funds(all milestones),
         // assigned as a seed portion for this milestone
-        // 100% == 10 ** 18
+        // 100% == 10 ** 6
         uint256 intervalSeedPortion;
         // Describes the portion of the total funds(all milestones),
         // assigned as a streaming portion for this milestone
-        // 100% == 10 ** 18
+        // 100% == 10 ** 6
         uint256 intervalStreamingPortion;
     }
 
@@ -39,11 +39,11 @@ interface IInvestmentPool is ISuperApp {
         uint256 paidAmount;
         // Describes the portion of the total funds(all milestones),
         // assigned as a seed portion for this milestone
-        // 100% == 10 ** 18
+        // 100% == 10 ** 6
         uint256 intervalSeedPortion;
         // Describes the portion of the total funds(all milestones),
         // assigned as a streaming portion for this milestone
-        // 100% == 10 ** 18
+        // 100% == 10 ** 6
         uint256 intervalStreamingPortion;
         // TODO: More fields here for internal state tracking
     }
