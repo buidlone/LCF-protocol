@@ -64,6 +64,13 @@ async function main() {
     const poolAddress = receipt.events?.find((e) => e.event === "Created")?.args?.pool;
 
     console.log("Created Investment Pool at address: ", poolAddress);
+    console.log("---Timeline---");
+    console.log("Fundraiser start date: ", new Date(campaignStartDate * 1000));
+    console.log("Fundraiser end date: ", new Date(campaignEndDate * 1000));
+    console.log("Milestone (id 0) start date: ", new Date(milestone1StartDate * 1000));
+    console.log("Milestone (id 0) end date: ", new Date(milestone1EndDate * 1000));
+    console.log("Milestone (id 1) start date: ", new Date(milestone2StartDate * 1000));
+    console.log("Milestone (id 1) end date: ", new Date(milestone2EndDate * 1000));
 }
 
 main().catch((error) => {
