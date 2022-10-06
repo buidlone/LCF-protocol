@@ -46,6 +46,7 @@ let governancePoolMock: GovernancePoolMockForIntegration;
 
 let snapshotId: string;
 
+let seedFundingLimit: BigNumber;
 let softCap: BigNumber;
 let hardCap: BigNumber;
 let milestoneStartDate: BigNumber;
@@ -155,6 +156,7 @@ const deployGovernancePoolMock = async () => {
 const createInvestmentWithTwoMilestones = async (feeAmount: BigNumber = gelatoFeeAllocation) => {
     hardCap = ethers.utils.parseEther("15000");
     softCap = ethers.utils.parseEther("1500");
+    seedFundingLimit = ethers.utils.parseEther("500");
     milestoneStartDate = dateToSeconds("2100/09/01") as BigNumber;
     milestoneEndDate = dateToSeconds("2100/10/01") as BigNumber;
     milestoneStartDate2 = dateToSeconds("2100/10/01") as BigNumber;
@@ -164,6 +166,7 @@ const createInvestmentWithTwoMilestones = async (feeAmount: BigNumber = gelatoFe
 
     creationRes = await investmentPoolFactory.connect(creator).createInvestmentPool(
         fUSDTx.address,
+        seedFundingLimit,
         softCap,
         hardCap,
         campaignStartDate,
