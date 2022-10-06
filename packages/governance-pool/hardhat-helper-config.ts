@@ -17,12 +17,6 @@ export const networkConfig: networkConfigInfo = {
         gelatoOps: "0xc1C6805B857Bef1f412519C4A842522431aFed39",
         superfluidHost: "0x22ff293e14F1EC3A09B137e9e06084AFd63adDF9",
     },
-    31337: {
-        name: "goerli",
-        blockConfirmations: 6,
-        gelatoOps: "0xc1C6805B857Bef1f412519C4A842522431aFed39",
-        superfluidHost: "0x22ff293e14F1EC3A09B137e9e06084AFd63adDF9",
-    },
 };
 
 export const developmentChains = ["hardhat", "localhost"];

@@ -8,6 +8,7 @@ import "@nomiclabs/hardhat-web3";
 import "hardhat-gas-reporter";
 import "solidity-coverage";
 import "hardhat-deploy";
+import "hardhat-docgen";
 
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
@@ -36,6 +37,12 @@ const config: HardhatUserConfig = {
     },
     etherscan: {
         apiKey: process.env.ETHERSCAN_API_KEY,
+    },
+    docgen: {
+        path: "./docs",
+        clear: true,
+        runOnCompile: false,
+        only: ["contracts/InvestmentPool.sol", "contracts/InvestmentPoolFactory.sol"],
     },
     mocha: {
         timeout: 200000, // 200 seconds
