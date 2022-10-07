@@ -9,6 +9,7 @@ import {IGovernancePool} from "./IGovernancePool.sol";
 
 interface IInvestmentPool is ISuperApp {
     struct ProjectInfo {
+        uint96 seedFundingLimit;
         uint96 softCap;
         uint96 hardCap;
         uint48 fundraiserStartAt;

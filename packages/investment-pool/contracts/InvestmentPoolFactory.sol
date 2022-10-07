@@ -21,6 +21,10 @@ error InvestmentPoolFactory__HostAddressIsZero();
 error InvestmentPoolFactory__GelatoOpsAddressIsZero();
 error InvestmentPoolFactory__AcceptedTokenAddressIsZero();
 error InvestmentPoolFactory__CreatorAddressIsZero();
+error InvestmentPoolFactory__SeedFundingLimitIsGreaterThanSoftCap(
+    uint96 seedFundingLimit,
+    uint96 softCap
+);
 error InvestmentPoolFactory__SoftCapIsGreaterThanHardCap(uint96 softCap, uint96 hardCap);
 error InvestmentPoolFactory__FundraiserStartIsInPast();
 error InvestmentPoolFactory__FundraiserStartTimeIsGreaterThanEndTime();
@@ -101,6 +105,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
 
     function createInvestmentPool(
         ISuperToken _acceptedToken,
+        uint96 _seedFundingLimit,
         uint96 _softCap,
         uint96 _hardCap,
         uint48 _fundraiserStartAt,
@@ -117,6 +122,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
             HOST,
             _acceptedToken,
             _msgSender(),
+            _seedFundingLimit,
             _softCap,
             _hardCap,
             _fundraiserStartAt,
@@ -132,6 +138,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
 
         // Using the struct and then passing it to the initialize function because we don't want to get the error: "Stack too deep"
         IInvestmentPool.ProjectInfo memory projectDetails = IInvestmentPool.ProjectInfo(
+            _seedFundingLimit,
             _softCap,
             _hardCap,
             _fundraiserStartAt,
@@ -189,6 +196,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         ISuperfluid, /*_host*/
         ISuperToken _superToken,
         address _creator,
+        uint96 _seedFundingLimit,
         uint96 _softCap,
         uint96 _hardCap,
         uint96 _fundraiserStartAt,
@@ -202,6 +210,12 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
             revert InvestmentPoolFactory__AcceptedTokenAddressIsZero();
 
         if (address(_creator) == address(0)) revert InvestmentPoolFactory__CreatorAddressIsZero();
+
+        if (_seedFundingLimit >= _softCap)
+            revert InvestmentPoolFactory__SeedFundingLimitIsGreaterThanSoftCap(
+                _seedFundingLimit,
+                _softCap
+            );
 
         if (_softCap > _hardCap)
             revert InvestmentPoolFactory__SoftCapIsGreaterThanHardCap(_softCap, _hardCap);

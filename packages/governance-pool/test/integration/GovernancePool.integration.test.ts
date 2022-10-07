@@ -45,6 +45,7 @@ let votingToken: VotingToken;
 let snapshotId: string;
 let gelatoFeeAllocation: BigNumber;
 
+let seedFundingLimit: BigNumber;
 let softCap: BigNumber;
 let hardCap: BigNumber;
 let milestoneStartDate: BigNumber;
@@ -147,6 +148,7 @@ const getInvestmentFromTx = async (tx: ContractTransaction): Promise<InvestmentP
 const createInvestmentWithTwoMilestones = async (feeAmount: BigNumber = gelatoFeeAllocation) => {
     creationRes = await investmentPoolFactory.connect(creator).createInvestmentPool(
         fUSDTx.address,
+        seedFundingLimit,
         softCap,
         hardCap,
         campaignStartDate,
@@ -255,6 +257,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
         campaignEndDate = dateToSeconds("2100/08/01") as BigNumber;
         hardCap = ethers.utils.parseEther("15000");
         softCap = ethers.utils.parseEther("1500");
+        seedFundingLimit = ethers.utils.parseEther("500");
     });
 
     describe("1. IPF request to activate investment pool (in GP)", () => {
@@ -285,9 +288,6 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
         });
 
         it("[IPF-GP][1.1] On CLONE_PROXY investment pool creation, governance pool adds it to active list", async () => {
-            const softCap = ethers.utils.parseEther("1500");
-            const hardCap = ethers.utils.parseEther("15000");
-
             // Deploy voting token
             const votingTokensFactory = await ethers.getContractFactory("VotingToken", deployer);
             votingToken = await votingTokensFactory.deploy();
@@ -315,6 +315,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
 
             const creationRes = await investmentPoolFactory.connect(creator).createInvestmentPool(
                 fUSDTx.address,
+                seedFundingLimit,
                 softCap,
                 hardCap,
                 campaignStartDate,
@@ -339,12 +340,10 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
         });
 
         it("[IPF-GP][1.2] Reverts creation if governance pool is not defined", async () => {
-            const softCap = ethers.utils.parseEther("1500");
-            const hardCap = ethers.utils.parseEther("15000");
-
             await expect(
                 investmentPoolFactory.connect(creator).createInvestmentPool(
                     fUSDTx.address,
+                    seedFundingLimit,
                     softCap,
                     hardCap,
                     campaignStartDate,

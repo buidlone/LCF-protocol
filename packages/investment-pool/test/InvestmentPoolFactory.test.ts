@@ -38,7 +38,12 @@ let governancePoolMock: GovernancePoolMockForIntegration;
 let gelatoFeeAllocation: BigNumber;
 let percentageDivider = BigNumber.from(0);
 let percent5InIpBigNumber: BigNumber;
+let percent6InIpBigNumber: BigNumber;
 let percent10InIpBigNumber: BigNumber;
+let percent40InIpBigNumber: BigNumber;
+let percent44InIpBigNumber: BigNumber;
+let percent49InIpBigNumber: BigNumber;
+let percent51InIpBigNumber: BigNumber;
 let percent90InIpBigNumber: BigNumber;
 let percent95InIpBigNumber: BigNumber;
 
@@ -105,7 +110,12 @@ const getConstantVariablesFromContract = async () => {
 const definePercentageDivider = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
     percentageDivider = await investmentPoolFactory.PERCENTAGE_DIVIDER();
     percent5InIpBigNumber = percentToIpBigNumber(5);
+    percent6InIpBigNumber = percentToIpBigNumber(6);
     percent10InIpBigNumber = percentToIpBigNumber(10);
+    percent40InIpBigNumber = percentToIpBigNumber(40);
+    percent44InIpBigNumber = percentToIpBigNumber(44);
+    percent49InIpBigNumber = percentToIpBigNumber(49);
+    percent51InIpBigNumber = percentToIpBigNumber(51);
     percent90InIpBigNumber = percentToIpBigNumber(90);
     percent95InIpBigNumber = percentToIpBigNumber(95);
 };
@@ -498,6 +508,7 @@ describe("Investment Pool Factory", async () => {
 
         describe("2.1 Interactions", () => {
             it("[IPF][2.1.1] On CLONE_PROXY investment pool creation events are emited", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -510,6 +521,7 @@ describe("Investment Pool Factory", async () => {
                     .connect(creator)
                     .createInvestmentPool(
                         fUSDTx.address,
+                        seedFundingLimit,
                         softCap,
                         hardCap,
                         campaignStartDate,
@@ -535,6 +547,7 @@ describe("Investment Pool Factory", async () => {
             });
 
             it("[IPF][2.1.2] On CLONE_PROXY investment pool creation variables are set correctly", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -547,6 +560,7 @@ describe("Investment Pool Factory", async () => {
                     .connect(creator)
                     .createInvestmentPool(
                         fUSDTx.address,
+                        seedFundingLimit,
                         softCap,
                         hardCap,
                         campaignStartDate,
@@ -638,6 +652,7 @@ describe("Investment Pool Factory", async () => {
             });
 
             it("[IPF][2.1.3] Reverts creation if accepted token address is zero", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -649,6 +664,7 @@ describe("Investment Pool Factory", async () => {
                 await expect(
                     investmentPoolFactory.connect(creator).createInvestmentPool(
                         constants.AddressZero,
+                        seedFundingLimit,
                         softCap,
                         hardCap,
                         campaignStartDate,
@@ -671,6 +687,7 @@ describe("Investment Pool Factory", async () => {
             });
 
             it("[IPF][2.1.4] Reverts creation if soft cap is greater than hard cap", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("1000");
 
@@ -682,6 +699,7 @@ describe("Investment Pool Factory", async () => {
                 await expect(
                     investmentPoolFactory.connect(creator).createInvestmentPool(
                         fUSDTx.address,
+                        seedFundingLimit,
                         softCap,
                         hardCap,
                         campaignStartDate,
@@ -706,6 +724,7 @@ describe("Investment Pool Factory", async () => {
             });
 
             it("[IPF][2.1.5] Fundraiser interval cannot be retrospective", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -721,6 +740,7 @@ describe("Investment Pool Factory", async () => {
                 await expect(
                     investmentPoolFactory.connect(creator).createInvestmentPool(
                         fUSDTx.address,
+                        seedFundingLimit,
                         softCap,
                         hardCap,
                         campaignStartDate,
@@ -743,6 +763,7 @@ describe("Investment Pool Factory", async () => {
             });
 
             it("[IPF][2.1.6] Reverts creation if fundraiser campaign ends before it starts", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -755,6 +776,7 @@ describe("Investment Pool Factory", async () => {
                 await expect(
                     investmentPoolFactory.connect(creator).createInvestmentPool(
                         fUSDTx.address,
+                        seedFundingLimit,
                         softCap,
                         hardCap,
                         campaignStartDate,
@@ -777,6 +799,7 @@ describe("Investment Pool Factory", async () => {
             });
 
             it("[IPF][2.1.7] Reverts creation if fundraiser period is longer than MAX duration (90 days)", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -788,6 +811,7 @@ describe("Investment Pool Factory", async () => {
                 await expect(
                     investmentPoolFactory.connect(creator).createInvestmentPool(
                         fUSDTx.address,
+                        seedFundingLimit,
                         softCap,
                         hardCap,
                         campaignStartDate,
@@ -810,6 +834,7 @@ describe("Investment Pool Factory", async () => {
             });
 
             it("[IPF][2.1.8] Reverts creation if fundraiser period is shorter than MIN duration (30 days)", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -821,6 +846,7 @@ describe("Investment Pool Factory", async () => {
                 await expect(
                     investmentPoolFactory.connect(creator).createInvestmentPool(
                         fUSDTx.address,
+                        seedFundingLimit,
                         softCap,
                         hardCap,
                         campaignStartDate,
@@ -843,6 +869,7 @@ describe("Investment Pool Factory", async () => {
             });
 
             it("[IPF][2.1.9] Reverts creation if milestones list is empty", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -852,6 +879,7 @@ describe("Investment Pool Factory", async () => {
                 await expect(
                     investmentPoolFactory.connect(creator).createInvestmentPool(
                         fUSDTx.address,
+                        seedFundingLimit,
                         softCap,
                         hardCap,
                         campaignStartDate,
@@ -867,6 +895,7 @@ describe("Investment Pool Factory", async () => {
             });
 
             it("[IPF][2.1.10] Reverts creation if exceeds MAX milestones count", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -881,6 +910,7 @@ describe("Investment Pool Factory", async () => {
                 await expect(
                     investmentPoolFactory.connect(creator).createInvestmentPool(
                         fUSDTx.address,
+                        seedFundingLimit,
                         softCap,
                         hardCap,
                         campaignStartDate,
@@ -900,6 +930,7 @@ describe("Investment Pool Factory", async () => {
             });
 
             it("[IPF][2.1.11] Can create multiple milestones", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -921,6 +952,7 @@ describe("Investment Pool Factory", async () => {
                 await expect(
                     investmentPoolFactory.connect(creator).createInvestmentPool(
                         fUSDTx.address,
+                        seedFundingLimit,
                         softCap,
                         hardCap,
                         campaignStartDate,
@@ -933,6 +965,7 @@ describe("Investment Pool Factory", async () => {
             });
 
             it("[IPF][2.1.12] Reverts creation if first milestone starts before fundraiser ends", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -945,6 +978,7 @@ describe("Investment Pool Factory", async () => {
                 await expect(
                     investmentPoolFactory.connect(creator).createInvestmentPool(
                         fUSDTx.address,
+                        seedFundingLimit,
                         softCap,
                         hardCap,
                         campaignStartDate,
@@ -967,6 +1001,7 @@ describe("Investment Pool Factory", async () => {
             });
 
             it("[IPF][2.1.13] Reverts creation if milestone ends before it starts", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -979,6 +1014,7 @@ describe("Investment Pool Factory", async () => {
                 await expect(
                     investmentPoolFactory.connect(creator).createInvestmentPool(
                         fUSDTx.address,
+                        seedFundingLimit,
                         softCap,
                         hardCap,
                         campaignStartDate,
@@ -1001,6 +1037,7 @@ describe("Investment Pool Factory", async () => {
             });
 
             it("[IPF][2.1.14] Reverts creation if milestone is shorter than MIN duration (30days)", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -1012,6 +1049,7 @@ describe("Investment Pool Factory", async () => {
                 await expect(
                     investmentPoolFactory.connect(creator).createInvestmentPool(
                         fUSDTx.address,
+                        seedFundingLimit,
                         softCap,
                         hardCap,
                         campaignStartDate,
@@ -1034,6 +1072,7 @@ describe("Investment Pool Factory", async () => {
             });
 
             it("[IPF][2.1.15] Reverts creation if milestone is longer than MAX duration (90 days)", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -1045,6 +1084,7 @@ describe("Investment Pool Factory", async () => {
                 await expect(
                     investmentPoolFactory.connect(creator).createInvestmentPool(
                         fUSDTx.address,
+                        seedFundingLimit,
                         softCap,
                         hardCap,
                         campaignStartDate,
@@ -1067,6 +1107,7 @@ describe("Investment Pool Factory", async () => {
             });
 
             it("[IPF][2.1.16] Reverts creation if milestone are not adjacent in time", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -1080,6 +1121,7 @@ describe("Investment Pool Factory", async () => {
                 await expect(
                     investmentPoolFactory.connect(creator).createInvestmentPool(
                         fUSDTx.address,
+                        seedFundingLimit,
                         softCap,
                         hardCap,
                         campaignStartDate,
@@ -1108,6 +1150,7 @@ describe("Investment Pool Factory", async () => {
             });
 
             it("[IPF][2.1.17] Reverts creation if milestone percentages are not adding up", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -1119,6 +1162,7 @@ describe("Investment Pool Factory", async () => {
                 await expect(
                     investmentPoolFactory.connect(creator).createInvestmentPool(
                         fUSDTx.address,
+                        seedFundingLimit,
                         softCap,
                         hardCap,
                         campaignStartDate,
@@ -1143,6 +1187,7 @@ describe("Investment Pool Factory", async () => {
             });
 
             it("[IPF][2.1.18] Shouldn't be able to create other type of contract than CLONE_PROXY", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -1154,6 +1199,7 @@ describe("Investment Pool Factory", async () => {
                 await expect(
                     investmentPoolFactory.connect(creator).createInvestmentPool(
                         fUSDTx.address,
+                        seedFundingLimit,
                         softCap,
                         hardCap,
                         campaignStartDate,
@@ -1173,6 +1219,7 @@ describe("Investment Pool Factory", async () => {
             });
 
             it("[IPF][2.1.19] Shouldn't be able to create CLONE_PROXY if not enough value for gelato fee is sent", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
@@ -1184,6 +1231,7 @@ describe("Investment Pool Factory", async () => {
                 await expect(
                     investmentPoolFactory.connect(creator).createInvestmentPool(
                         fUSDTx.address,
+                        seedFundingLimit,
                         softCap,
                         hardCap,
                         campaignStartDate,
@@ -1202,6 +1250,121 @@ describe("Investment Pool Factory", async () => {
                 ).to.be.revertedWithCustomError(
                     investmentPoolFactory,
                     "InvestmentPoolFactory__NotEnoughEthValue"
+                );
+            });
+
+            it("[IPF][2.1.20] Reverts creation if seed funding limit is greater than soft cap", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("1010");
+                const softCap = ethers.utils.parseEther("1000");
+                const hardCap = ethers.utils.parseEther("1500");
+
+                const milestoneStartDate = dateToSeconds("2100/09/01");
+                const milestoneEndDate = dateToSeconds("2100/10/01");
+                const campaignStartDate = dateToSeconds("2100/07/01");
+                const campaignEndDate = dateToSeconds("2100/08/01");
+
+                await expect(
+                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                        fUSDTx.address,
+                        seedFundingLimit,
+                        softCap,
+                        hardCap,
+                        campaignStartDate,
+                        campaignEndDate,
+                        0, // CLONE-PROXY
+                        [
+                            {
+                                startDate: milestoneStartDate,
+                                endDate: milestoneEndDate,
+                                intervalSeedPortion: percent10InIpBigNumber,
+                                intervalStreamingPortion: percent90InIpBigNumber,
+                            },
+                        ],
+                        {value: gelatoFeeAllocation}
+                    )
+                )
+                    .to.be.revertedWithCustomError(
+                        investmentPoolFactory,
+                        "InvestmentPoolFactory__SeedFundingLimitIsGreaterThanSoftCap"
+                    )
+                    .withArgs(seedFundingLimit, softCap);
+            });
+
+            it("[IPF][2.1.21] Reverts creation if first milestone's seed funds allocation is greater than 50%", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
+                const softCap = ethers.utils.parseEther("1000");
+                const hardCap = ethers.utils.parseEther("1500");
+
+                const milestoneStartDate = dateToSeconds("2100/09/01");
+                const milestoneEndDate = dateToSeconds("2100/10/01");
+                const campaignStartDate = dateToSeconds("2100/07/01");
+                const campaignEndDate = dateToSeconds("2100/08/01");
+
+                await expect(
+                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                        fUSDTx.address,
+                        seedFundingLimit,
+                        softCap,
+                        hardCap,
+                        campaignStartDate,
+                        campaignEndDate,
+                        0, // CLONE-PROXY
+                        [
+                            {
+                                startDate: milestoneStartDate,
+                                endDate: milestoneEndDate,
+                                intervalSeedPortion: percent51InIpBigNumber,
+                                intervalStreamingPortion: percent49InIpBigNumber,
+                            },
+                        ],
+                        {value: gelatoFeeAllocation}
+                    )
+                ).to.be.revertedWithCustomError(
+                    investmentPoolFactory,
+                    "InvestmentPoolFactory__SeedFundsAllocationExceedsMax"
+                );
+            });
+
+            it("[IPF][2.1.22] Reverts creation if second milestone's seed funds allocation is greater than 10%", async () => {
+                const seedFundingLimit = ethers.utils.parseEther("500");
+                const softCap = ethers.utils.parseEther("1000");
+                const hardCap = ethers.utils.parseEther("1500");
+
+                const milestoneStartDate = dateToSeconds("2100/09/01");
+                const milestoneEndDate = dateToSeconds("2100/10/01");
+                const milestoneStartDate2 = dateToSeconds("2100/10/01");
+                const milestoneEndDate2 = dateToSeconds("2100/11/01");
+                const campaignStartDate = dateToSeconds("2100/07/01");
+                const campaignEndDate = dateToSeconds("2100/08/01");
+
+                await expect(
+                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                        fUSDTx.address,
+                        seedFundingLimit,
+                        softCap,
+                        hardCap,
+                        campaignStartDate,
+                        campaignEndDate,
+                        0, // CLONE-PROXY
+                        [
+                            {
+                                startDate: milestoneStartDate,
+                                endDate: milestoneEndDate,
+                                intervalSeedPortion: percent10InIpBigNumber,
+                                intervalStreamingPortion: percent40InIpBigNumber,
+                            },
+                            {
+                                startDate: milestoneStartDate2,
+                                endDate: milestoneEndDate2,
+                                intervalSeedPortion: percent6InIpBigNumber,
+                                intervalStreamingPortion: percent44InIpBigNumber,
+                            },
+                        ],
+                        {value: gelatoFeeAllocation}
+                    )
+                ).to.be.revertedWithCustomError(
+                    investmentPoolFactory,
+                    "InvestmentPoolFactory__SeedFundsAllocationExceedsMax"
                 );
             });
         });

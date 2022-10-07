@@ -91,6 +91,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     IGovernancePool public governancePool;
 
     // TODO: validate that uint96 for soft cap is enough
+    uint96 public seedFundingLimit;
     uint96 public softCap;
     uint96 public hardCap;
     uint48 public fundraiserStartAt;
@@ -232,6 +233,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         creator = _creator;
         gelatoOps = _gelatoOps;
         gelato = gelatoOps.gelato();
+        seedFundingLimit = _projectInfo.seedFundingLimit;
         softCap = _projectInfo.softCap;
         hardCap = _projectInfo.hardCap;
         fundraiserStartAt = _projectInfo.fundraiserStartAt;
