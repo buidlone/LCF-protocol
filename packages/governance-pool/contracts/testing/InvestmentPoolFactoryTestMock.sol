@@ -13,10 +13,10 @@ contract InvestmentPoolFactoryTestMock is InvestmentPoolFactory {
         IGelatoOps _gelatoOps,
         address _implementationContract
     ) InvestmentPoolFactory(_host, _gelatoOps, _implementationContract) {
-        TERMINATION_WINDOW = 10 minutes;
-        AUTOMATED_TERMINATION_WINDOW = 5 minutes;
-        MILESTONE_MIN_DURATION = 1 minutes;
-        MILESTONE_MAX_DURATION = 60 minutes;
+        TERMINATION_WINDOW = 30 minutes;
+        AUTOMATED_TERMINATION_WINDOW = 15 minutes;
+        MILESTONE_MIN_DURATION = 2 hours;
+        MILESTONE_MAX_DURATION = 8 hours;
         FUNDRAISER_MIN_DURATION = 1 minutes;
         FUNDRAISER_MAX_DURATION = 60 minutes;
     }
