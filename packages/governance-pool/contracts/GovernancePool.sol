@@ -31,6 +31,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     VotingToken public immutable VOTING_TOKEN;
     address public immutable INVESTMENT_POOL_FACTORY_ADDRESS;
     uint8 public immutable VOTES_PERCENTAGE_THRESHOLD;
+    uint256 public immutable VOTES_WITHDRAW_FEE; // number out of 100%; E.g. 1 or 13
 
     /// @notice mapping from investment pool id => status
     mapping(uint256 => InvestmentPoolStatus) public investmentPoolStatus;
@@ -66,12 +67,14 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     constructor(
         VotingToken _votingToken,
         address _investmentPoolFactory,
-        uint8 _threshold
+        uint8 _threshold,
+        uint256 _votestWithdrawFee
     ) {
         if (_threshold > 100) revert GovernancePool__thresholdNumberIsGreaterThan100();
         VOTING_TOKEN = _votingToken;
         INVESTMENT_POOL_FACTORY_ADDRESS = _investmentPoolFactory;
         VOTES_PERCENTAGE_THRESHOLD = _threshold;
+        VOTES_WITHDRAW_FEE = _votestWithdrawFee;
     }
 
     modifier onUnavailableInvestmentPool(address _investmentPool) {
@@ -248,11 +251,14 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         votesAmount[_msgSender()][investmentPoolId] = investorVotesAmount - _retractAmount;
         totalVotesAmount[investmentPoolId] -= _retractAmount;
 
+        // Apply fee for votes withdrawal
+        uint256 amountToTransfer = (_retractAmount * (100 - VOTES_WITHDRAW_FEE)) / 100;
+
         VOTING_TOKEN.safeTransferFrom(
             address(this),
             _msgSender(),
             investmentPoolId,
-            _retractAmount,
+            amountToTransfer,
             ""
         );
 

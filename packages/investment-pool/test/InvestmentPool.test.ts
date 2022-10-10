@@ -60,6 +60,7 @@ let creationRes: ContractTransaction;
 let gelatoOpsMock: GelatoOpsMock;
 
 let gelatoFeeAllocation: BigNumber;
+let investmentWithdrawFee: BigNumber;
 let ethAddress: string;
 
 // Percentages (in divider format)
@@ -138,6 +139,10 @@ const defineProjectStateByteValues = async (investment: InvestmentPoolMock) => {
 
 const defineGelatoFeeAllocation = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
     gelatoFeeAllocation = await investmentPoolFactory.gelatoFeeAllocationForProject();
+};
+
+const defineInvestmentWithdrawFee = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
+    investmentWithdrawFee = await investmentPoolFactory.INVESTMENT_WITHDRAW_FEE();
 };
 
 const defineEthAddress = async (investmentPool: InvestmentPoolMock) => {
@@ -310,6 +315,7 @@ describe("Investment Pool", async () => {
         await defineGelatoFeeAllocation(investmentPoolFactory);
         await defineProjectStateByteValues(investmentPool);
         await defineEthAddress(investmentPool);
+        await defineInvestmentWithdrawFee(investmentPoolFactory);
 
         // Enforce a starting timestamp to avoid time based bugs
         const time = dateToSeconds("2100/06/01");
@@ -1195,6 +1201,8 @@ describe("Investment Pool", async () => {
 
             it("[IP][4.1.4] In fundraising period unpledge should update investors and contract balance", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("10");
+                const unpledgeAmount: BigNumber = ethers.utils.parseEther("1");
+
                 const investorPriorBalance = BigNumber.from(
                     await fUSDTx.balanceOf({
                         account: investorA.address,
@@ -1213,7 +1221,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await investMoney(fUSDTx, investment, investorA, investedAmount);
 
-                await investment.connect(investorA).unpledge(investedAmount.sub(100));
+                await investment.connect(investorA).unpledge(unpledgeAmount);
 
                 const investorsBalance = BigNumber.from(
                     await fUSDTx.balanceOf({
@@ -1227,8 +1235,19 @@ describe("Investment Pool", async () => {
                         providerOrSigner: buidl1Admin,
                     })
                 );
-                assert.deepEqual(investorPriorBalance.sub(100), investorsBalance);
-                assert.deepEqual(contractPriorBalance.add(100), contractBalance);
+
+                const feeAmount: BigNumber = unpledgeAmount
+                    .mul(investmentWithdrawFee)
+                    .div(BigNumber.from(100));
+
+                assert.deepEqual(
+                    investorsBalance,
+                    investorPriorBalance.sub(investedAmount).add(unpledgeAmount).sub(feeAmount)
+                );
+                assert.deepEqual(
+                    contractBalance,
+                    contractPriorBalance.add(investedAmount).sub(unpledgeAmount).add(feeAmount)
+                );
             });
 
             it("[IP][4.1.5] In fundraising period unpledge should emit event with investor and amount args", async () => {
@@ -1311,6 +1330,7 @@ describe("Investment Pool", async () => {
             it("[IP][4.1.9] In milestone 0 period unpledge should update investors and contract balance", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("2000");
                 const investedAmount2: BigNumber = ethers.utils.parseEther("100");
+                const unpledgeAmount: BigNumber = ethers.utils.parseEther("1");
 
                 // NOTE: Time traveling to 2100/07/15, when fundraiser already started
                 let timeStamp = dateToSeconds("2100/07/15");
@@ -1335,7 +1355,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await investMoney(fUSDTx, investment, investorB, investedAmount2);
 
-                await investment.connect(investorB).unpledge(investedAmount2.sub(100));
+                await investment.connect(investorB).unpledge(unpledgeAmount);
 
                 const investorsBalance = BigNumber.from(
                     await fUSDTx.balanceOf({
@@ -1350,8 +1370,18 @@ describe("Investment Pool", async () => {
                     })
                 );
 
-                assert.deepEqual(investorPriorBalance.sub(100), investorsBalance);
-                assert.deepEqual(contractPriorBalance.add(100), contractBalance);
+                const feeAmount: BigNumber = unpledgeAmount
+                    .mul(investmentWithdrawFee)
+                    .div(BigNumber.from(100));
+
+                assert.deepEqual(
+                    investorsBalance,
+                    investorPriorBalance.sub(investedAmount2).add(unpledgeAmount).sub(feeAmount)
+                );
+                assert.deepEqual(
+                    contractBalance,
+                    contractPriorBalance.add(investedAmount2).sub(unpledgeAmount).add(feeAmount)
+                );
             });
 
             it("[IP][4.1.10] In milestone 0 period unpledge should emit event with investor and amount args", async () => {
@@ -1589,8 +1619,12 @@ describe("Investment Pool", async () => {
                     })
                 );
 
-                assert.deepEqual(investorsBalance, investorPriorBalance);
-                assert.deepEqual(contractBalance, contractPriorBalance);
+                const feeAmount: BigNumber = investedAmount
+                    .mul(investmentWithdrawFee)
+                    .div(BigNumber.from(100));
+
+                assert.deepEqual(investorsBalance, investorPriorBalance.sub(feeAmount));
+                assert.deepEqual(contractBalance, contractPriorBalance.add(feeAmount));
             });
 
             it("[IP][4.2.11] Investor should be able to do a partial unpledge", async () => {
@@ -1631,11 +1665,19 @@ describe("Investment Pool", async () => {
                     })
                 );
 
+                const feeAmount: BigNumber = investedAmount
+                    .div(2)
+                    .mul(investmentWithdrawFee)
+                    .div(BigNumber.from(100));
+
                 assert.deepEqual(
                     investorsBalance,
-                    investorPriorBalance.sub(investedAmount.div(2))
+                    investorPriorBalance.sub(investedAmount.div(2)).sub(feeAmount)
                 );
-                assert.deepEqual(contractBalance, contractPriorBalance.add(investedAmount.div(2)));
+                assert.deepEqual(
+                    contractBalance,
+                    contractPriorBalance.add(investedAmount.div(2)).add(feeAmount)
+                );
             });
 
             it("[IP][4.2.12] Non-investor shouldn't be able to unpledge", async () => {

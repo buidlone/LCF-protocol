@@ -9,7 +9,6 @@ import {
     GelatoOpsMock,
     GovernancePoolMockForIntegration,
 } from "../typechain-types";
-import {formatEther} from "ethers/lib/utils";
 
 const fTokenAbi = require("./abis/fTokenAbi");
 

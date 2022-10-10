@@ -70,12 +70,18 @@ async function main() {
     governancePool = await governancePoolDep.deploy(
         votingToken.address,
         investmentPoolFactory.address,
-        51 // Votes threshold
+        51, // Votes threshold
+        1 // 1% Votes withdraw fee
     );
     await governancePool.deployed();
     console.log("Governance pool address: ", governancePool.address);
     await governancePool.deployTransaction.wait(6);
-    await verify(governancePool.address, [votingToken.address, investmentPoolFactory.address, 51]);
+    await verify(governancePool.address, [
+        votingToken.address,
+        investmentPoolFactory.address,
+        51,
+        1,
+    ]);
 
     // Transfer ownership to governance pool
     console.log("Transfering voting token ownership to governance pool...");

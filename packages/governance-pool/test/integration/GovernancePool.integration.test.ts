@@ -301,7 +301,8 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             governancePool = await governancePoolFactory.deploy(
                 votingToken.address,
                 investmentPoolFactory.address,
-                51 // Votes threshold
+                51, // Votes threshold
+                1 // 1% Votes withdraw fee
             );
             await governancePool.deployed();
 
@@ -406,7 +407,8 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             governancePool = await governancePoolFactory.deploy(
                 votingToken.address,
                 investmentPoolFactory.address,
-                51 // Votes threshold
+                51, // Votes threshold
+                1 // 1% Votes withdraw fee
             );
             await governancePool.deployed();
         });
@@ -477,7 +479,8 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             governancePool = await governancePoolFactory.deploy(
                 votingToken.address,
                 investmentPoolFactory.address,
-                51 // Votes threshold
+                51, // Votes threshold
+                1 // 1% Votes withdraw fee
             );
             await governancePool.deployed();
 
@@ -551,7 +554,8 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             governancePool = await governancePoolFactory.deploy(
                 votingToken.address,
                 investmentPoolFactory.address,
-                51 // Votes threshold
+                51, // Votes threshold
+                1 // 1% Votes withdraw fee
             );
             await governancePool.deployed();
 

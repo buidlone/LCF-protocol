@@ -54,13 +54,14 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     using Clones for address;
 
     uint32 public constant MAX_MILESTONE_COUNT = 10;
-    uint256 public constant PERCENTAGE_DIVIDER = 10**6;
     uint48 public TERMINATION_WINDOW = 3 days;
     uint48 public AUTOMATED_TERMINATION_WINDOW = 1 hours;
+    uint256 public constant PERCENTAGE_DIVIDER = 10**6;
     uint256 public MILESTONE_MIN_DURATION = 30 days;
     uint256 public MILESTONE_MAX_DURATION = 90 days;
     uint256 public FUNDRAISER_MIN_DURATION = 30 days;
     uint256 public FUNDRAISER_MAX_DURATION = 90 days;
+    uint256 public INVESTMENT_WITHDRAW_FEE = 1; // 1% out of 100%
 
     /**
      * @notice Amount that will be used to cover transaction fee for gelato automation
@@ -153,6 +154,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
             projectDetails,
             TERMINATION_WINDOW,
             AUTOMATED_TERMINATION_WINDOW,
+            INVESTMENT_WITHDRAW_FEE,
             _milestones,
             governancePool
         );

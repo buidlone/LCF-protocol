@@ -67,8 +67,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     uint256 public constant NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE = 32;
     uint256 public constant LAST_MILESTONE_BYTE_VALUE = 64;
     uint256 public constant TERMINATED_BY_VOTING_BYTE_VALUE = 128;
-    uint256 public constant SUCCESSFULLY_ENDED_BYTE_VALUE = 256;
-    uint256 public constant NO_STATE_BYTE_VALUE = 512;
+    uint256 public constant TERMINATED_BY_GELATO_BYTE_VALUE = 256;
+    uint256 public constant SUCCESSFULLY_ENDED_BYTE_VALUE = 512;
+    uint256 public constant NO_STATE_BYTE_VALUE = 1024;
     uint256 public constant ANY_ACTIVE_MILESTONE_BYTE_VALUE =
         NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE | LAST_MILESTONE_BYTE_VALUE;
 
@@ -112,6 +113,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     // TODO: Look into, maybe an array would be better, since we have a fixed amount?
     mapping(uint256 => Milestone) public milestones;
     uint256 public currentMilestone;
+    uint256 public investmentWithdrawFee;
 
     /**
      * @dev It's a memoization mapping for milestone Portions
@@ -218,6 +220,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         ProjectInfo calldata _projectInfo,
         uint48 _terminationWindow,
         uint48 _automatedTerminationWindow,
+        uint256 _investmentWithdrawFee,
         MilestoneInterval[] calldata _milestones,
         IGovernancePool _governancePool
     ) external payable initializer {
@@ -240,6 +243,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         fundraiserEndAt = _projectInfo.fundraiserEndAt;
         terminationWindow = _terminationWindow;
         automatedTerminationWindow = _automatedTerminationWindow;
+        investmentWithdrawFee = _investmentWithdrawFee;
         milestoneCount = _milestones.length;
         currentMilestone = 0;
         governancePool = _governancePool;
@@ -344,7 +348,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         investedAmount[_msgSender()][unpledgeFromMilestoneId] -= _amount;
         totalInvestedAmount -= _amount;
 
-        bool successfulTransfer = acceptedToken.transfer(_msgSender(), _amount);
+        // Apply fee for withdrawal during the same period as invested (milestone or fundraiser)
+        uint256 amountToTransfer = (_amount * (100 - investmentWithdrawFee)) / 100;
+
+        bool successfulTransfer = acceptedToken.transfer(_msgSender(), amountToTransfer);
         if (!successfulTransfer) revert InvestmentPool__SuperTokenTransferFailed();
 
         emit Unpledge(_msgSender(), _amount);
@@ -606,8 +613,14 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             return NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE;
         } else if (isLastMilestoneOngoing() && !isEmergencyTerminated() && !isFailedFundraiser()) {
             return LAST_MILESTONE_BYTE_VALUE;
-        } else if (isCanceledDuringMilestones() && !isFailedFundraiser()) {
+        } else if (
+            gelatoTask != bytes32(0) && isCanceledDuringMilestones() && !isFailedFundraiser()
+        ) {
             return TERMINATED_BY_VOTING_BYTE_VALUE;
+        } else if (
+            gelatoTask == bytes32(0) && isCanceledDuringMilestones() && !isFailedFundraiser()
+        ) {
+            return TERMINATED_BY_GELATO_BYTE_VALUE;
         } else if (didProjectEnd() && !isEmergencyTerminated() && !isFailedFundraiser()) {
             return SUCCESSFULLY_ENDED_BYTE_VALUE;
         } else {
@@ -976,6 +989,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         _gelatoTransfer(fee, feeToken);
 
         gelatoOps.cancelTask(gelatoTask);
+        gelatoTask = bytes32(0);
     }
 
     // TODO: Ensure that this wouldn't clash with our logic

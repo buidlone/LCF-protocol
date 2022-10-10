@@ -120,6 +120,7 @@ interface IInitializableInvestmentPool is IInvestmentPool {
         IInvestmentPool.ProjectInfo calldata _projectInfo,
         uint48 _terminationWindow,
         uint48 _automatedTerminationWindow,
+        uint256 _investmentWithdrawFee,
         MilestoneInterval[] calldata _milestones,
         IGovernancePool _governancePool
     ) external payable;
