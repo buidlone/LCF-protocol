@@ -654,7 +654,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      * @dev Used only by the frontend
      */
     function getMilestonesInvestmentsListForFormula() public view returns (uint256[] memory) {
-        uint256 listValuesCount = milestoneCount + 1;
+        uint256 listValuesCount = milestoneCount;
         uint256[] memory investmentsList = new uint256[](listValuesCount);
 
         for (uint i = 0; i < listValuesCount; i++) {
@@ -835,6 +835,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     /// @notice Get the total project PORTION percentage. It shouldn't be confused with total investment percentage that is left.
     function _getEarlyTerminationProjectLeftPortion(uint256 _terminationMilestoneId)
         internal
+        view
         returns (uint256)
     {
         /**
