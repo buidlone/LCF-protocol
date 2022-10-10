@@ -639,20 +639,38 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     }
 
     /// @notice Calculate the real funds allocation for the milestone
-    function getTotalMilestoneTokenAllocation(uint _milestoneId) public returns (uint256) {
+    function getTotalMilestoneTokenAllocation(uint _milestoneId) public view returns (uint256) {
         uint256 memInvAmount = memMilestoneInvestments[_milestoneId];
-        if (memInvAmount == 0 && _milestoneId > 0) {
-            memInvAmount = memMilestoneInvestments[_milestoneId - 1];
-            memMilestoneInvestments[_milestoneId] = memInvAmount;
-        }
-
         uint totalPercentage = milestones[_milestoneId].intervalSeedPortion +
             milestones[_milestoneId].intervalStreamingPortion;
         uint256 subt = memInvAmount * totalPercentage;
         return subt / PERCENTAGE_DIVIDER;
     }
 
+    /**
+     * @notice This function returns values that shouldn't be used on its own.
+     * @notice The amount should be multiplied with the corresponding milestone's allocation percentage
+     * @notice If list item is zero, percentage should be multiplied by the nearest value on the left that is not zero
+     * @dev Used only by the frontend
+     */
+    function getMilestonesInvestmentsListForFormula() public view returns (uint256[] memory) {
+        uint256 listValuesCount = milestoneCount + 1;
+        uint256[] memory investmentsList = new uint256[](listValuesCount);
+
+        for (uint i = 0; i < listValuesCount; i++) {
+            investmentsList[i] = memMilestoneInvestments[i];
+        }
+        return investmentsList;
+    }
+
     /** INTERNAL FUNCTIONS */
+
+    function _ifNeededUpdateMemInvestmentValue(uint256 _milestoneId) internal {
+        uint256 memInvAmount = memMilestoneInvestments[_milestoneId];
+        if (memInvAmount == 0 && _milestoneId > 0) {
+            memMilestoneInvestments[_milestoneId] = memMilestoneInvestments[_milestoneId - 1];
+        }
+    }
 
     /**
      * @notice Allows the pool creator to start streaming/receive funds for a certain milestone
@@ -670,6 +688,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         if (milestone.streamOngoing)
             revert InvestmentPool__AlreadyStreamingForMilestone(_milestoneId);
         if (milestone.paid) revert InvestmentPool__AlreadyPaidForMilestone(_milestoneId);
+
+        _ifNeededUpdateMemInvestmentValue(_milestoneId);
 
         // Allow creator to claim only milestone seed funds if milestone was terminated by voting
         if (isCanceledDuringMilestones()) {
