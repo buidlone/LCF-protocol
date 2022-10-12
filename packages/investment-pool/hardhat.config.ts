@@ -27,7 +27,10 @@ const config: HardhatUserConfig = {
         hardhat: {},
         goerli: {
             url: process.env.GOERLI_URL || "",
-            accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+            accounts:
+                process.env.DEPLOYER_PRIVATE_KEY !== undefined
+                    ? [process.env.DEPLOYER_PRIVATE_KEY]
+                    : [],
             chainId: 5,
         },
     },

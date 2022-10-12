@@ -13,8 +13,8 @@
     "deploy_verify:goerli": "yarn hardhat run scripts/deploy-and-verify.ts --network goerli",
     "deploy_verify_testing:goerli": "yarn hardhat run scripts/deploy-and-verify-testing.ts --network goerli",
     "deploy_testing:goerli": "yarn hardhat run scripts/deploy-testing.ts --network goerli",
-    "test-ip-creation:goerli": "yarn hardhat run scripts/create-ip-testing.ts --network goerli",
-    "ip-creation:goerli": "yarn hardhat run scripts/create-ip.ts --network goerli"
+    "test-ip-creation:goerli": "yarn hardhat create-ip-test --network goerli",
+    "ip-creation:goerli": "yarn hardhat create-ip --network goerli"
   },
   "devDependencies": {
     "@ethersproject/abi": "^5.4.7",
