@@ -26,10 +26,8 @@ const config: HardhatUserConfig = {
         goerli: {
             url: process.env.GOERLI_URL || "",
             accounts:
-                process.env.PRIVATE_KEY !== undefined && process.env.PRIVATE_KEY_2 !== undefined
-                    ? [process.env.PRIVATE_KEY, process.env.PRIVATE_KEY_2]
-                    : process.env.PRIVATE_KEY !== undefined
-                    ? [process.env.PRIVATE_KEY]
+                process.env.DEPLOYER_PRIVATE_KEY !== undefined
+                    ? [process.env.DEPLOYER_PRIVATE_KEY]
                     : [],
             chainId: 5,
         },
