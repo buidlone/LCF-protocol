@@ -364,7 +364,11 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      */
     function refund()
         external
-        allowedProjectStates(FAILED_FUNDRAISER_BYTE_VALUE | TERMINATED_BY_VOTING_BYTE_VALUE)
+        allowedProjectStates(
+            FAILED_FUNDRAISER_BYTE_VALUE |
+                TERMINATED_BY_VOTING_BYTE_VALUE |
+                TERMINATED_BY_GELATO_BYTE_VALUE
+        )
     {
         // If fundraiser failed, transfer back total amount that investor invested
         if (isFailedFundraiser()) {
@@ -472,6 +476,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             CANCELED_PROJECT_BYTE_VALUE |
                 FAILED_FUNDRAISER_BYTE_VALUE |
                 TERMINATED_BY_VOTING_BYTE_VALUE |
+                TERMINATED_BY_GELATO_BYTE_VALUE |
                 SUCCESSFULLY_ENDED_BYTE_VALUE
         )
     {
