@@ -6,7 +6,6 @@ import {
     GovernancePoolMock,
     InvestmentPoolMockForIntegration,
 } from "../../typechain-types";
-import traveler from "ganache-time-traveler";
 import {BigNumber} from "ethers";
 
 let accounts: SignerWithAddress[];
@@ -21,10 +20,17 @@ let votingToken: VotingToken;
 let governancePool: GovernancePoolMock;
 let investmentPoolMock: InvestmentPoolMockForIntegration;
 
+let votesWithdrawFee: BigNumber;
+
 const getInvestmentPoolStatus = async (address: string): Promise<number> => {
     const investmentPoolId = await governancePool.getInvestmentPoolId(address);
     const investmentPoolStatus = await governancePool.investmentPoolStatus(investmentPoolId);
     return investmentPoolStatus;
+};
+
+const defineVotesWithdrawFee = async () => {
+    await deployContracts();
+    votesWithdrawFee = await governancePool.VOTES_WITHDRAW_FEE();
 };
 
 const deployContracts = async () => {
@@ -37,7 +43,8 @@ const deployContracts = async () => {
     governancePool = await governancePoolFactory.deploy(
         votingToken.address,
         investmentPoolFactoryAsUser.address,
-        51 // Votes threshold
+        51, // Votes threshold
+        1 // 1% Votes withdraw fee
     );
     await governancePool.deployed();
 
@@ -63,6 +70,8 @@ describe("Governance Pool", async () => {
         investorA = accounts[3];
         investorB = accounts[4];
         investmentPoolFactoryAsUser = accounts[5];
+
+        await defineVotesWithdrawFee();
     });
 
     describe("1. Governance pool creation", () => {
@@ -84,7 +93,8 @@ describe("Governance Pool", async () => {
                 governancePool = await governancePoolFactory.deploy(
                     votingToken.address,
                     investmentPoolFactoryAsUser.address,
-                    51 // Votes threshold
+                    51, // Votes threshold
+                    1 // 1% Votes withdraw fee
                 );
                 await governancePool.deployed();
 
@@ -1330,8 +1340,18 @@ describe("Governance Pool", async () => {
                     investorA.address
                 );
 
-                assert.equal(governancePoolBalance.toString(), votesLeftInPool.toString());
-                assert.equal(investorBalance.toString(), votesLeftForInvestor.toString());
+                const feeAmount: BigNumber = votesToRetract
+                    .mul(votesWithdrawFee)
+                    .div(BigNumber.from(100));
+
+                assert.equal(
+                    governancePoolBalance.toString(),
+                    votesLeftInPool.add(feeAmount).toString()
+                );
+                assert.equal(
+                    investorBalance.toString(),
+                    votesLeftForInvestor.sub(feeAmount).toString()
+                );
             });
 
             it("[GP][9.2.8] Should be able to retract all of the votes", async () => {

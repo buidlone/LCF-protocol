@@ -61,7 +61,8 @@ async function main() {
     governancePool = await governancePoolDep.deploy(
         votingToken.address,
         investmentPoolFactory.address,
-        51 // Votes threshold
+        51, // Votes threshold
+        1 // 1% Votes withdraw fee
     );
     await governancePool.deployed();
     console.log("Governance pool address: ", governancePool.address);
