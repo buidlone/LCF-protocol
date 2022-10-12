@@ -293,6 +293,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         allowedProjectStates(ACTIVE_FUNDRAISER_BYTE_VALUE | NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE)
     {
         uint256 untilHardcap = hardCap - totalInvestedAmount;
+        uint256 votingTokensToMint = _getVotingTokensAmountToMint(_amount);
 
         if (untilHardcap < _amount) {
             // Edge case, trying to invest, when hard cap is reached or almost reached
@@ -313,9 +314,15 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         bool successfulTransfer = acceptedToken.transferFrom(_msgSender(), address(this), _amount);
         if (!successfulTransfer) revert InvestmentPool__SuperTokenTransferFailed();
 
-        // Mint voting tokens in governance pool
         uint48 unlockTime = milestones[investToMilestoneId].startDate;
-        governancePool.mintVotingTokens(investToMilestoneId, _msgSender(), _amount, unlockTime);
+
+        // Mint voting tokens in governance pool
+        governancePool.mintVotingTokens(
+            investToMilestoneId,
+            _msgSender(),
+            votingTokensToMint,
+            unlockTime
+        );
 
         emit Invest(_msgSender(), _amount);
     }
@@ -828,6 +835,64 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         memMilestoneInvestments[_milestoneId] += scaledInvestment;
         investedAmount[_investor][_milestoneId] += _amount;
         totalInvestedAmount += _amount;
+    }
+
+    /**
+     * @notice Get the multiplier for voting tokens to mint. It is determined by the period (seed/private/public)
+     * @notice Multiplier for seed funding is 2,5; private - 1,9; public - 1.
+     * @dev Multiplier is firstly multiplied by 10 to avoid decimal places rounding in solidity
+     */
+    function _getVotingTokensAmountToMint(uint256 _amount) internal view returns (uint256) {
+        uint256 seedFundingMultiplier = 25;
+        uint256 privateFundingMultiplier = 19;
+        uint256 publicFundingMultiplier = 10;
+
+        if (totalInvestedAmount < seedFundingLimit) {
+            // Seed funding
+            if (totalInvestedAmount + _amount <= seedFundingLimit) {
+                // Multiplier will be the same for all voting tokens
+                return _amount * seedFundingMultiplier;
+            } else if (totalInvestedAmount + _amount <= softCap) {
+                // Multiplier is going to be different. That's why we need to calculate
+                // the amount which is going to be invested in seed funding and which in private funding
+                uint256 amountInSeedFunding = (seedFundingLimit - totalInvestedAmount) *
+                    seedFundingMultiplier;
+                uint256 amountInPrivateFunding = (_amount - amountInSeedFunding) *
+                    privateFundingMultiplier;
+                return amountInSeedFunding + amountInPrivateFunding;
+            } else if (totalInvestedAmount + _amount <= hardCap) {
+                // Multiplier is going to be different. That's why we need to calculate
+                // the amount which is going to be invested in seed funding, which in private funding and which in public funding
+                uint256 amountInSeedFunding = (seedFundingLimit - totalInvestedAmount) *
+                    seedFundingMultiplier;
+                uint256 amountInPrivateFunding = (softCap - seedFundingLimit) *
+                    privateFundingMultiplier;
+                uint256 amountInPublicFunding = (_amount -
+                    amountInSeedFunding -
+                    amountInPrivateFunding) * publicFundingMultiplier;
+                return amountInSeedFunding + amountInPrivateFunding + amountInPublicFunding;
+            }
+        } else if (totalInvestedAmount >= seedFundingLimit && totalInvestedAmount < softCap) {
+            // Private funding
+            if (totalInvestedAmount + _amount <= softCap) {
+                // Multiplier will be the same for all voting tokens
+                return _amount * privateFundingMultiplier;
+            } else if (totalInvestedAmount + _amount <= hardCap) {
+                // Multiplier is going to be different. That's why we need to calculate
+                // the amount which is going to be invested in private funding and which in public funding
+                uint256 amountInPrivateFunding = (softCap - totalInvestedAmount) *
+                    privateFundingMultiplier;
+                uint256 amountInPublicFunding = (_amount - amountInPrivateFunding) *
+                    publicFundingMultiplier;
+                return amountInPrivateFunding + amountInPublicFunding;
+            }
+        } else if (totalInvestedAmount >= softCap && totalInvestedAmount < hardCap) {
+            // Public limited funding
+            if (totalInvestedAmount + _amount <= hardCap) {
+                // Multiplier will be the same for all voting tokens
+                return _amount * publicFundingMultiplier;
+            }
+        }
     }
 
     /// @notice Get the total project PORTION percentage. It shouldn't be confused with total investment percentage that is left.

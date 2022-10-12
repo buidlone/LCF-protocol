@@ -152,7 +152,7 @@ describe("Governance Pool", async () => {
                         .activateInvestmentPool(investmentPoolAsUser.address)
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__notInvestmentPoolFactory"
+                    "GovernancePool__NotInvestmentPoolFactory"
                 );
             });
 
@@ -167,7 +167,7 @@ describe("Governance Pool", async () => {
                         .activateInvestmentPool(investmentPoolAsUser.address)
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__statusIsNotUnavailable"
+                    "GovernancePool__StatusIsNotUnavailable"
                 );
             });
         });
@@ -346,7 +346,7 @@ describe("Governance Pool", async () => {
                         .mintVotingTokens(0, investorA.address, tokensToMint, 0)
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__statusIsNotActiveVoting"
+                    "GovernancePool__StatusIsNotActiveVoting"
                 );
             });
 
@@ -362,7 +362,7 @@ describe("Governance Pool", async () => {
                         .mintVotingTokens(0, investorA.address, tokensToMint, 0)
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__statusIsNotActiveVoting"
+                    "GovernancePool__StatusIsNotActiveVoting"
                 );
             });
 
@@ -378,7 +378,7 @@ describe("Governance Pool", async () => {
                         .mintVotingTokens(0, investorA.address, tokensToMint, 0)
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__statusIsNotActiveVoting"
+                    "GovernancePool__StatusIsNotActiveVoting"
                 );
             });
 
@@ -391,7 +391,7 @@ describe("Governance Pool", async () => {
                     governancePool
                         .connect(investmentPoolAsUser)
                         .mintVotingTokens(0, investorA.address, 0, 0)
-                ).to.be.revertedWithCustomError(governancePool, "GovernancePool__amountIsZero");
+                ).to.be.revertedWithCustomError(governancePool, "GovernancePool__AmountIsZero");
             });
 
             it("[GP][4.2.6] Should be able to mint 1mln tokens in one mint", async () => {
@@ -451,7 +451,7 @@ describe("Governance Pool", async () => {
                     )
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__totalSupplyIsZero"
+                    "GovernancePool__TotalSupplyIsZero"
                 );
             });
 
@@ -479,7 +479,7 @@ describe("Governance Pool", async () => {
                 )
                     .to.be.revertedWithCustomError(
                         governancePool,
-                        "GovernancePool__totalSupplyIsSmallerThanVotesAgainst"
+                        "GovernancePool__TotalSupplyIsSmallerThanVotesAgainst"
                     )
                     .withArgs(totalSupply, votesAgainst);
             });
@@ -615,7 +615,7 @@ describe("Governance Pool", async () => {
                         .unlockVotingTokens(investmentPoolAsUser.address, 0)
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__statusIsNotActiveVoting"
+                    "GovernancePool__StatusIsNotActiveVoting"
                 );
             });
 
@@ -631,7 +631,7 @@ describe("Governance Pool", async () => {
                         .unlockVotingTokens(investmentPoolAsUser.address, 0)
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__statusIsNotActiveVoting"
+                    "GovernancePool__StatusIsNotActiveVoting"
                 );
             });
 
@@ -646,7 +646,7 @@ describe("Governance Pool", async () => {
                         .unlockVotingTokens(investmentPoolAsUser.address, 0)
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__noIvestmentsMade"
+                    "GovernancePool__NoIvestmentsMade"
                 );
             });
 
@@ -699,7 +699,7 @@ describe("Governance Pool", async () => {
                         .unlockVotingTokens(investmentPoolAsUser.address, 1)
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__noVotingTokensAvailableForClaim"
+                    "GovernancePool__NoVotingTokensAvailableForClaim"
                 );
             });
 
@@ -725,7 +725,7 @@ describe("Governance Pool", async () => {
                         .unlockVotingTokens(investmentPoolAsUser.address, 0)
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__noVotingTokensAvailableForClaim"
+                    "GovernancePool__NoVotingTokensAvailableForClaim"
                 );
             });
 
@@ -913,7 +913,7 @@ describe("Governance Pool", async () => {
                         .voteAgainst(investmentPoolAsUser.address, votesAgainst)
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__statusIsNotActiveVoting"
+                    "GovernancePool__StatusIsNotActiveVoting"
                 );
             });
 
@@ -931,7 +931,7 @@ describe("Governance Pool", async () => {
                         .voteAgainst(investmentPoolAsUser.address, votesAgainst)
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__statusIsNotActiveVoting"
+                    "GovernancePool__StatusIsNotActiveVoting"
                 );
             });
 
@@ -942,7 +942,7 @@ describe("Governance Pool", async () => {
 
                 await expect(
                     governancePool.connect(investorA).voteAgainst(investmentPoolAsUser.address, 0)
-                ).to.be.revertedWithCustomError(governancePool, "GovernancePool__amountIsZero");
+                ).to.be.revertedWithCustomError(governancePool, "GovernancePool__AmountIsZero");
             });
 
             it("[GP][8.2.5] Should revert if investor does not have any voting tokens", async () => {
@@ -958,7 +958,7 @@ describe("Governance Pool", async () => {
                         .voteAgainst(investmentPoolAsUser.address, votesAgainst)
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__noVotingTokensOwned"
+                    "GovernancePool__NoVotingTokensOwned"
                 );
             });
 
@@ -990,7 +990,7 @@ describe("Governance Pool", async () => {
                 )
                     .to.be.revertedWithCustomError(
                         governancePool,
-                        "GovernancePool__amountIsGreaterThanVotingTokensBalance"
+                        "GovernancePool__AmountIsGreaterThanVotingTokensBalance"
                     )
                     .withArgs(votesAgainst, tokenBalance);
             });
@@ -1201,7 +1201,7 @@ describe("Governance Pool", async () => {
                         .retractVotes(investmentPoolAsUser.address, votesToRetract)
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__statusIsNotActiveVoting"
+                    "GovernancePool__StatusIsNotActiveVoting"
                 );
             });
 
@@ -1219,7 +1219,7 @@ describe("Governance Pool", async () => {
                         .retractVotes(investmentPoolAsUser.address, votesToRetract)
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__statusIsNotActiveVoting"
+                    "GovernancePool__StatusIsNotActiveVoting"
                 );
             });
 
@@ -1230,7 +1230,7 @@ describe("Governance Pool", async () => {
 
                 await expect(
                     governancePool.connect(investorA).retractVotes(investmentPoolAsUser.address, 0)
-                ).to.be.revertedWithCustomError(governancePool, "GovernancePool__amountIsZero");
+                ).to.be.revertedWithCustomError(governancePool, "GovernancePool__AmountIsZero");
             });
 
             it("[GP][9.2.5] Should revert if investor did not vote against the project", async () => {
@@ -1246,7 +1246,7 @@ describe("Governance Pool", async () => {
                         .retractVotes(investmentPoolAsUser.address, votesToRetract)
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__noVotesAgainstProject"
+                    "GovernancePool__NoVotesAgainstProject"
                 );
             });
 
@@ -1291,7 +1291,7 @@ describe("Governance Pool", async () => {
                 )
                     .to.be.revertedWithCustomError(
                         governancePool,
-                        "GovernancePool__amountIsGreaterThanDelegatedVotes"
+                        "GovernancePool__AmountIsGreaterThanDelegatedVotes"
                     )
                     .withArgs(votesToRetract, delegatedVotes);
             });
