@@ -502,6 +502,8 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             const timeStamp = dateToSeconds("2100/07/15");
             await investment.setTimestamp(timeStamp);
 
+            const seedFundingMultiplier = await investment.seedFundingMultiplier();
+
             // Approve and invest money
             await investMoney(fUSDTx, investment, investorA, investedAmount);
 
@@ -514,7 +516,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             const unlockTime = (await investment.milestones(0)).startDate;
 
             assert.equal(lockedTokens.unlockTime, unlockTime);
-            assert.deepEqual(lockedTokens.amount, investedAmount);
+            assert.deepEqual(lockedTokens.amount, investedAmount.mul(seedFundingMultiplier));
             assert.isFalse(lockedTokens.claimed);
         });
     });
@@ -574,7 +576,6 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             await createInvestmentWithTwoMilestones();
 
             const investedAmount: BigNumber = ethers.utils.parseEther("2000");
-            const votesAgainst = ethers.utils.parseEther("1200");
 
             let timeStamp = dateToSeconds("2100/07/15");
             await investment.setTimestamp(timeStamp);
@@ -583,12 +584,13 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             // Approve and invest money
             await investMoney(fUSDTx, investment, investorA, investedAmount);
 
-            const investmentPoolId = await governancePool.getInvestmentPoolId(investment.address);
-
             timeStamp = dateToSeconds("2100/09/15");
             await investment.setTimestamp(timeStamp);
             await governancePool.setTimestamp(timeStamp);
             await governancePool.connect(investorA).unlockVotingTokens(investment.address, 0);
+
+            const seedFundingMultiplier = await investment.seedFundingMultiplier();
+            const votesAgainst = seedFundingMultiplier.mul(investedAmount).mul(2).div(3);
 
             // Approve the governance pool contract to spend investor's tokens
             await votingToken.connect(investorA).setApprovalForAll(governancePool.address, true);
