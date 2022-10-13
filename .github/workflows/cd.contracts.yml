@@ -1,0 +1,34 @@
+name: CD | Deploy to Goerli
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - uses: cschleiden/replace-tokens@v1
+      with:
+        files: '["packages/governance-pool/.env"]'
+      env:
+        DEPLOYER_PRIVATE_KEY:  ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+        ETHERSCAN_API_KEY:  ${{ secrets.ETHERSCAN_API_KEY }}
+        GOERLI_URL:  ${{ secrets.GOERLI_URL }}
+
+    - name: yarn install monorepo
+      run: yarn install
+
+    - name: yarn install, build
+      working-directory: ./packages/governance-pool
+      run: |
+        yarn install
+        yarn build
+
+    - name: yarn install, build
+      working-directory: ./packages/governance-pool
+      run: |
+        yarn deploy:goerli
