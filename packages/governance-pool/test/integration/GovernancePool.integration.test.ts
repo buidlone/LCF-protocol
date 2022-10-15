@@ -588,7 +588,6 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             timeStamp = dateToSeconds("2100/09/15");
             await investment.setTimestamp(timeStamp);
             await governancePool.setTimestamp(timeStamp);
-            await governancePool.connect(investorA).unlockVotingTokens(investment.address, 0);
 
             // Approve the governance pool contract to spend investor's tokens
             await votingToken.connect(investorA).setApprovalForAll(governancePool.address, true);

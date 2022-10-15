@@ -313,9 +313,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         bool successfulTransfer = acceptedToken.transferFrom(_msgSender(), address(this), _amount);
         if (!successfulTransfer) revert InvestmentPool__SuperTokenTransferFailed();
 
-        // Mint voting tokens in governance pool
-        uint48 unlockTime = milestones[investToMilestoneId].startDate;
-        governancePool.mintVotingTokens(investToMilestoneId, _msgSender(), _amount, unlockTime);
+        governancePool.mintVotingTokens(investToMilestoneId, _msgSender(), _amount);
 
         emit Invest(_msgSender(), _amount);
     }
