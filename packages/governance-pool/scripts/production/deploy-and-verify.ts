@@ -1,11 +1,12 @@
 import {ethers, network} from "hardhat";
-import {availableTestnetChains, networkConfig} from "../hardhat-helper-config";
+import {availableTestnetChains, networkConfig} from "../../hardhat-helper-config";
+import {verify} from "../verify";
 import {
     VotingToken,
     GovernancePool,
     InvestmentPoolFactory,
     InvestmentPool,
-} from "../typechain-types";
+} from "../../typechain-types";
 
 let gelatoOpsAddress: string;
 let superfluidHostAddress: string;
@@ -33,6 +34,8 @@ async function main() {
     investmentPool = await investmentPoolDep.deploy();
     await investmentPool.deployed();
     console.log("Investment pool logic address: ", investmentPool.address);
+    await investmentPool.deployTransaction.wait(6);
+    await verify(investmentPool.address, []);
 
     // Deploy investment pool factory contract
     console.log("Deploying investment pool factory...");
@@ -47,6 +50,12 @@ async function main() {
     );
     await investmentPoolFactory.deployed();
     console.log("Investment pool factory address: ", investmentPoolFactory.address);
+    await investmentPoolFactory.deployTransaction.wait(6);
+    await verify(investmentPoolFactory.address, [
+        superfluidHostAddress,
+        gelatoOpsAddress,
+        investmentPool.address,
+    ]);
 
     // Deploy voting token
     console.log("Deploying voting token contract...");
@@ -66,6 +75,13 @@ async function main() {
     );
     await governancePool.deployed();
     console.log("Governance pool address: ", governancePool.address);
+    await governancePool.deployTransaction.wait(6);
+    await verify(governancePool.address, [
+        votingToken.address,
+        investmentPoolFactory.address,
+        51,
+        1,
+    ]);
 
     // Transfer ownership to governance pool
     console.log("Transfering voting token ownership to governance pool...");
