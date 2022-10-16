@@ -16,7 +16,7 @@ error GovernancePool__statusIsNotActiveVoting();
 error GovernancePool__statusIsNotVotedAgainst();
 error GovernancePool__notInvestmentPoolFactory();
 error GovernancePool__amountIsZero();
-error GovernancePool__noVotingTokensOwned();
+error GovernancePool__NoActiveVotingTokensOwned();
 error GovernancePool__amountIsGreaterThanVotingTokensBalance(uint256 amount, uint256 balance);
 error GovernancePool__noVotesAgainstProject();
 error GovernancePool__amountIsGreaterThanDelegatedVotes(uint256 amount, uint256 votes);
@@ -128,19 +128,24 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         if (_amount == 0) revert GovernancePool__amountIsZero();
 
         uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
+        uint256[] memory milestonesIds = milestonesIdsInWhichInvestorInvested[_investor][
+            investmentPoolId
+        ];
 
-        if (milestonesIdsInWhichInvestorInvested[_investor][investmentPoolId].length == 0) {
+        if (milestonesIds.length == 0) {
             activeTokens[_investor][investmentPoolId][_milestoneId] = _amount;
             milestonesIdsInWhichInvestorInvested[_investor][investmentPoolId].push(_milestoneId);
         } else {
-            uint256[] memory milestonesIds = milestonesIdsInWhichInvestorInvested[_investor][
-                investmentPoolId
-            ];
             uint256 milestoneIdOfLastIncrease = milestonesIds[milestonesIds.length - 1];
             activeTokens[_investor][investmentPoolId][_milestoneId] =
                 activeTokens[_investor][investmentPoolId][milestoneIdOfLastIncrease] +
                 _amount;
-            milestonesIdsInWhichInvestorInvested[_investor][investmentPoolId].push(_milestoneId);
+
+            if (milestoneIdOfLastIncrease != _milestoneId) {
+                milestonesIdsInWhichInvestorInvested[_investor][investmentPoolId].push(
+                    _milestoneId
+                );
+            }
         }
 
         // Tokens will never be minted for the milestones that already passed because this is called only by IP in invest function
@@ -160,13 +165,19 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         onActiveInvestmentPool(_investmentPool)
     {
         if (_amount == 0) revert GovernancePool__amountIsZero();
-        uint256 investorVotingTokenBalance = getVotingTokenBalance(_investmentPool, _msgSender());
+        uint256 currentMilestoneId = IInvestmentPool(_investmentPool).getCurrentMilestoneId();
+        uint256 investorActiveVotingTokensBalance = getActiveVotingTokensBalance(
+            _investmentPool,
+            currentMilestoneId,
+            _msgSender()
+        );
 
-        if (investorVotingTokenBalance == 0) revert GovernancePool__noVotingTokensOwned();
-        if (_amount > investorVotingTokenBalance)
+        if (investorActiveVotingTokensBalance == 0)
+            revert GovernancePool__NoActiveVotingTokensOwned();
+        if (_amount > investorActiveVotingTokensBalance)
             revert GovernancePool__amountIsGreaterThanVotingTokensBalance(
                 _amount,
-                investorVotingTokenBalance
+                investorActiveVotingTokensBalance
             );
 
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
@@ -292,7 +303,11 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         return investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.ActiveVoting;
     }
 
-    /** @notice Get balance of active voting tokens for specified milestone
+    /** @notice Get balance of active voting tokens for specified milestone.
+     *  @notice The balance is retrieve by checking if in milestone id investor invested.
+     *  @notice If amount is zero that means investment was not made in given milestone.
+     *  @notice That's why it finds the nearest milestone that is smaller than given one
+     *  @notice and returns its balance or if no investments were made at all - zero.
      *  @param _investmentPool investment pool address
      *  @param _milestoneId milestone id in which tokens should be active
      *  @param _account address of the account to check

@@ -295,33 +295,6 @@ describe("Governance Pool", async () => {
                 assert.equal(balanceOfinvestorA.toString(), "0");
                 assert.equal(balanceOfinvestorB.toString(), "0");
             });
-
-            it("[GP][4.1.4] Should update mapping for tracking locked tokens", async () => {
-                const investmentPoolId = await governancePool.getInvestmentPoolId(
-                    investmentPoolAsUser.address
-                );
-
-                await governancePool
-                    .connect(investmentPoolAsUser)
-                    .mintVotingTokens(0, investorA.address, tokensToMintA);
-
-                await governancePool
-                    .connect(investmentPoolAsUser)
-                    .mintVotingTokens(0, investorA.address, tokensToMintB);
-
-                const lockedTokens = await governancePool.tokensLocked(
-                    investorA.address,
-                    investmentPoolId,
-                    0
-                );
-
-                assert.equal(lockedTokens.unlockTime.toString(), "0");
-                assert.equal(
-                    lockedTokens.amount.toString(),
-                    tokensToMintA.add(tokensToMintB).toString()
-                );
-                assert.isFalse(lockedTokens.claimed);
-            });
         });
 
         describe("4.2 Interactions", () => {
@@ -753,7 +726,7 @@ describe("Governance Pool", async () => {
                         .voteAgainst(investmentPoolAsUser.address, votesAgainst)
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__noVotingTokensOwned"
+                    "GovernancePool__NoActiveVotingTokensOwned"
                 );
             });
 

@@ -506,16 +506,6 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             await investMoney(fUSDTx, investment, investorA, investedAmount);
 
             const investmentPoolId = await governancePool.getInvestmentPoolId(investment.address);
-            const lockedTokens = await governancePool.tokensLocked(
-                investorA.address,
-                investmentPoolId,
-                0
-            );
-            const unlockTime = (await investment.milestones(0)).startDate;
-
-            assert.equal(lockedTokens.unlockTime, unlockTime);
-            assert.deepEqual(lockedTokens.amount, investedAmount);
-            assert.isFalse(lockedTokens.claimed);
         });
     });
 

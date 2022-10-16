@@ -65,6 +65,8 @@ interface IInvestmentPool is ISuperApp {
 
     function withdrawRemainingEth() external;
 
+    function getCurrentMilestoneId() external view returns (uint256);
+
     function isEmergencyTerminated() external view returns (bool);
 
     function isCanceledBeforeFundraiserStart() external view returns (bool);
