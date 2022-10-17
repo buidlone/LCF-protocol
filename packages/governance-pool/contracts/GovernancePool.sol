@@ -23,6 +23,7 @@ error GovernancePool__amountIsGreaterThanDelegatedVotes(uint256 amount, uint256 
 error GovernancePool__totalSupplyIsZero();
 error GovernancePool__totalSupplyIsSmallerThanVotesAgainst(uint256 totalSupply, uint256 votes);
 error GovernancePool__thresholdNumberIsGreaterThan100();
+error GovernancePool__InvestmentPoolStateNotAllowed();
 
 /// @title Governance Pool contract.
 contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
@@ -165,22 +166,30 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         onActiveInvestmentPool(_investmentPool)
     {
         if (_amount == 0) revert GovernancePool__amountIsZero();
-        uint256 currentMilestoneId = IInvestmentPool(_investmentPool).getCurrentMilestoneId();
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        IInvestmentPool investmentPool = IInvestmentPool(_investmentPool);
+        uint256 currentMilestoneId = investmentPool.getCurrentMilestoneId();
+        uint256 investmentPoolState = investmentPool.getProjectStateByteValue();
+        uint256 notLastActiveMilestoneValue = investmentPool.notLastActiveMilestoneByteValue();
+        uint256 lastActiveMilestoneValue = investmentPool.lastActiveMilestoneByteValue();
+        if (
+            investmentPoolState != notLastActiveMilestoneValue &&
+            investmentPoolState != lastActiveMilestoneValue
+        ) {
+            revert GovernancePool__InvestmentPoolStateNotAllowed();
+        }
+
         uint256 investorActiveVotingTokensBalance = getActiveVotingTokensBalance(
             _investmentPool,
             currentMilestoneId,
             _msgSender()
         );
+        uint256 votesLeft = investorActiveVotingTokensBalance -
+            votesAmount[_msgSender()][investmentPoolId];
 
-        if (investorActiveVotingTokensBalance == 0)
-            revert GovernancePool__NoActiveVotingTokensOwned();
-        if (_amount > investorActiveVotingTokensBalance)
-            revert GovernancePool__amountIsGreaterThanVotingTokensBalance(
-                _amount,
-                investorActiveVotingTokensBalance
-            );
-
-        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        if (votesLeft == 0) revert GovernancePool__NoActiveVotingTokensOwned();
+        if (_amount > votesLeft)
+            revert GovernancePool__amountIsGreaterThanVotingTokensBalance(_amount, votesLeft);
 
         // Check if new votes amount specified by investor will reach 51%
         bool thresholdWillBeReached = willInvestorReachThreshold(_investmentPool, _amount);
@@ -362,6 +371,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
                 // current milestone is LESS than milestone retrieved from milestonesIds
                 // it means no investments were made before the current milestone.
                 // Thus, no voting tokens were minted at all.
+                // This condition is met when
                 return 0;
             } else if (milestonesIds.length > 1 && nearestMilestoneIdFromTop != 0) {
                 // If more than 1 investment was made, nearestMilestoneIdFromTop will return

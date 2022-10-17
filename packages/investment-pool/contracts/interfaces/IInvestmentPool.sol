@@ -102,6 +102,10 @@ interface IInvestmentPool is ISuperApp {
         view
         returns (bool);
 
+    function notLastActiveMilestoneByteValue() external pure returns (uint256);
+
+    function lastActiveMilestoneByteValue() external pure returns (uint256);
+
     function getMilestoneSeedAmount(uint256 _milestoneId) external view returns (uint256);
 
     function getTotalMilestoneTokenAllocation(uint _milestoneId) external returns (uint256);

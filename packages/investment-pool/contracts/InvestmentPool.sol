@@ -514,6 +514,14 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         emit Cancel();
     }
 
+    function notLastActiveMilestoneByteValue() public pure returns (uint256) {
+        return NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE;
+    }
+
+    function lastActiveMilestoneByteValue() public pure returns (uint256) {
+        return LAST_MILESTONE_BYTE_VALUE;
+    }
+
     /// @notice Checks if project was canceled
     function isEmergencyTerminated() public view returns (bool) {
         return emergencyTerminationTimestamp != 0;
