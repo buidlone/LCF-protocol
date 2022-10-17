@@ -59,19 +59,19 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      * @dev Values are used for bitwise operations to determine current project state.
      * @dev Investment pool can't have multiple states at the same time.
      */
-    uint256 public constant CANCELED_PROJECT_BYTE_VALUE = 1;
-    uint256 public constant BEFORE_FUNDRAISER_BYTE_VALUE = 2;
-    uint256 public constant ACTIVE_FUNDRAISER_BYTE_VALUE = 4;
-    uint256 public constant FAILED_FUNDRAISER_BYTE_VALUE = 8;
-    uint256 public constant FUNDRAISER_ENDED_NO_ACTIVE_MILESTONE_BYTE_VALUE = 16;
-    uint256 public constant NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE = 32;
-    uint256 public constant LAST_MILESTONE_BYTE_VALUE = 64;
-    uint256 public constant TERMINATED_BY_VOTING_BYTE_VALUE = 128;
-    uint256 public constant TERMINATED_BY_GELATO_BYTE_VALUE = 256;
-    uint256 public constant SUCCESSFULLY_ENDED_BYTE_VALUE = 512;
-    uint256 public constant NO_STATE_BYTE_VALUE = 1024;
-    uint256 public constant ANY_ACTIVE_MILESTONE_BYTE_VALUE =
-        NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE | LAST_MILESTONE_BYTE_VALUE;
+    uint256 public constant CANCELED_PROJECT_STATE_VALUE = 1;
+    uint256 public constant BEFORE_FUNDRAISER_STATE_VALUE = 2;
+    uint256 public constant FUNDRAISER_ONGOING_STATE_VALUE = 4;
+    uint256 public constant FAILED_FUNDRAISER_STATE_VALUE = 8;
+    uint256 public constant FUNDRAISER_ENDED_NO_MILESTONES_ONGOING_STATE_VALUE = 16;
+    uint256 public constant MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE = 32;
+    uint256 public constant LAST_MILESTONE_ONGOING_STATE_VALUE = 64;
+    uint256 public constant TERMINATED_BY_VOTING_STATE_VALUE = 128;
+    uint256 public constant TERMINATED_BY_GELATO_STATE_VALUE = 256;
+    uint256 public constant SUCCESSFULLY_ENDED_STATE_VALUE = 512;
+    uint256 public constant UNKNOWN_STATE_VALUE = 1024;
+    uint256 public constant ANY_MILESTONE_ONGOING_STATE_VALUE =
+        MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE | LAST_MILESTONE_ONGOING_STATE_VALUE;
 
     address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
@@ -290,7 +290,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     function invest(uint256 _amount, bool _strict)
         external
         notZeroAmount(_amount)
-        allowedProjectStates(ACTIVE_FUNDRAISER_BYTE_VALUE | NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE)
+        allowedProjectStates(
+            FUNDRAISER_ONGOING_STATE_VALUE | MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE
+        )
     {
         uint256 untilHardcap = hardCap - totalInvestedAmount;
 
@@ -324,7 +326,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     function unpledge(uint256 _amount)
         external
         notZeroAmount(_amount)
-        allowedProjectStates(ACTIVE_FUNDRAISER_BYTE_VALUE | NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE)
+        allowedProjectStates(
+            FUNDRAISER_ONGOING_STATE_VALUE | MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE
+        )
     {
         uint256 unpledgeFromMilestoneId = isFundraiserOngoingNow()
             ? 0
@@ -361,9 +365,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     function refund()
         external
         allowedProjectStates(
-            FAILED_FUNDRAISER_BYTE_VALUE |
-                TERMINATED_BY_VOTING_BYTE_VALUE |
-                TERMINATED_BY_GELATO_BYTE_VALUE
+            FAILED_FUNDRAISER_STATE_VALUE |
+                TERMINATED_BY_VOTING_STATE_VALUE |
+                TERMINATED_BY_GELATO_STATE_VALUE
         )
     {
         // If fundraiser failed, transfer back total amount that investor invested
@@ -426,7 +430,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     function startFirstFundsStream()
         external
         onlyCreator
-        allowedProjectStates(ANY_ACTIVE_MILESTONE_BYTE_VALUE | TERMINATED_BY_VOTING_BYTE_VALUE)
+        allowedProjectStates(ANY_MILESTONE_ONGOING_STATE_VALUE | TERMINATED_BY_VOTING_STATE_VALUE)
     {
         if (!isMilestoneOngoingNow(0)) revert InvestmentPool__NotInFirstMilestonePeriod();
 
@@ -439,7 +443,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     function cancelBeforeFundraiserStart()
         external
         onlyCreator
-        allowedProjectStates(BEFORE_FUNDRAISER_BYTE_VALUE)
+        allowedProjectStates(BEFORE_FUNDRAISER_STATE_VALUE)
     {
         emergencyTerminationTimestamp = uint48(_getNow());
         emit Cancel();
@@ -452,7 +456,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     function milestoneJumpOrFinalProjectTermination()
         external
         onlyCreator
-        allowedProjectStates(ANY_ACTIVE_MILESTONE_BYTE_VALUE)
+        allowedProjectStates(ANY_MILESTONE_ONGOING_STATE_VALUE)
     {
         uint curMil = getCurrentMilestoneId();
         _terminateMilestoneStreamFinal(curMil);
@@ -469,11 +473,11 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         external
         onlyCreator
         allowedProjectStates(
-            CANCELED_PROJECT_BYTE_VALUE |
-                FAILED_FUNDRAISER_BYTE_VALUE |
-                TERMINATED_BY_VOTING_BYTE_VALUE |
-                TERMINATED_BY_GELATO_BYTE_VALUE |
-                SUCCESSFULLY_ENDED_BYTE_VALUE
+            CANCELED_PROJECT_STATE_VALUE |
+                FAILED_FUNDRAISER_STATE_VALUE |
+                TERMINATED_BY_VOTING_STATE_VALUE |
+                TERMINATED_BY_GELATO_STATE_VALUE |
+                SUCCESSFULLY_ENDED_STATE_VALUE
         )
     {
         if (address(this).balance == 0) revert InvestmentPool__NoEthLeftToWithdraw();
@@ -491,7 +495,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     function cancelDuringMilestones()
         public
         onlyGovernancePoolOrGelato
-        allowedProjectStates(ANY_ACTIVE_MILESTONE_BYTE_VALUE)
+        allowedProjectStates(ANY_MILESTONE_ONGOING_STATE_VALUE)
     {
         emergencyTerminationTimestamp = uint48(_getNow());
 
@@ -514,12 +518,13 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         emit Cancel();
     }
 
-    function notLastActiveMilestoneByteValue() public pure returns (uint256) {
-        return NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE;
-    }
-
-    function lastActiveMilestoneByteValue() public pure returns (uint256) {
-        return LAST_MILESTONE_BYTE_VALUE;
+    function isAnyMilestoneOngoingAndActive() public view returns (bool) {
+        uint256 currentState = getProjectStateByteValue();
+        if (ANY_MILESTONE_ONGOING_STATE_VALUE & currentState == 0) {
+            return false;
+        } else {
+            return true;
+        }
     }
 
     /// @notice Checks if project was canceled
@@ -600,40 +605,40 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      */
     function getProjectStateByteValue() public view returns (uint256 stateNumber) {
         if (isCanceledBeforeFundraiserStart()) {
-            return CANCELED_PROJECT_BYTE_VALUE;
+            return CANCELED_PROJECT_STATE_VALUE;
         } else if (isFundraiserNotStarted() && !isEmergencyTerminated()) {
-            return BEFORE_FUNDRAISER_BYTE_VALUE;
+            return BEFORE_FUNDRAISER_STATE_VALUE;
         } else if (isFundraiserOngoingNow() && !isEmergencyTerminated()) {
-            return ACTIVE_FUNDRAISER_BYTE_VALUE;
+            return FUNDRAISER_ONGOING_STATE_VALUE;
         } else if (isFailedFundraiser() && !isEmergencyTerminated()) {
-            return FAILED_FUNDRAISER_BYTE_VALUE;
+            return FAILED_FUNDRAISER_STATE_VALUE;
         } else if (
             isFundraiserEndedButNoMilestoneIsActive() &&
             !isEmergencyTerminated() &&
             !isFailedFundraiser()
         ) {
-            return FUNDRAISER_ENDED_NO_ACTIVE_MILESTONE_BYTE_VALUE;
+            return FUNDRAISER_ENDED_NO_MILESTONES_ONGOING_STATE_VALUE;
         } else if (
             isAnyMilestoneOngoing() &&
             !isLastMilestoneOngoing() &&
             !isEmergencyTerminated() &&
             !isFailedFundraiser()
         ) {
-            return NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE;
+            return MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE;
         } else if (isLastMilestoneOngoing() && !isEmergencyTerminated() && !isFailedFundraiser()) {
-            return LAST_MILESTONE_BYTE_VALUE;
+            return LAST_MILESTONE_ONGOING_STATE_VALUE;
         } else if (
             gelatoTask != bytes32(0) && isCanceledDuringMilestones() && !isFailedFundraiser()
         ) {
-            return TERMINATED_BY_VOTING_BYTE_VALUE;
+            return TERMINATED_BY_VOTING_STATE_VALUE;
         } else if (
             gelatoTask == bytes32(0) && isCanceledDuringMilestones() && !isFailedFundraiser()
         ) {
-            return TERMINATED_BY_GELATO_BYTE_VALUE;
+            return TERMINATED_BY_GELATO_STATE_VALUE;
         } else if (didProjectEnd() && !isEmergencyTerminated() && !isFailedFundraiser()) {
-            return SUCCESSFULLY_ENDED_BYTE_VALUE;
+            return SUCCESSFULLY_ENDED_STATE_VALUE;
         } else {
-            return NO_STATE_BYTE_VALUE;
+            return UNKNOWN_STATE_VALUE;
         }
     }
 
@@ -687,7 +692,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     function _claim(uint256 _milestoneId)
         internal
         onlyCreator
-        allowedProjectStates(ANY_ACTIVE_MILESTONE_BYTE_VALUE | TERMINATED_BY_VOTING_BYTE_VALUE)
+        allowedProjectStates(ANY_MILESTONE_ONGOING_STATE_VALUE | TERMINATED_BY_VOTING_STATE_VALUE)
     {
         Milestone storage milestone = milestones[_milestoneId];
 

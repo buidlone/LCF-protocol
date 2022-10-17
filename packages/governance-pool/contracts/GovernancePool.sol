@@ -169,13 +169,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         IInvestmentPool investmentPool = IInvestmentPool(_investmentPool);
         uint256 currentMilestoneId = investmentPool.getCurrentMilestoneId();
-        uint256 investmentPoolState = investmentPool.getProjectStateByteValue();
-        uint256 notLastActiveMilestoneValue = investmentPool.notLastActiveMilestoneByteValue();
-        uint256 lastActiveMilestoneValue = investmentPool.lastActiveMilestoneByteValue();
-        if (
-            investmentPoolState != notLastActiveMilestoneValue &&
-            investmentPoolState != lastActiveMilestoneValue
-        ) {
+        bool anyMilestoneOngoing = investmentPool.isAnyMilestoneOngoingAndActive();
+        if (!anyMilestoneOngoing) {
             revert GovernancePool__InvestmentPoolStateNotAllowed();
         }
 

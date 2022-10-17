@@ -504,8 +504,6 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
 
             // Approve and invest money
             await investMoney(fUSDTx, investment, investorA, investedAmount);
-
-            const investmentPoolId = await governancePool.getInvestmentPoolId(investment.address);
         });
     });
 
@@ -572,8 +570,6 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
 
             // Approve and invest money
             await investMoney(fUSDTx, investment, investorA, investedAmount);
-
-            const investmentPoolId = await governancePool.getInvestmentPoolId(investment.address);
 
             timeStamp = dateToSeconds("2100/09/15");
             await investment.setTimestamp(timeStamp);
