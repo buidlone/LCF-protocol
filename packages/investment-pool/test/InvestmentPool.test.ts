@@ -72,16 +72,16 @@ let percent70InIpBigNumber: BigNumber;
 let percent95InIpBigNumber: BigNumber;
 
 // Project state values
-let canceledProjectByteValue: BigNumber;
-let beforeFundraiserByteValue: BigNumber;
-let activeFundraiserByteValue: BigNumber;
-let failedFundraiserByteValue: BigNumber;
-let fundraiserEndedNoActiveMilestone: BigNumber;
-let notLastActiveMilestoneByteValue: BigNumber;
-let lastMilestoneByteValue: BigNumber;
-let terminatedByVotingByteValue: BigNumber;
-let successfullyEndedByteValue: BigNumber;
-let noStateByteValue: BigNumber;
+let canceledProjectStateValue: BigNumber;
+let beforeFundraiserStateValue: BigNumber;
+let fundraiserOngoingStateValue: BigNumber;
+let failedFundraiserStateValue: BigNumber;
+let fundraiserEndedNoMilestonesOngoingStateValue: BigNumber;
+let milestonesOngoingBeforeLastStateValue: BigNumber;
+let lastMilestoneOngoingStateValue: BigNumber;
+let terminatedByVotingStateValue: BigNumber;
+let successfullyEndedStateValue: BigNumber;
+let unknownStateValue: BigNumber;
 
 const percentToIpBigNumber = (percent: number): BigNumber => {
     return percentageDivider.mul(percent).div(100);
@@ -124,17 +124,18 @@ const definePercentageDivider = async (investmentPoolFactory: InvestmentPoolFact
 };
 
 const defineProjectStateByteValues = async (investment: InvestmentPoolMock) => {
-    canceledProjectByteValue = await investment.CANCELED_PROJECT_BYTE_VALUE();
-    beforeFundraiserByteValue = await investment.BEFORE_FUNDRAISER_BYTE_VALUE();
-    activeFundraiserByteValue = await investment.ACTIVE_FUNDRAISER_BYTE_VALUE();
-    failedFundraiserByteValue = await investment.FAILED_FUNDRAISER_BYTE_VALUE();
-    fundraiserEndedNoActiveMilestone =
-        await investment.FUNDRAISER_ENDED_NO_ACTIVE_MILESTONE_BYTE_VALUE();
-    notLastActiveMilestoneByteValue = await investment.NOT_LAST_ACTIVE_MILESTONE_BYTE_VALUE();
-    lastMilestoneByteValue = await investment.LAST_MILESTONE_BYTE_VALUE();
-    terminatedByVotingByteValue = await investment.TERMINATED_BY_VOTING_BYTE_VALUE();
-    successfullyEndedByteValue = await investment.SUCCESSFULLY_ENDED_BYTE_VALUE();
-    noStateByteValue = await investment.NO_STATE_BYTE_VALUE();
+    canceledProjectStateValue = await investment.CANCELED_PROJECT_STATE_VALUE();
+    beforeFundraiserStateValue = await investment.BEFORE_FUNDRAISER_STATE_VALUE();
+    fundraiserOngoingStateValue = await investment.FUNDRAISER_ONGOING_STATE_VALUE();
+    failedFundraiserStateValue = await investment.FAILED_FUNDRAISER_STATE_VALUE();
+    fundraiserEndedNoMilestonesOngoingStateValue =
+        await investment.FUNDRAISER_ENDED_NO_MILESTONES_ONGOING_STATE_VALUE();
+    milestonesOngoingBeforeLastStateValue =
+        await investment.MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE();
+    lastMilestoneOngoingStateValue = await investment.LAST_MILESTONE_ONGOING_STATE_VALUE();
+    terminatedByVotingStateValue = await investment.TERMINATED_BY_VOTING_STATE_VALUE();
+    successfullyEndedStateValue = await investment.SUCCESSFULLY_ENDED_STATE_VALUE();
+    unknownStateValue = await investment.UNKNOWN_STATE_VALUE();
 };
 
 const defineGelatoFeeAllocation = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
@@ -594,7 +595,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(activeFundraiserByteValue);
+                    .withArgs(fundraiserOngoingStateValue);
             });
 
             it("[IP][2.1.4] Fundraiser can't be cancelled, if it's already been canceled", async () => {
@@ -609,7 +610,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(canceledProjectByteValue);
+                    .withArgs(canceledProjectStateValue);
             });
         });
     });
@@ -896,7 +897,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(canceledProjectByteValue);
+                    .withArgs(canceledProjectStateValue);
             });
 
             it("[IP][3.2.3] Investor shouldn't be able to invest if fundraiser hasn't been started", async () => {
@@ -909,7 +910,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(beforeFundraiserByteValue);
+                    .withArgs(beforeFundraiserStateValue);
             });
 
             it("[IP][3.2.4] Investor shouldn't be able to invest if fundraiser has failed", async () => {
@@ -925,7 +926,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(failedFundraiserByteValue);
+                    .withArgs(failedFundraiserStateValue);
             });
 
             it("[IP][3.2.5] Investor shouldn't be able to invest during gap between fundraiser end and 0 milestone start", async () => {
@@ -953,7 +954,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(fundraiserEndedNoActiveMilestone);
+                    .withArgs(fundraiserEndedNoMilestonesOngoingStateValue);
             });
 
             it("[IP][3.2.6] Shouldn't be able to invest in last milestone", async () => {
@@ -982,7 +983,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(lastMilestoneByteValue);
+                    .withArgs(lastMilestoneOngoingStateValue);
             });
 
             it("[IP][3.2.7] Shouldn't be able to invest if project was terminated by voting", async () => {
@@ -1012,7 +1013,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(terminatedByVotingByteValue);
+                    .withArgs(terminatedByVotingStateValue);
             });
 
             it("[IP][3.2.8] Investor shouldn't be able to invest after project has ended", async () => {
@@ -1058,7 +1059,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(successfullyEndedByteValue);
+                    .withArgs(successfullyEndedStateValue);
             });
 
             it("[IP][3.2.9] Investor shouldn't be able to invest more than a hard cap if stric mode is enabled", async () => {
@@ -1431,7 +1432,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(canceledProjectByteValue);
+                    .withArgs(canceledProjectStateValue);
             });
 
             it("[IP][4.2.3] Shouldn't be able to unpledge if fundraiser hasn't started", async () => {
@@ -1446,7 +1447,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(beforeFundraiserByteValue);
+                    .withArgs(beforeFundraiserStateValue);
             });
 
             it("[IP][4.2.4] Shouldn't be able to unpledge from failed fundraiser", async () => {
@@ -1461,7 +1462,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(failedFundraiserByteValue);
+                    .withArgs(failedFundraiserStateValue);
             });
 
             it("[IP][4.2.5] Shouldn't be able to unpledge if fundraiser has ended (in gap between fundraiser and 0 milestone)", async () => {
@@ -1481,7 +1482,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(fundraiserEndedNoActiveMilestone);
+                    .withArgs(fundraiserEndedNoMilestonesOngoingStateValue);
             });
 
             it("[IP][4.2.6] Shouldn't be able to unpledge in last milestone", async () => {
@@ -1501,7 +1502,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(lastMilestoneByteValue);
+                    .withArgs(lastMilestoneOngoingStateValue);
             });
 
             it("[IP][4.2.7] Shouldn't be able to unpledge if project was terminated by voting", async () => {
@@ -1522,7 +1523,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(terminatedByVotingByteValue);
+                    .withArgs(terminatedByVotingStateValue);
             });
 
             it("[IP][4.2.8] Shouldn't be able to unpledge after project ended", async () => {
@@ -1560,7 +1561,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(successfullyEndedByteValue);
+                    .withArgs(successfullyEndedStateValue);
             });
 
             it("[IP][4.2.9] Investor shouldn't be able to unpledge more than invested", async () => {
@@ -1900,7 +1901,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(canceledProjectByteValue);
+                    .withArgs(canceledProjectStateValue);
             });
 
             it("[IP][5.2.2] Refund should be inactive before fundraiser", async () => {
@@ -1913,7 +1914,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(beforeFundraiserByteValue);
+                    .withArgs(beforeFundraiserStateValue);
             });
 
             it("[IP][5.2.3] Refund should be inactive during fundraiser", async () => {
@@ -1929,7 +1930,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(activeFundraiserByteValue);
+                    .withArgs(fundraiserOngoingStateValue);
             });
 
             it("[IP][5.2.4] Refund should be inactive if fundraiser was successful (gap between fundraiser and 0 milestone)", async () => {
@@ -1949,7 +1950,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(fundraiserEndedNoActiveMilestone);
+                    .withArgs(fundraiserEndedNoMilestonesOngoingStateValue);
             });
 
             it("[IP][5.2.5] Refund should be inactive if not last milestone is active", async () => {
@@ -1969,7 +1970,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(notLastActiveMilestoneByteValue);
+                    .withArgs(milestonesOngoingBeforeLastStateValue);
             });
 
             it("[IP][5.2.6] Refund should be inactive if last milestone is active", async () => {
@@ -1989,7 +1990,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(lastMilestoneByteValue);
+                    .withArgs(lastMilestoneOngoingStateValue);
             });
 
             it("[IP][5.2.7] If failed fundraiser, refund should revert where zero investments were made", async () => {
@@ -2624,7 +2625,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(canceledProjectByteValue);
+                    .withArgs(canceledProjectStateValue);
             });
 
             it("[IP][9.2.3] Creator shouldn't be able to claim tokens before fundraiser start", async () => {
@@ -2637,7 +2638,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(beforeFundraiserByteValue);
+                    .withArgs(beforeFundraiserStateValue);
             });
 
             it("[IP][9.2.4] Creator shouldn't be able to claim tokens during fundraiser", async () => {
@@ -2650,7 +2651,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(activeFundraiserByteValue);
+                    .withArgs(fundraiserOngoingStateValue);
             });
 
             it("[IP][9.2.5] Creator shouldn't be able to claim tokens if fundraiser failed", async () => {
@@ -2663,7 +2664,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(failedFundraiserByteValue);
+                    .withArgs(failedFundraiserStateValue);
             });
 
             it("[IP][9.2.6] Creator shouldn't be able to claim tokens in gap between fundraiser and 0 milestone", async () => {
@@ -2683,7 +2684,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(fundraiserEndedNoActiveMilestone);
+                    .withArgs(fundraiserEndedNoMilestonesOngoingStateValue);
             });
 
             it("[IP][9.2.7] Creator shouldn't be able to claim tokens after project ends", async () => {
@@ -2721,7 +2722,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(successfullyEndedByteValue);
+                    .withArgs(successfullyEndedStateValue);
             });
 
             it("[IP][9.2.8] Creator shouldn't be able to claim funds and open stream before milestone starts", async () => {
@@ -3632,7 +3633,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(canceledProjectByteValue);
+                    .withArgs(canceledProjectStateValue);
             });
 
             it("[IP][12.2.2] Project can't be canceled if fundraiser hasn't started", async () => {
@@ -3645,7 +3646,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(beforeFundraiserByteValue);
+                    .withArgs(beforeFundraiserStateValue);
             });
 
             it("[IP][12.2.3] Project can't be canceled if fundraiser is active", async () => {
@@ -3658,7 +3659,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(activeFundraiserByteValue);
+                    .withArgs(fundraiserOngoingStateValue);
             });
 
             it("[IP][12.2.4] Project can't be canceled if fundraiser has failed", async () => {
@@ -3673,7 +3674,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(failedFundraiserByteValue);
+                    .withArgs(failedFundraiserStateValue);
             });
 
             it("[IP][12.2.5] Project can't be canceled if fundraiser ended successfully, but 0 milestone hasn't started yet", async () => {
@@ -3693,7 +3694,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(fundraiserEndedNoActiveMilestone);
+                    .withArgs(fundraiserEndedNoMilestonesOngoingStateValue);
             });
 
             it("[IP][12.2.6] Project can't be canceled if project was already canceled by voting", async () => {
@@ -3714,7 +3715,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(terminatedByVotingByteValue);
+                    .withArgs(terminatedByVotingStateValue);
             });
 
             it("[IP][12.2.7] Project can't be canceled if project milestones have ended", async () => {
@@ -3752,7 +3753,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(successfullyEndedByteValue);
+                    .withArgs(successfullyEndedStateValue);
             });
 
             it("[IP][12.2.8] Project can't be canceled if caller isn't a governance pool", async () => {
@@ -3946,7 +3947,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(canceledProjectByteValue);
+                    .withArgs(canceledProjectStateValue);
             });
 
             it("[IP][13.2.3] Shouldn't be able to do a milestone jump if fundraiser hasn't started", async () => {
@@ -3959,7 +3960,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(beforeFundraiserByteValue);
+                    .withArgs(beforeFundraiserStateValue);
             });
 
             it("[IP][13.2.4] Shouldn't be able to do a milestone jump if fundraiser is active", async () => {
@@ -3972,7 +3973,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(activeFundraiserByteValue);
+                    .withArgs(fundraiserOngoingStateValue);
             });
 
             it("[IP][13.2.5] Shouldn't be able to do a milestone jump if fundraiser has failed", async () => {
@@ -3987,7 +3988,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(failedFundraiserByteValue);
+                    .withArgs(failedFundraiserStateValue);
             });
 
             it("[IP][13.2.6] Shouldn't be able to do a milestone jump if fundraiser ended successfully, but 0 milestone hasn't started yet", async () => {
@@ -4007,7 +4008,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(fundraiserEndedNoActiveMilestone);
+                    .withArgs(fundraiserEndedNoMilestonesOngoingStateValue);
             });
 
             it("[IP][13.2.7] Shouldn't be able to do a milestone jump if project was already canceled by voting", async () => {
@@ -4028,7 +4029,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(terminatedByVotingByteValue);
+                    .withArgs(terminatedByVotingStateValue);
             });
 
             it("[IP][13.2.8] Shouldn't be able to do a milestone jump if project milestones have ended", async () => {
@@ -4066,7 +4067,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(successfullyEndedByteValue);
+                    .withArgs(successfullyEndedStateValue);
             });
         });
     });
@@ -4174,7 +4175,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(beforeFundraiserByteValue);
+                    .withArgs(beforeFundraiserStateValue);
             });
 
             it("[IP][14.2.6] Creator shouldn't be able to withdraw eth if fundraiser is active", async () => {
@@ -4186,7 +4187,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(activeFundraiserByteValue);
+                    .withArgs(fundraiserOngoingStateValue);
             });
 
             it("[IP][14.2.7] Creator shouldn't be able to withdraw eth during gap between fundraiser end and 0 milestone start", async () => {
@@ -4207,7 +4208,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(fundraiserEndedNoActiveMilestone);
+                    .withArgs(fundraiserEndedNoMilestonesOngoingStateValue);
             });
 
             it("[IP][14.2.8] Creator shouldn't be able to withdraw eth during not last milestone", async () => {
@@ -4226,7 +4227,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(notLastActiveMilestoneByteValue);
+                    .withArgs(milestonesOngoingBeforeLastStateValue);
             });
 
             it("[IP][14.2.9] Creator shouldn't be able to withdraw eth during last milestone", async () => {
@@ -4246,7 +4247,7 @@ describe("Investment Pool", async () => {
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
-                    .withArgs(lastMilestoneByteValue);
+                    .withArgs(lastMilestoneOngoingStateValue);
             });
 
             it("[IP][14.2.10] Creator shouldn't be able to withdraw eth if 0 amount is left", async () => {

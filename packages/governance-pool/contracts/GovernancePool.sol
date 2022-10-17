@@ -5,6 +5,7 @@ pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
+import "@openzeppelin/contracts/utils/Arrays.sol";
 
 import {IInvestmentPool} from "@buidlone/investment-pool/contracts/interfaces/IInvestmentPool.sol";
 import {IGovernancePool} from "@buidlone/investment-pool/contracts/interfaces/IGovernancePool.sol";
@@ -14,19 +15,20 @@ error GovernancePool__statusIsNotUnavailable();
 error GovernancePool__statusIsNotActiveVoting();
 error GovernancePool__statusIsNotVotedAgainst();
 error GovernancePool__notInvestmentPoolFactory();
-error GovernancePool__noIvestmentsMade();
 error GovernancePool__amountIsZero();
-error GovernancePool__noVotingTokensOwned();
+error GovernancePool__NoActiveVotingTokensOwned();
 error GovernancePool__amountIsGreaterThanVotingTokensBalance(uint256 amount, uint256 balance);
 error GovernancePool__noVotesAgainstProject();
 error GovernancePool__amountIsGreaterThanDelegatedVotes(uint256 amount, uint256 votes);
 error GovernancePool__totalSupplyIsZero();
 error GovernancePool__totalSupplyIsSmallerThanVotesAgainst(uint256 totalSupply, uint256 votes);
-error GovernancePool__noVotingTokensAvailableForClaim();
 error GovernancePool__thresholdNumberIsGreaterThan100();
+error GovernancePool__InvestmentPoolStateNotAllowed();
 
 /// @title Governance Pool contract.
 contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
+    using Arrays for uint256[];
+
     // ERC1155 contract where all voting tokens are stored
     VotingToken public immutable VOTING_TOKEN;
     address public immutable INVESTMENT_POOL_FACTORY_ADDRESS;
@@ -35,20 +37,17 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
 
     /// @notice mapping from investment pool id => status
     mapping(uint256 => InvestmentPoolStatus) public investmentPoolStatus;
-    /// @notice mapping from investor address => investment pool id => voting tokens asmount
+    /// @notice mapping from investor address => investment pool id => votes amount against the project
     mapping(address => mapping(uint256 => uint256)) public votesAmount;
-    /// @notice mapping from investor address => investment pool id => milestone id => token portion details
-    mapping(address => mapping(uint256 => mapping(uint256 => TokensLocked))) public tokensLocked;
-    /// @notice mapping from investment pool id => total votes amount
+    /// @notice mapping from investment pool id => total votes amount against the project
     mapping(uint256 => uint256) public totalVotesAmount;
 
+    /// @notice mapping from investor address => investment pool id => milestone id => amount of voting tokens, investor started to own
+    mapping(address => mapping(uint256 => mapping(uint256 => uint256))) public activeTokens;
+    /// @notice mapping from investor address => investment pool id => list of milestones in which voting tokens amount increaced
+    mapping(address => mapping(uint256 => uint256[])) public milestonesIdsInWhichInvestorInvested;
+
     event ActivateVoting(address indexed investmentPool);
-    event UnlockVotingTokens(
-        address indexed investmentPool,
-        address indexed investor,
-        uint256 indexed milestoneId,
-        uint256 amount
-    );
     event VoteAgainstProject(
         address indexed investmentPool,
         address indexed investor,
@@ -117,70 +116,41 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @dev Is called by INVESTMENT POOL.
      *  @dev Reverts if status is not active voting, amount to mint is zero.
      *  @dev Voting Token contract emits TransferSingle event.
+     *  @param _milestoneId id of milestone in which the newly minted voting tokens will become active
      *  @param _investor account address for which voting tokens will be minted.
      *  @param _amount tokens amount to mint.
-     *  @param _unlockTime time until newly minted tokens will be locked in governance pool. No checks for time are applied. It can be in the past, which means tokens are unlock instantly.
      */
     function mintVotingTokens(
         uint256 _milestoneId,
         address _investor,
-        uint256 _amount,
-        uint48 _unlockTime
+        uint256 _amount
     ) external onActiveInvestmentPool(_msgSender()) {
-        /// @dev Unlock time can be in the past, which means tokens are unlocked instantly.
-
+        // Not updating the middle [100, 0, 300]. Also use needs to invest at the end to make sure this structure works
         if (_amount == 0) revert GovernancePool__amountIsZero();
+
         uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
-
-        // Push new locked tokens info to mapping and mint them. Tokens will be held by governance pool until unlock times
-        tokensLocked[_investor][investmentPoolId][_milestoneId] = TokensLocked({
-            unlockTime: _unlockTime,
-            amount: tokensLocked[_investor][investmentPoolId][_milestoneId].amount + _amount,
-            claimed: false
-        });
-
-        // Tokens will never be minted for the milestones that already passed because this is called only by IP in invest function
-        VOTING_TOKEN.mint(address(this), investmentPoolId, _amount, "");
-    }
-
-    /** @notice Transfer voting tokens if lock period ended.
-     *  @dev Is called by INVESTOR.
-     *  @dev Reverts if status is not active voting, if investor has zero investments, if all tokens are still locked.
-     *  @dev Emits UnlockVotingTokens event with investment pool address, sender, id, amount. Voting Token contract emits TransferSingle event.
-     *  @param _investmentPool investment pool address. Investor tries to unlock tokens for this investment pool.
-     */
-    function unlockVotingTokens(address _investmentPool, uint256 _milestoneId)
-        external
-        onActiveInvestmentPool(_investmentPool)
-    {
-        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        uint256 owedTokens = 0;
-        TokensLocked memory lockedTokens = tokensLocked[_msgSender()][investmentPoolId][
-            _milestoneId
+        uint256[] memory milestonesIds = milestonesIdsInWhichInvestorInvested[_investor][
+            investmentPoolId
         ];
 
-        if (lockedTokens.amount == 0) revert GovernancePool__noIvestmentsMade();
-
-        // Transfer only tokens that haven't been claimed and unlock time was reached
-        if (!lockedTokens.claimed && lockedTokens.unlockTime <= uint48(_getNow())) {
-            tokensLocked[_msgSender()][investmentPoolId][_milestoneId].claimed = true;
-            owedTokens = lockedTokens.amount;
-        }
-
-        if (owedTokens > 0) {
-            // Transfer the voting tokens from the governance pool to investor
-            VOTING_TOKEN.safeTransferFrom(
-                address(this),
-                _msgSender(),
-                investmentPoolId,
-                owedTokens,
-                ""
-            );
-
-            emit UnlockVotingTokens(_investmentPool, _msgSender(), _milestoneId, owedTokens);
+        if (milestonesIds.length == 0) {
+            activeTokens[_investor][investmentPoolId][_milestoneId] = _amount;
+            milestonesIdsInWhichInvestorInvested[_investor][investmentPoolId].push(_milestoneId);
         } else {
-            revert GovernancePool__noVotingTokensAvailableForClaim();
+            uint256 milestoneIdOfLastIncrease = milestonesIds[milestonesIds.length - 1];
+            activeTokens[_investor][investmentPoolId][_milestoneId] =
+                activeTokens[_investor][investmentPoolId][milestoneIdOfLastIncrease] +
+                _amount;
+
+            if (milestoneIdOfLastIncrease != _milestoneId) {
+                milestonesIdsInWhichInvestorInvested[_investor][investmentPoolId].push(
+                    _milestoneId
+                );
+            }
         }
+
+        // Tokens will never be minted for the milestones that already passed because this is called only by IP in invest function
+        VOTING_TOKEN.mint(_investor, investmentPoolId, _amount, "");
     }
 
     /** @notice Vote against the project by transfering investor vote tokens to the governance pool contract.
@@ -196,16 +166,25 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         onActiveInvestmentPool(_investmentPool)
     {
         if (_amount == 0) revert GovernancePool__amountIsZero();
-        uint256 investorVotingTokenBalance = getVotingTokenBalance(_investmentPool, _msgSender());
-
-        if (investorVotingTokenBalance == 0) revert GovernancePool__noVotingTokensOwned();
-        if (_amount > investorVotingTokenBalance)
-            revert GovernancePool__amountIsGreaterThanVotingTokensBalance(
-                _amount,
-                investorVotingTokenBalance
-            );
-
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        IInvestmentPool investmentPool = IInvestmentPool(_investmentPool);
+        uint256 currentMilestoneId = investmentPool.getCurrentMilestoneId();
+        bool anyMilestoneOngoing = investmentPool.isAnyMilestoneOngoingAndActive();
+        if (!anyMilestoneOngoing) {
+            revert GovernancePool__InvestmentPoolStateNotAllowed();
+        }
+
+        uint256 investorActiveVotingTokensBalance = getActiveVotingTokensBalance(
+            _investmentPool,
+            currentMilestoneId,
+            _msgSender()
+        );
+        uint256 votesLeft = investorActiveVotingTokensBalance -
+            votesAmount[_msgSender()][investmentPoolId];
+
+        if (votesLeft == 0) revert GovernancePool__NoActiveVotingTokensOwned();
+        if (_amount > votesLeft)
+            revert GovernancePool__amountIsGreaterThanVotingTokensBalance(_amount, votesLeft);
 
         // Check if new votes amount specified by investor will reach 51%
         bool thresholdWillBeReached = willInvestorReachThreshold(_investmentPool, _amount);
@@ -326,6 +305,82 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     function isInvestmentPoolVotingActive(address _investmentPool) public view returns (bool) {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         return investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.ActiveVoting;
+    }
+
+    /** @notice Get balance of active voting tokens for specified milestone.
+     *  @notice The balance is retrieve by checking if in milestone id investor invested.
+     *  @notice If amount is zero that means investment was not made in given milestone.
+     *  @notice That's why it finds the nearest milestone that is smaller than given one
+     *  @notice and returns its balance or if no investments were made at all - zero.
+     *  @param _investmentPool investment pool address
+     *  @param _milestoneId milestone id in which tokens should be active
+     *  @param _account address of the account to check
+     *  @return uint256 -> balance of tokens owned in milestone
+     */
+    function getActiveVotingTokensBalance(
+        address _investmentPool,
+        uint256 _milestoneId,
+        address _account
+    ) public view returns (uint256) {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        uint256[] memory milestonesIds = milestonesIdsInWhichInvestorInvested[_account][
+            investmentPoolId
+        ];
+
+        if (milestonesIds.length == 0) {
+            // If milestonesIds array is empty that means that no investments were made
+            // and no voting tokens were minted. Return zero.assert
+            return 0;
+        } else if (
+            _milestoneId == 0 || activeTokens[_account][investmentPoolId][_milestoneId] != 0
+        ) {
+            // Return the value that mapping holds.
+            // If milestone is zero, no matter the active tokens amount (it can be 0 or more),
+            // it is the correct one, as no investments were made before it.
+            // If active tokens amount is not zero, that means investor invested in that milestone,
+            // that is why we can get the value immediately, without any additional step.
+            return activeTokens[_account][investmentPoolId][_milestoneId];
+        } else if (activeTokens[_account][investmentPoolId][_milestoneId] == 0) {
+            // If active tokens amount is zero, that means investment was MADE before it
+            // or was NOT MADE at all. It also means that investment definitely was not made in the current milestone.
+
+            // array.findUpperBound(element) searches a sorted array and returns the first index that contains a value greater or equal to element.
+            // If no such index exists (i.e. all values in the array are strictly less than element), the array length is returned.
+            // Because in previous condition we checked if investments were made to the milestone id,
+            // we can be sure that findUpperBound function will return the value greater than element of length of the array,
+            // but not the value that is equal.
+            /// @dev not using milestonesIds variable because findUpperBound works only with storage variables.
+            uint256 nearestMilestoneIdFromTop = milestonesIdsInWhichInvestorInvested[_account][
+                investmentPoolId
+            ].findUpperBound(_milestoneId);
+
+            if (nearestMilestoneIdFromTop == milestonesIds.length) {
+                // If length of an array was returned, it means
+                // no milestone id in the array is greater than the current one.
+                // Get the last value on milestonesIds array, because all the milestones after it
+                // have the same active tokens amount.
+                uint256 lastMilestoneIdWithInvestment = milestonesIds[milestonesIds.length - 1];
+                return activeTokens[_account][investmentPoolId][lastMilestoneIdWithInvestment];
+            } else if (nearestMilestoneIdFromTop == 0 && _milestoneId < milestonesIds[0]) {
+                // If the index of milestone that was found is zero AND
+                // current milestone is LESS than milestone retrieved from milestonesIds
+                // it means no investments were made before the current milestone.
+                // Thus, no voting tokens were minted at all.
+                // This condition can be met when looking for tokens amount in past milestones
+                return 0;
+            } else if (milestonesIds.length > 1 && nearestMilestoneIdFromTop != 0) {
+                // If more than 1 investment was made, nearestMilestoneIdFromTop will return
+                // the index that is higher by 1 array element. That is we need to subtract 1, to get the right index
+                // When we have the right index, we can return the active tokens amount
+                // This condition can be met when looking for tokens amount in past milestones
+                uint256 milestoneIdWithInvestment = milestonesIds[nearestMilestoneIdFromTop - 1];
+                return activeTokens[_account][investmentPoolId][milestoneIdWithInvestment];
+            }
+        }
+
+        // At this point all of the cases should be handled and value should already be returns
+        // This part of code should never be reached, but for unknown cases we will return zero.
+        return 0;
     }
 
     /** @notice Get tokens supply for investment pool token

@@ -10,22 +10,13 @@ interface IGovernancePool {
         VotedAgainst
     }
 
-    struct TokensLocked {
-        uint48 unlockTime;
-        uint256 amount;
-        bool claimed;
-    }
-
     function activateInvestmentPool(address _investmentPool) external;
 
     function mintVotingTokens(
         uint256 _milestoneId,
         address _investor,
-        uint256 _amount,
-        uint48 _unlockTime
+        uint256 _amount
     ) external;
-
-    function unlockVotingTokens(address _investmentPool, uint256 _milestoneId) external;
 
     function voteAgainst(address _investmentPool, uint256 _amount) external;
 

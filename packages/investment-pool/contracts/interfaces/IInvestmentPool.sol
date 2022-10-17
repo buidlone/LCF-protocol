@@ -65,6 +65,8 @@ interface IInvestmentPool is ISuperApp {
 
     function withdrawRemainingEth() external;
 
+    function getCurrentMilestoneId() external view returns (uint256);
+
     function isEmergencyTerminated() external view returns (bool);
 
     function isCanceledBeforeFundraiserStart() external view returns (bool);
@@ -90,6 +92,8 @@ interface IInvestmentPool is ISuperApp {
     function isFailedFundraiser() external view returns (bool);
 
     function didProjectEnd() external view returns (bool);
+
+    function isAnyMilestoneOngoingAndActive() external view returns (bool);
 
     function getProjectStateByteValue() external view returns (uint256 stateNumber);
 

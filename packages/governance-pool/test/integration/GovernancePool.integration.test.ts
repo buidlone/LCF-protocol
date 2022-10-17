@@ -504,18 +504,6 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
 
             // Approve and invest money
             await investMoney(fUSDTx, investment, investorA, investedAmount);
-
-            const investmentPoolId = await governancePool.getInvestmentPoolId(investment.address);
-            const lockedTokens = await governancePool.tokensLocked(
-                investorA.address,
-                investmentPoolId,
-                0
-            );
-            const unlockTime = (await investment.milestones(0)).startDate;
-
-            assert.equal(lockedTokens.unlockTime, unlockTime);
-            assert.deepEqual(lockedTokens.amount, investedAmount);
-            assert.isFalse(lockedTokens.claimed);
         });
     });
 
@@ -583,12 +571,9 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             // Approve and invest money
             await investMoney(fUSDTx, investment, investorA, investedAmount);
 
-            const investmentPoolId = await governancePool.getInvestmentPoolId(investment.address);
-
             timeStamp = dateToSeconds("2100/09/15");
             await investment.setTimestamp(timeStamp);
             await governancePool.setTimestamp(timeStamp);
-            await governancePool.connect(investorA).unlockVotingTokens(investment.address, 0);
 
             // Approve the governance pool contract to spend investor's tokens
             await votingToken.connect(investorA).setApprovalForAll(governancePool.address, true);
