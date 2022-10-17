@@ -371,12 +371,13 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
                 // current milestone is LESS than milestone retrieved from milestonesIds
                 // it means no investments were made before the current milestone.
                 // Thus, no voting tokens were minted at all.
-                // This condition is met when
+                // This condition can be met when looking for tokens amount in past milestones
                 return 0;
             } else if (milestonesIds.length > 1 && nearestMilestoneIdFromTop != 0) {
                 // If more than 1 investment was made, nearestMilestoneIdFromTop will return
                 // the index that is higher by 1 array element. That is we need to subtract 1, to get the right index
                 // When we have the right index, we can return the active tokens amount
+                // This condition can be met when looking for tokens amount in past milestones
                 uint256 milestoneIdWithInvestment = milestonesIds[nearestMilestoneIdFromTop - 1];
                 return activeTokens[_account][investmentPoolId][milestoneIdWithInvestment];
             }
