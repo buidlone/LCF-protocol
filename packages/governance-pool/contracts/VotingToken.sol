@@ -12,25 +12,24 @@ contract VotingToken is ERC1155, ERC1155Burnable, Ownable, ERC1155Supply {
     constructor() ERC1155("") {}
 
     function mint(
-        address account,
-        uint256 id,
-        uint256 amount,
-        bytes memory data
+        address _investor,
+        uint256 _investmentPoolId,
+        uint256 _amount,
+        bytes memory _data
     ) public onlyOwner {
-        _mint(account, id, amount, data);
+        _mint(_investor, _investmentPoolId, _amount, _data);
     }
 
     function mintBatch(
-        address to,
-        uint256[] memory ids,
-        uint256[] memory amounts,
+        address _investor,
+        uint256[] memory _investmentPoolIds,
+        uint256[] memory _amounts,
         bytes memory data
     ) public onlyOwner {
-        _mintBatch(to, ids, amounts, data);
+        _mintBatch(_investor, _investmentPoolIds, _amounts, data);
     }
 
     // The following functions are overrides required by Solidity.
-
     function _beforeTokenTransfer(
         address operator,
         address from,

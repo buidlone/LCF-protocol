@@ -445,6 +445,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
     });
 
     describe("3. IP request to mint voting tokens (in GP)", () => {
+        /*
         it("[IP-GP][3.1] Governance pool should mint voting tokens on investment", async () => {
             // Create investment pool implementation contract
             const investmentPoolDep = await ethers.getContractFactory(
@@ -506,19 +507,8 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
 
             // Approve and invest money
             await investMoney(fUSDTx, investment, investorA, investedAmount);
-
-            const investmentPoolId = await governancePool.getInvestmentPoolId(investment.address);
-            const lockedTokens = await governancePool.tokensLocked(
-                investorA.address,
-                investmentPoolId,
-                0
-            );
-            const unlockTime = (await investment.milestones(0)).startDate;
-
-            assert.equal(lockedTokens.unlockTime, unlockTime);
-            assert.deepEqual(lockedTokens.amount, investedAmount.mul(seedFundingMultiplier));
-            assert.isFalse(lockedTokens.claimed);
         });
+        */
     });
 
     describe("4. GP request to terminate project (in IP)", () => {
@@ -587,7 +577,6 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             timeStamp = dateToSeconds("2100/09/15");
             await investment.setTimestamp(timeStamp);
             await governancePool.setTimestamp(timeStamp);
-            await governancePool.connect(investorA).unlockVotingTokens(investment.address, 0);
 
             const seedFundingMultiplier = await investment.seedFundingMultiplier();
             const votesAgainst = seedFundingMultiplier.mul(investedAmount).mul(2).div(3);

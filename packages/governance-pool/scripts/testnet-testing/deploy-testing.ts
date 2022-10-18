@@ -1,11 +1,11 @@
 import {ethers, network} from "hardhat";
-import {availableTestnetChains, networkConfig} from "../hardhat-helper-config";
+import {availableTestnetChains, networkConfig} from "../../hardhat-helper-config";
 import {
     VotingToken,
     GovernancePool,
     InvestmentPoolFactoryTestMock,
     InvestmentPool,
-} from "../typechain-types";
+} from "../../typechain-types";
 
 let gelatoOpsAddress: string;
 let superfluidHostAddress: string;

@@ -17,7 +17,6 @@ contract GovernancePoolMockForIntegration {
     function mintVotingTokens(
         uint256, /*_milestoneId*/
         address, /*_investor*/
-        uint256, /*_amount*/
-        uint48 /*_unlockTime*/
+        uint256 /*_amount*/
     ) external pure {}
 }
