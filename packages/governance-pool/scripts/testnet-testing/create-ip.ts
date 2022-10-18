@@ -1,9 +1,9 @@
 import {ethers, network} from "hardhat";
 import {availableTestnetChains} from "../../hardhat-helper-config";
 import {BigNumber} from "ethers";
-import {InvestmentPoolFactoryMock} from "../../typechain-types";
+import {InvestmentPoolFactoryTestMock} from "../../typechain-types";
 
-let investmentPoolFactory: InvestmentPoolFactoryMock;
+let investmentPoolFactory: InvestmentPoolFactoryTestMock;
 const percentageDivider: number = 10 ** 6;
 
 const percentToIpBigNumber = (percent: number): number => {
@@ -21,20 +21,20 @@ async function main() {
     const deployer = accounts[0];
 
     const wrappedEther = "0x5943f705abb6834cad767e6e4bb258bc48d9c947";
-    const seedFundingLimit: BigNumber = ethers.utils.parseEther("0.001");
-    const softCap: BigNumber = ethers.utils.parseEther("0.01");
-    const hardCap: BigNumber = ethers.utils.parseEther("0.02");
+    const seedFundingLimit: BigNumber = ethers.utils.parseEther("0.0001");
+    const softCap: BigNumber = ethers.utils.parseEther("0.001");
+    const hardCap: BigNumber = ethers.utils.parseEther("0.002");
     const gelatoFeeAllocation: BigNumber = ethers.utils.parseEther("0.1");
-    const campaignStartDate: number = Math.round(new Date().getTime() / 1000) + 10 * 60; // current time + 5 minutes
-    const campaignEndDate: number = campaignStartDate + 60 * 60 * 24 * 30 * 2; // campaignStartDate + 2 months
+    const campaignStartDate: number = Math.round(new Date().getTime() / 1000) + 5 * 60; // current time + 5 minutes
+    const campaignEndDate: number = campaignStartDate + 15 * 60; // campaignStartDate + 15 minutes
     const milestone1StartDate: number = campaignEndDate; // = campaignStartDate
-    const milestone1EndDate: number = milestone1StartDate + 60 * 60 * 24 * 30 * 2; // milestone1StartDate + 2 months
+    const milestone1EndDate: number = milestone1StartDate + 60 * 60 * 2; // milestone1StartDate + 2 hours
     const milestone2StartDate: number = milestone1EndDate; // = milestone1EndDate
-    const milestone2EndDate: number = milestone2StartDate + 60 * 60 * 24 * 30 * 2; // milestone2StartDate + 2 months
+    const milestone2EndDate: number = milestone2StartDate + 60 * 60 * 2; // milestone2StartDate + 2 hours
 
     investmentPoolFactory = await ethers.getContractAt(
-        "InvestmentPoolFactoryMock",
-        "0x1d13caAf1F1C56A008e5A0bFC55ACa89376Eaa25"
+        "InvestmentPoolFactoryTestMock",
+        "<address>"
     );
 
     const creationTx = await investmentPoolFactory.connect(deployer).createInvestmentPool(
