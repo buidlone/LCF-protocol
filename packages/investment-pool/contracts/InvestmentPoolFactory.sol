@@ -63,6 +63,12 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     uint256 public FUNDRAISER_MAX_DURATION = 90 days;
     uint256 public INVESTMENT_WITHDRAW_FEE = 1; // 1% out of 100%
 
+    /// * @notice Multiplier for seed funding is 2,5; private - 1,9; public - 1.
+    /// * @dev Multiplier is firstly multiplied by 10 to avoid decimal places rounding in solidity
+    uint256 public SEED_FUNDING_MULTIPLIER = 25;
+    uint256 public PRIVATE_FUNDING_MULTIPLIER = 19;
+    uint256 public PUBLIC_FUNDING_MULTIPLIER = 10;
+
     /**
      * @notice Amount that will be used to cover transaction fee for gelato automation
      * @dev 108,328 (gas used for calls inside gelato network)
@@ -139,21 +145,29 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
 
         // Using the struct and then passing it to the initialize function because we don't want to get the error: "Stack too deep"
         IInvestmentPool.ProjectInfo memory projectDetails = IInvestmentPool.ProjectInfo(
+            _acceptedToken,
+            _msgSender(),
             _seedFundingLimit,
             _softCap,
             _hardCap,
             _fundraiserStartAt,
-            _fundraiserEndAt
+            _fundraiserEndAt,
+            TERMINATION_WINDOW,
+            AUTOMATED_TERMINATION_WINDOW
         );
+
+        IInvestmentPool.VotingTokensMultipliers memory multipliers = IInvestmentPool
+            .VotingTokensMultipliers(
+                SEED_FUNDING_MULTIPLIER,
+                PRIVATE_FUNDING_MULTIPLIER,
+                PUBLIC_FUNDING_MULTIPLIER
+            );
 
         invPool.initialize{value: msg.value}(
             HOST,
-            _acceptedToken,
-            _msgSender(),
             GELATO_OPS,
             projectDetails,
-            TERMINATION_WINDOW,
-            AUTOMATED_TERMINATION_WINDOW,
+            multipliers,
             INVESTMENT_WITHDRAW_FEE,
             _milestones,
             governancePool

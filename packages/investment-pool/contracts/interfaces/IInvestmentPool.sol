@@ -9,11 +9,21 @@ import {IGovernancePool} from "./IGovernancePool.sol";
 
 interface IInvestmentPool is ISuperApp {
     struct ProjectInfo {
+        ISuperToken acceptedToken;
+        address creator;
         uint96 seedFundingLimit;
         uint96 softCap;
         uint96 hardCap;
         uint48 fundraiserStartAt;
         uint48 fundraiserEndAt;
+        uint48 terminationWindow;
+        uint48 automatedTerminationWindow;
+    }
+
+    struct VotingTokensMultipliers {
+        uint256 seedFundingMultiplier;
+        uint256 privateFundingMultiplier;
+        uint256 publicFundingMultiplier;
     }
 
     struct MilestoneInterval {
@@ -118,12 +128,9 @@ interface IInvestmentPool is ISuperApp {
 interface IInitializableInvestmentPool is IInvestmentPool {
     function initialize(
         ISuperfluid _host,
-        ISuperToken _acceptedToken,
-        address _creator,
         IGelatoOps _gelatoOps,
         IInvestmentPool.ProjectInfo calldata _projectInfo,
-        uint48 _terminationWindow,
-        uint48 _automatedTerminationWindow,
+        IInvestmentPool.VotingTokensMultipliers calldata _multipliers,
         uint256 _investmentWithdrawFee,
         MilestoneInterval[] calldata _milestones,
         IGovernancePool _governancePool

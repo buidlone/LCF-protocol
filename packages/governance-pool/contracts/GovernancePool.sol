@@ -11,18 +11,18 @@ import {IInvestmentPool} from "@buidlone/investment-pool/contracts/interfaces/II
 import {IGovernancePool} from "@buidlone/investment-pool/contracts/interfaces/IGovernancePool.sol";
 import {VotingToken} from "./VotingToken.sol";
 
-error GovernancePool__statusIsNotUnavailable();
-error GovernancePool__statusIsNotActiveVoting();
-error GovernancePool__statusIsNotVotedAgainst();
-error GovernancePool__notInvestmentPoolFactory();
-error GovernancePool__amountIsZero();
+error GovernancePool__StatusIsNotUnavailable();
+error GovernancePool__StatusIsNotActiveVoting();
+error GovernancePool__StatusIsNotVotedAgainst();
+error GovernancePool__NotInvestmentPoolFactory();
+error GovernancePool__AmountIsZero();
 error GovernancePool__NoActiveVotingTokensOwned();
-error GovernancePool__amountIsGreaterThanVotingTokensBalance(uint256 amount, uint256 balance);
-error GovernancePool__noVotesAgainstProject();
-error GovernancePool__amountIsGreaterThanDelegatedVotes(uint256 amount, uint256 votes);
-error GovernancePool__totalSupplyIsZero();
-error GovernancePool__totalSupplyIsSmallerThanVotesAgainst(uint256 totalSupply, uint256 votes);
-error GovernancePool__thresholdNumberIsGreaterThan100();
+error GovernancePool__AmountIsGreaterThanVotingTokensBalance(uint256 amount, uint256 balance);
+error GovernancePool__NoVotesAgainstProject();
+error GovernancePool__AmountIsGreaterThanDelegatedVotes(uint256 amount, uint256 votes);
+error GovernancePool__TotalSupplyIsZero();
+error GovernancePool__TotalSupplyIsSmallerThanVotesAgainst(uint256 totalSupply, uint256 votes);
+error GovernancePool__ThresholdNumberIsGreaterThan100();
 error GovernancePool__InvestmentPoolStateNotAllowed();
 
 /// @title Governance Pool contract.
@@ -69,7 +69,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         uint8 _threshold,
         uint256 _votestWithdrawFee
     ) {
-        if (_threshold > 100) revert GovernancePool__thresholdNumberIsGreaterThan100();
+        if (_threshold > 100) revert GovernancePool__ThresholdNumberIsGreaterThan100();
         VOTING_TOKEN = _votingToken;
         INVESTMENT_POOL_FACTORY_ADDRESS = _investmentPoolFactory;
         VOTES_PERCENTAGE_THRESHOLD = _threshold;
@@ -78,20 +78,20 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
 
     modifier onUnavailableInvestmentPool(address _investmentPool) {
         if (!isInvestmentPoolUnavailable(_investmentPool)) {
-            revert GovernancePool__statusIsNotUnavailable();
+            revert GovernancePool__StatusIsNotUnavailable();
         }
         _;
     }
 
     modifier onActiveInvestmentPool(address _investmentPool) {
         if (!isInvestmentPoolVotingActive(_investmentPool))
-            revert GovernancePool__statusIsNotActiveVoting();
+            revert GovernancePool__StatusIsNotActiveVoting();
         _;
     }
 
     modifier onlyInvestmentPoolFactory() {
         if (_msgSender() != INVESTMENT_POOL_FACTORY_ADDRESS)
-            revert GovernancePool__notInvestmentPoolFactory();
+            revert GovernancePool__NotInvestmentPoolFactory();
         _;
     }
 
@@ -125,8 +125,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         address _investor,
         uint256 _amount
     ) external onActiveInvestmentPool(_msgSender()) {
-        // Not updating the middle [100, 0, 300]. Also use needs to invest at the end to make sure this structure works
-        if (_amount == 0) revert GovernancePool__amountIsZero();
+        if (_amount == 0) revert GovernancePool__AmountIsZero();
 
         uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
         uint256[] memory milestonesIds = milestonesIdsInWhichInvestorInvested[_investor][
@@ -165,7 +164,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         external
         onActiveInvestmentPool(_investmentPool)
     {
-        if (_amount == 0) revert GovernancePool__amountIsZero();
+        if (_amount == 0) revert GovernancePool__AmountIsZero();
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         IInvestmentPool investmentPool = IInvestmentPool(_investmentPool);
         uint256 currentMilestoneId = investmentPool.getCurrentMilestoneId();
@@ -184,7 +183,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
 
         if (votesLeft == 0) revert GovernancePool__NoActiveVotingTokensOwned();
         if (_amount > votesLeft)
-            revert GovernancePool__amountIsGreaterThanVotingTokensBalance(_amount, votesLeft);
+            revert GovernancePool__AmountIsGreaterThanVotingTokensBalance(_amount, votesLeft);
 
         // Check if new votes amount specified by investor will reach 51%
         bool thresholdWillBeReached = willInvestorReachThreshold(_investmentPool, _amount);
@@ -215,13 +214,13 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         external
         onActiveInvestmentPool(_investmentPool)
     {
-        if (_retractAmount == 0) revert GovernancePool__amountIsZero();
+        if (_retractAmount == 0) revert GovernancePool__AmountIsZero();
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         uint256 investorVotesAmount = votesAmount[_msgSender()][investmentPoolId];
 
-        if (investorVotesAmount == 0) revert GovernancePool__noVotesAgainstProject();
+        if (investorVotesAmount == 0) revert GovernancePool__NoVotesAgainstProject();
         if (_retractAmount > investorVotesAmount)
-            revert GovernancePool__amountIsGreaterThanDelegatedVotes(
+            revert GovernancePool__AmountIsGreaterThanDelegatedVotes(
                 _retractAmount,
                 investorVotesAmount
             );
@@ -256,9 +255,9 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     {
         uint256 totalSupply = getVotingTokensSupply(_investmentPool);
 
-        if (totalSupply == 0) revert GovernancePool__totalSupplyIsZero();
+        if (totalSupply == 0) revert GovernancePool__TotalSupplyIsZero();
         if (totalSupply < _votesAgainst)
-            revert GovernancePool__totalSupplyIsSmallerThanVotesAgainst(
+            revert GovernancePool__TotalSupplyIsSmallerThanVotesAgainst(
                 totalSupply,
                 _votesAgainst
             );
@@ -412,11 +411,13 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         return uint256(uint160(_investmentPool));
     }
 
+    /** INTERNAL FUNCTIONS */
+
     /**
      * @notice If project reaches threshold, this function sends request to the investment pool for terminating project
      * @param _investmentPool Address of the pool, which needs to be terminated
      */
-    function _endProject(address _investmentPool) private {
+    function _endProject(address _investmentPool) internal {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         investmentPoolStatus[investmentPoolId] = InvestmentPoolStatus.VotedAgainst;
 
