@@ -1,3 +1,3 @@
 module.exports = {
-  skipFiles: ["mock/InvestmentMock.sol", "DPatron.sol", "Investment.sol"],
+  skipFiles: ["mock", "interfaces", "DPatron.sol"],
 };

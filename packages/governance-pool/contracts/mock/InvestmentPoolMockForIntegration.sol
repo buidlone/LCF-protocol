@@ -7,6 +7,8 @@ import {IGovernancePool} from "@buidlone/investment-pool/contracts/interfaces/IG
 
 contract InvestmentPoolMockForIntegration {
     IGovernancePool public governancePool;
+    bool anyMilestoneOngoingNow = false;
+    uint256 currentMilestone = 0;
 
     constructor(IGovernancePool _governancePool) {
         governancePool = _governancePool;
@@ -21,4 +23,20 @@ contract InvestmentPoolMockForIntegration {
     }
 
     function cancelDuringMilestones() external pure {}
+
+    function getCurrentMilestoneId() external view returns (uint256) {
+        return currentMilestone;
+    }
+
+    function increaseMilestone() external {
+        currentMilestone += 1;
+    }
+
+    function isAnyMilestoneOngoingAndActive() external view returns (bool) {
+        return anyMilestoneOngoingNow;
+    }
+
+    function setIsAnyMilestoneOngoing(bool _isOngoing) external {
+        anyMilestoneOngoingNow = _isOngoing;
+    }
 }

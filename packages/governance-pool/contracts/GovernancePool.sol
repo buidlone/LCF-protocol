@@ -13,7 +13,6 @@ import {VotingToken} from "./VotingToken.sol";
 
 error GovernancePool__StatusIsNotUnavailable();
 error GovernancePool__StatusIsNotActiveVoting();
-error GovernancePool__StatusIsNotVotedAgainst();
 error GovernancePool__NotInvestmentPoolFactory();
 error GovernancePool__AmountIsZero();
 error GovernancePool__NoActiveVotingTokensOwned();
@@ -42,9 +41,18 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     /// @notice mapping from investment pool id => total votes amount against the project
     mapping(uint256 => uint256) public totalVotesAmount;
 
-    /// @notice mapping from investor address => investment pool id => milestone id => amount of voting tokens, investor started to own
-    mapping(address => mapping(uint256 => mapping(uint256 => uint256))) public activeTokens;
-    /// @notice mapping from investor address => investment pool id => list of milestones in which voting tokens amount increaced
+    /**
+     * @notice It's a memoization mapping from investor address => investment pool id => milestone id => amount of voting tokens
+     * @dev It returns 0 if no investments were made in that milestone and number > 0 if investment was made.
+     * @dev Number represents the active voting tokens amount, which can be used to vote against the project
+     * @dev It doesn't hold real money value, but a value, which will be used in other formulas.
+     * @dev Memoization will never be used on it's own, to get voting tokens balance.
+     */
+    mapping(address => mapping(uint256 => mapping(uint256 => uint256))) internal memActiveTokens;
+    /**
+     * @notice mapping from investor address => investment pool id => list of milestones in which voting tokens amount increaced
+     * @dev Array returns all milestones, in which at least 1 investment was made by investor.
+     */
     mapping(address => mapping(uint256 => uint256[])) public milestonesIdsInWhichInvestorInvested;
 
     event ActivateVoting(address indexed investmentPool);
@@ -112,7 +120,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         emit ActivateVoting(_investmentPool);
     }
 
-    /** @notice Mint new tokens for specified investment pool. Tokens are held by governance pool contract until unlock time is reached.
+    /** @notice Mint new tokens for specified investment pool. Tokens are minted for investor, but they are not active from the begining
      *  @dev Is called by INVESTMENT POOL.
      *  @dev Reverts if status is not active voting, amount to mint is zero.
      *  @dev Voting Token contract emits TransferSingle event.
@@ -128,20 +136,27 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         if (_amount == 0) revert GovernancePool__AmountIsZero();
 
         uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
+
+        // Get all milestones in which investor invested. This array allows us to know when the voting tokens balance increased.
         uint256[] memory milestonesIds = milestonesIdsInWhichInvestorInvested[_investor][
             investmentPoolId
         ];
 
         if (milestonesIds.length == 0) {
-            activeTokens[_investor][investmentPoolId][_milestoneId] = _amount;
+            // If array is zero, it means no investments exist and therefore investor doesn't own any voting tokens from past.
+            memActiveTokens[_investor][investmentPoolId][_milestoneId] = _amount;
             milestonesIdsInWhichInvestorInvested[_investor][investmentPoolId].push(_milestoneId);
         } else {
+            // If array is not zero, it means investor has made investments before.
+            // Now we should add the voting tokens amount from previous investments and add the current amount.
+            // This allows us to know the specific amount that investor started owning from the provided milestone start.
             uint256 milestoneIdOfLastIncrease = milestonesIds[milestonesIds.length - 1];
-            activeTokens[_investor][investmentPoolId][_milestoneId] =
-                activeTokens[_investor][investmentPoolId][milestoneIdOfLastIncrease] +
+            memActiveTokens[_investor][investmentPoolId][_milestoneId] =
+                memActiveTokens[_investor][investmentPoolId][milestoneIdOfLastIncrease] +
                 _amount;
 
             if (milestoneIdOfLastIncrease != _milestoneId) {
+                // If it's first investment for this milestone, add milestone id to the array.
                 milestonesIdsInWhichInvestorInvested[_investor][investmentPoolId].push(
                     _milestoneId
                 );
@@ -165,19 +180,25 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         onActiveInvestmentPool(_investmentPool)
     {
         if (_amount == 0) revert GovernancePool__AmountIsZero();
+
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         IInvestmentPool investmentPool = IInvestmentPool(_investmentPool);
         uint256 currentMilestoneId = investmentPool.getCurrentMilestoneId();
         bool anyMilestoneOngoing = investmentPool.isAnyMilestoneOngoingAndActive();
+
+        // Check investment pool state. If any milestone is ongoing, it means voting is still active.
         if (!anyMilestoneOngoing) {
             revert GovernancePool__InvestmentPoolStateNotAllowed();
         }
 
+        // Get the voting tokens that are active and can be used for voting
         uint256 investorActiveVotingTokensBalance = getActiveVotingTokensBalance(
             _investmentPool,
             currentMilestoneId,
             _msgSender()
         );
+
+        // Get amount of votes investor owns. Remove the votes that were used for voting already.
         uint256 votesLeft = investorActiveVotingTokensBalance -
             votesAmount[_msgSender()][investmentPoolId];
 
@@ -328,18 +349,18 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
 
         if (milestonesIds.length == 0) {
             // If milestonesIds array is empty that means that no investments were made
-            // and no voting tokens were minted. Return zero.assert
+            // and no voting tokens were minted. Return zero.
             return 0;
         } else if (
-            _milestoneId == 0 || activeTokens[_account][investmentPoolId][_milestoneId] != 0
+            _milestoneId == 0 || memActiveTokens[_account][investmentPoolId][_milestoneId] != 0
         ) {
             // Return the value that mapping holds.
             // If milestone is zero, no matter the active tokens amount (it can be 0 or more),
             // it is the correct one, as no investments were made before it.
             // If active tokens amount is not zero, that means investor invested in that milestone,
             // that is why we can get the value immediately, without any additional step.
-            return activeTokens[_account][investmentPoolId][_milestoneId];
-        } else if (activeTokens[_account][investmentPoolId][_milestoneId] == 0) {
+            return memActiveTokens[_account][investmentPoolId][_milestoneId];
+        } else if (memActiveTokens[_account][investmentPoolId][_milestoneId] == 0) {
             // If active tokens amount is zero, that means investment was MADE before it
             // or was NOT MADE at all. It also means that investment definitely was not made in the current milestone.
 
@@ -359,8 +380,11 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
                 // Get the last value on milestonesIds array, because all the milestones after it
                 // have the same active tokens amount.
                 uint256 lastMilestoneIdWithInvestment = milestonesIds[milestonesIds.length - 1];
-                return activeTokens[_account][investmentPoolId][lastMilestoneIdWithInvestment];
-            } else if (nearestMilestoneIdFromTop == 0 && _milestoneId < milestonesIds[0]) {
+                return memActiveTokens[_account][investmentPoolId][lastMilestoneIdWithInvestment];
+            } else if (
+                nearestMilestoneIdFromTop == 0 &&
+                _milestoneId < milestonesIds[nearestMilestoneIdFromTop]
+            ) {
                 // If the index of milestone that was found is zero AND
                 // current milestone is LESS than milestone retrieved from milestonesIds
                 // it means no investments were made before the current milestone.
@@ -373,7 +397,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
                 // When we have the right index, we can return the active tokens amount
                 // This condition can be met when looking for tokens amount in past milestones
                 uint256 milestoneIdWithInvestment = milestonesIds[nearestMilestoneIdFromTop - 1];
-                return activeTokens[_account][investmentPoolId][milestoneIdWithInvestment];
+                return memActiveTokens[_account][investmentPoolId][milestoneIdWithInvestment];
             }
         }
 

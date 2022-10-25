@@ -7,7 +7,7 @@ import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinition
 import {InvestmentPool} from "../InvestmentPool.sol";
 
 contract InvestmentPoolMock is InvestmentPool {
-    uint256 timestamp = 0;
+    uint256 public timestamp = 0;
 
     function setTimestamp(uint256 _timestamp) public {
         timestamp = _timestamp;
@@ -31,6 +31,10 @@ contract InvestmentPoolMock is InvestmentPool {
         currentMilestone++;
     }
 
+    function setCurrentMilestone(uint256 _milestone) public {
+        currentMilestone = _milestone;
+    }
+
     function terminateMilestoneStreamFinal(uint256 _id) public {
         _terminateMilestoneStreamFinal(_id);
     }
@@ -45,5 +49,25 @@ contract InvestmentPoolMock is InvestmentPool {
 
     function deleteGelatoTask() public {
         delete gelatoTask;
+    }
+
+    function encodeGelatoTerminationWithSelector(uint256 _milestoneId)
+        public
+        pure
+        returns (bytes memory)
+    {
+        return
+            abi.encodeWithSelector(
+                this.gelatoTerminateMilestoneStreamFinal.selector,
+                _milestoneId
+            );
+    }
+
+    function ifNeededUpdateMemInvestmentValue(uint256 _milestoneId) public {
+        _ifNeededUpdateMemInvestmentValue(_milestoneId);
+    }
+
+    function getVotingTokensAmountToMint(uint256 _amount) public view returns (uint256) {
+        return _getVotingTokensAmountToMint(_amount);
     }
 }

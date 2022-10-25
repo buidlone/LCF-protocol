@@ -25,12 +25,23 @@ async function main() {
     const softCap: BigNumber = ethers.utils.parseEther("0.01");
     const hardCap: BigNumber = ethers.utils.parseEther("0.02");
     const gelatoFeeAllocation: BigNumber = ethers.utils.parseEther("0.1");
+
+    const twoMonthsInSeconds: number = 60 * 60 * 24 * 30 * 2;
     const campaignStartDate: number = Math.round(new Date().getTime() / 1000) + 10 * 60; // current time + 5 minutes
-    const campaignEndDate: number = campaignStartDate + 60 * 60 * 24 * 30 * 2; // campaignStartDate + 2 months
-    const milestone1StartDate: number = campaignEndDate; // = campaignStartDate
-    const milestone1EndDate: number = milestone1StartDate + 60 * 60 * 24 * 30 * 2; // milestone1StartDate + 2 months
-    const milestone2StartDate: number = milestone1EndDate; // = milestone1EndDate
-    const milestone2EndDate: number = milestone2StartDate + 60 * 60 * 24 * 30 * 2; // milestone2StartDate + 2 months
+    const campaignEndDate: number = campaignStartDate + twoMonthsInSeconds; // campaignStartDate + 2 months
+    const percentagePart1: number = percentToIpBigNumber(0.5);
+    const percentagePart2: number = percentToIpBigNumber(9.5);
+
+    let milestones = [];
+
+    for (let i = 0; i < 10; i++) {
+        milestones.push({
+            startDate: campaignEndDate + i * twoMonthsInSeconds,
+            endDate: campaignEndDate + twoMonthsInSeconds + i * twoMonthsInSeconds,
+            intervalSeedPortion: percentagePart1,
+            intervalStreamingPortion: percentagePart2,
+        });
+    }
 
     investmentPoolFactory = await ethers.getContractAt(
         "InvestmentPoolFactoryMock",
@@ -45,20 +56,7 @@ async function main() {
         campaignStartDate,
         campaignEndDate,
         0, // CLONE-PROXY
-        [
-            {
-                startDate: milestone1StartDate,
-                endDate: milestone1EndDate,
-                intervalSeedPortion: percentToIpBigNumber(5),
-                intervalStreamingPortion: percentToIpBigNumber(70),
-            },
-            {
-                startDate: milestone2StartDate,
-                endDate: milestone2EndDate,
-                intervalSeedPortion: percentToIpBigNumber(5),
-                intervalStreamingPortion: percentToIpBigNumber(20),
-            },
-        ],
+        milestones,
         {value: gelatoFeeAllocation}
     );
 
@@ -69,10 +67,6 @@ async function main() {
     console.log("---Timeline---");
     console.log("Fundraiser start date: ", new Date(campaignStartDate * 1000));
     console.log("Fundraiser end date: ", new Date(campaignEndDate * 1000));
-    console.log("Milestone (id 0) start date: ", new Date(milestone1StartDate * 1000));
-    console.log("Milestone (id 0) end date: ", new Date(milestone1EndDate * 1000));
-    console.log("Milestone (id 1) start date: ", new Date(milestone2StartDate * 1000));
-    console.log("Milestone (id 1) end date: ", new Date(milestone2EndDate * 1000));
 }
 
 main().catch((error) => {

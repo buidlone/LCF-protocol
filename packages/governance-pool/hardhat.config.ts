@@ -6,8 +6,6 @@ import "hardhat-gas-reporter";
 import "solidity-coverage";
 import "hardhat-deploy";
 import "hardhat-docgen";
-import "./tasks/create-ip-testing";
-import "./tasks/create-ip";
 // You need to export an object to set up your config
 // Go to https://hardhat.org/config/ to learn more
 
