@@ -8,7 +8,7 @@ import {GovernancePool} from "../GovernancePool.sol";
 import {VotingToken} from "../VotingToken.sol";
 
 contract GovernancePoolMock is GovernancePool {
-    uint256 timestamp = 0;
+    uint256 public timestamp = 0;
 
     constructor(
         VotingToken _votingToken,
@@ -34,5 +34,13 @@ contract GovernancePoolMock is GovernancePool {
     function updateInvestmentPoolStatusToVotedAgainst(address _investmentPool) public {
         uint256 id = getInvestmentPoolId(_investmentPool);
         investmentPoolStatus[id] = IGovernancePool.InvestmentPoolStatus.VotedAgainst;
+    }
+
+    function getMemActiveTokens(
+        address _investor,
+        uint256 _ipId,
+        uint256 _milestoneId
+    ) public view returns (uint256) {
+        return memActiveTokens[_investor][_ipId][_milestoneId];
     }
 }

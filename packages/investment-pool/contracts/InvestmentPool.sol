@@ -29,7 +29,6 @@ error InvestmentPool__Unauthorized();
 /// @notice InvestmentPool ERRORS
 error InvestmentPool__NotCreator();
 error InvestmentPool__NotGelatoOps();
-error InvestmentPool__NotGovernancePool();
 error InvestmentPool__NotGovernancePoolOrGelato();
 error InvestmentPool__MilestoneStillLocked();
 error InvestmentPool__MilestoneStreamTerminationUnavailable();
@@ -201,7 +200,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     /// @notice Ensures that the milestone stream can be terminated by gelato
     modifier canGelatoTerminateMilestoneFinal(uint _index) {
-        if (!canGelatoTerminateMilestoneStreamFinal(_index) || gelatoTask == bytes32(0))
+        if (!canGelatoTerminateMilestoneStreamFinal(_index))
             revert InvestmentPool__GelatoMilestoneStreamTerminationUnavailable();
         _;
     }
@@ -214,10 +213,22 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         _;
     }
 
+    /// @notice allow investment pool to receive funds from other accounts
     receive() external payable {}
 
     /** EXTERNAL FUNCTIONS */
 
+    /**
+     * @notice This function is like contructor. It defines all the important variables for further processes.
+     * @dev This function is called by INVESTMENT POOL FACTORY on new project creation
+     * @param _host superfluid contract, which is responsible for most of interactions with streams
+     * @param _gelatoOps gelato contract, which is responsible for creating automated tasks and accepting fee
+     * @param _projectInfo information about the project milestones, fundraiser, termination.
+     * @param _multipliers numbers, which are going to be used for calculating the voting tokens amount for minting
+     * @param _investmentWithdrawFee fee, which is going to be used when unpledging investment
+     * @param _milestones details about each milestone
+     * @param _governancePool contract, which is used for managing voting system
+     */
     function initialize(
         ISuperfluid _host,
         IGelatoOps _gelatoOps,
@@ -329,7 +340,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     }
 
     /**
-     * @notice Allows investors to change their mind during the active fundraiser or not last milestone is active.
+     * @notice Allows investors to change their mind during the ongoing fundraiser or ongoing milestone.
      * @notice Funds are transfered back if milestone hasn't started yet. Unpledge all at once, or just a specified amount
      * @param _amount Amount of funds to withdraw.
      */
@@ -369,8 +380,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     /**
      * @notice Allows investors to withdraw all locked funds for a failed project
-     * @notice if the soft cap has not been raised by the fundraiser end date
-     * @notice or project was terminated by investors votes
+     * @notice if the soft cap has not been raised by the fundraiser end date or project was terminated.
      */
     function refund()
         external
@@ -437,6 +447,11 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         emit Refund(_msgSender(), tokensOwned);
     }
 
+    /**
+     * @notice Function is called only once, for the first milestone to start. Can be called only in milestone id 0
+     * @notice If project is terminated so fast that even first funds stream was not opened yet,
+     * @notice allow creator to get a seed funds.
+     */
     function startFirstFundsStream()
         external
         onlyCreator
@@ -448,7 +463,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     }
 
     /**
-     * @notice Cancel project before fundraiser start
+     * @notice Creator can cancel the project before fundraiser start
      */
     function cancelBeforeFundraiserStart()
         external
@@ -456,12 +471,13 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         allowedProjectStates(BEFORE_FUNDRAISER_STATE_VALUE)
     {
         emergencyTerminationTimestamp = uint48(_getNow());
+        gelatoOps.cancelTask(gelatoTask);
         emit Cancel();
     }
 
     /**
-     * @notice Allows creator to terminate stream and claim funds.
-     * @notice If it is a last milestone, only terminate the stream.
+     * @notice Allows creator to terminate stream and claim next milestone's funds.
+     * @notice If it is a last milestone, only terminate the stream and cancel gelato tasks.
      */
     function milestoneJumpOrFinalProjectTermination()
         external
@@ -479,6 +495,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         }
     }
 
+    /**
+     * @notice Creator deposits gelato fee amount on project creation (which is 0.1 ETH for now)
+     * @notice If project was canceled or terminated in any way
+     */
     function withdrawRemainingEth()
         external
         onlyCreator
@@ -500,7 +520,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     /**
      * @notice Cancel project during milestone periods.
-     * @notice Should only be called by the governane pool
+     * @notice Should only be called by the governane pool or gelato
      */
     function cancelDuringMilestones()
         public
@@ -525,9 +545,14 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             _afterMilestoneStreamTermination(getCurrentMilestoneId(), streamedAmount, false);
         }
 
+        gelatoOps.cancelTask(gelatoTask);
         emit Cancel();
     }
 
+    /**
+     * @notice Checks if project state is "any milestone ongoing"
+     * @return bool -> true if state is "any milestones ongoing", else false
+     */
     function isAnyMilestoneOngoingAndActive() public view returns (bool) {
         uint256 currentState = getProjectStateByteValue();
         if (ANY_MILESTONE_ONGOING_STATE_VALUE & currentState == 0) {
@@ -588,7 +613,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     /// @notice Checking if currently in defined milestone because milestone jump happens before next milestone start date
     function isAnyMilestoneOngoing() public view returns (bool) {
         return
-            _getNow() > milestones[0].startDate &&
+            _getNow() >= milestones[0].startDate &&
             _getNow() < milestones[milestoneCount - 1].endDate;
     }
 
@@ -654,7 +679,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     /// @notice Check if milestone can be terminated
     function canTerminateMilestoneStreamFinal(uint256 _milestoneId) public view returns (bool) {
-        Milestone storage milestone = milestones[_milestoneId];
+        Milestone memory milestone = milestones[_milestoneId];
         return milestone.streamOngoing && milestone.endDate - terminationWindow <= _getNow();
     }
 
@@ -664,11 +689,14 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         view
         returns (bool)
     {
-        Milestone storage milestone = milestones[_milestoneId];
+        Milestone memory milestone = milestones[_milestoneId];
         return
-            milestone.streamOngoing && milestone.endDate - automatedTerminationWindow <= _getNow();
+            milestone.streamOngoing &&
+            milestone.endDate - automatedTerminationWindow <= _getNow() &&
+            gelatoTask != bytes32(0);
     }
 
+    /// @notice get current milestone id
     function getCurrentMilestoneId() public view virtual returns (uint256) {
         return currentMilestone;
     }
@@ -706,6 +734,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     /** INTERNAL FUNCTIONS */
 
+    /// @notice Update value memMilestoneInvestments value, to make sure it doesn't return zero by mistake
     function _ifNeededUpdateMemInvestmentValue(uint256 _milestoneId) internal {
         uint256 memInvAmount = memMilestoneInvestments[_milestoneId];
         if (memInvAmount == 0 && _milestoneId > 0) {
@@ -881,11 +910,13 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         if (totalInvestedAmount < seedFundingLimit) {
             // Seed funding
             if (totalInvestedAmount + _amount <= seedFundingLimit) {
-                // Multiplier will be the same for all voting tokens
+                // Seed funding was not reached that's why multiplier will be the same for all voting tokens
                 returnedValue = _amount * seedFundingMultiplier;
             } else if (totalInvestedAmount + _amount <= softCap) {
                 // Multiplier is going to be different. That's why we need to calculate
-                // the amount which is going to be invested in seed funding and which in private funding
+                // the amount which is going to be invested in seed funding and which in private funding.
+                // In this situation, investor invested while in seed funding, but investment was to big to fit only in seed, so
+                // the remaining funds were dedicated to private funding
 
                 uint256 amountInSeedFunding = seedFundingLimit - totalInvestedAmount;
                 uint256 ticketsForSeedFunding = amountInSeedFunding * seedFundingMultiplier;
@@ -897,7 +928,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
                 returnedValue = ticketsForSeedFunding + ticketsForPrivateFunding;
             } else if (totalInvestedAmount + _amount <= hardCap) {
                 // Multiplier is going to be different. That's why we need to calculate
-                // the amount which is going to be invested in seed funding, which in private funding and which in public funding
+                // the amount which is going to be invested in seed funding, which in private funding and which in public funding.
+                // In this situation investor invested in seed funding, but because it was too large, funds were dedicated to
+                // private and public fundings too.
 
                 uint256 amountInSeedFunding = seedFundingLimit - totalInvestedAmount;
                 uint256 ticketsForSeedFunding = amountInSeedFunding * seedFundingMultiplier;
@@ -923,7 +956,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
                 returnedValue = _amount * privateFundingMultiplier;
             } else if (totalInvestedAmount + _amount <= hardCap) {
                 // Multiplier is going to be different. That's why we need to calculate
-                // the amount which is going to be invested in private funding and which in public funding
+                // the amount which is going to be invested in private funding and which in public funding.
+                // Investor invested while in private funding. Remaining funds went to public funding.
 
                 uint256 amountInPrivateFunding = softCap - totalInvestedAmount;
                 uint256 ticketsForPrivateFunding = amountInPrivateFunding *
@@ -1071,16 +1105,16 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     /// @return canExec : whether Gelato should execute the task.
     /// @return execPayload :  data that executors should use for the execution.
     function gelatoChecker() public view returns (bool canExec, bytes memory execPayload) {
-        if (gelatoTask != bytes32(0)) {
-            // Check if gelato can terminate stream of current milestone
-            canExec = canGelatoTerminateMilestoneStreamFinal(getCurrentMilestoneId());
-        } else {
-            canExec = false;
-        }
+        uint256 milestoneId = getCurrentMilestoneId();
+        canExec = canGelatoTerminateMilestoneStreamFinal(milestoneId);
 
-        execPayload = abi.encodeWithSelector(this.gelatoTerminateMilestoneStreamFinal.selector);
+        execPayload = abi.encodeWithSelector(
+            this.gelatoTerminateMilestoneStreamFinal.selector,
+            milestoneId
+        );
     }
 
+    /// @notice Register gelato task, to make termination automated
     function startGelatoTask() public {
         // Register task to run it automatically
         bytes32 taskId = gelatoOps.createTaskNoPrepayment(
@@ -1094,6 +1128,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         gelatoTask = taskId;
     }
 
+    /// @notice Function is called by gelato automation, when conditions are met
     function gelatoTerminateMilestoneStreamFinal(uint256 _milestoneId)
         public
         onlyGelatoOps
