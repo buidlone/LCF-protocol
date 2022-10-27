@@ -53,21 +53,21 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     // Assign all Clones library functions to addresses
     using Clones for address;
 
-    uint32 public constant MAX_MILESTONE_COUNT = 10;
-    uint48 public TERMINATION_WINDOW = 3 days;
-    uint48 public AUTOMATED_TERMINATION_WINDOW = 1 hours;
-    uint256 public constant PERCENTAGE_DIVIDER = 10**6;
-    uint256 public MILESTONE_MIN_DURATION = 30 days;
-    uint256 public MILESTONE_MAX_DURATION = 90 days;
-    uint256 public FUNDRAISER_MIN_DURATION = 30 days;
-    uint256 public FUNDRAISER_MAX_DURATION = 90 days;
-    uint256 public INVESTMENT_WITHDRAW_FEE = 1; // 1% out of 100%
+    uint32 internal constant MAX_MILESTONE_COUNT = 10;
+    uint48 internal TERMINATION_WINDOW = 3 days;
+    uint48 internal AUTOMATED_TERMINATION_WINDOW = 1 hours;
+    uint256 internal constant PERCENTAGE_DIVIDER = 10**6;
+    uint256 internal MILESTONE_MIN_DURATION = 30 days;
+    uint256 internal MILESTONE_MAX_DURATION = 90 days;
+    uint256 internal FUNDRAISER_MIN_DURATION = 30 days;
+    uint256 internal FUNDRAISER_MAX_DURATION = 90 days;
+    uint256 internal INVESTMENT_WITHDRAW_FEE = 1; // 1% out of 100%
 
     /// * @notice Multiplier for seed funding is 2,5; private - 1,9; public - 1.
     /// * @dev Multiplier is firstly multiplied by 10 to avoid decimal places rounding in solidity
-    uint256 public SEED_FUNDING_MULTIPLIER = 25;
-    uint256 public PRIVATE_FUNDING_MULTIPLIER = 19;
-    uint256 public PUBLIC_FUNDING_MULTIPLIER = 10;
+    uint256 internal SEED_FUNDING_MULTIPLIER = 25;
+    uint256 internal PRIVATE_FUNDING_MULTIPLIER = 19;
+    uint256 internal PUBLIC_FUNDING_MULTIPLIER = 10;
 
     /**
      * @notice Amount that will be used to cover transaction fee for gelato automation
@@ -76,17 +76,16 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
      * @dev 108,328 + 353,912 = 462,240 (gas amount needed for gelato termination)
      * @dev If gas price is 200 Gwei, the total fee is 0,092448
      */
-    uint256 public gelatoFeeAllocationForProject = 0.1 ether;
-
-    IGovernancePool public governancePool;
+    uint256 internal gelatoFeeAllocationForProject = 0.1 ether;
+    IGovernancePool internal governancePool;
 
     /* WARNING: NEVER RE-ORDER VARIABLES! Always double-check that new
        variables are added APPEND-ONLY. Re-ordering variables can
        permanently BREAK the deployed proxy contract. */
 
-    ISuperfluid public immutable HOST;
-    IGelatoOps public immutable GELATO_OPS;
-    address public investmentPoolImplementation;
+    ISuperfluid internal immutable HOST;
+    IGelatoOps internal immutable GELATO_OPS;
+    address internal investmentPoolImplementation;
 
     constructor(
         ISuperfluid _host,
@@ -110,6 +109,8 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
 
     receive() external payable {}
 
+    /** EXTERNAL FUNCTIONS */
+
     function createInvestmentPool(
         ISuperToken _acceptedToken,
         uint96 _seedFundingLimit,
@@ -120,13 +121,13 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         ProxyType _proxyType,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
     ) external payable returns (IInvestmentPool) {
-        if (msg.value < gelatoFeeAllocationForProject)
+        if (msg.value < getGelatoFeeAllocationForProject())
             revert InvestmentPoolFactory__NotEnoughEthValue();
 
         IInitializableInvestmentPool invPool;
 
         _assertPoolInitArguments(
-            HOST,
+            getSuperfluidHost(),
             _acceptedToken,
             _msgSender(),
             _seedFundingLimit,
@@ -152,29 +153,29 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
             _hardCap,
             _fundraiserStartAt,
             _fundraiserEndAt,
-            TERMINATION_WINDOW,
-            AUTOMATED_TERMINATION_WINDOW
+            getTerminationWindow(),
+            getAutomatedTerminationWindow()
         );
 
         IInvestmentPool.VotingTokensMultipliers memory multipliers = IInvestmentPool
             .VotingTokensMultipliers(
-                SEED_FUNDING_MULTIPLIER,
-                PRIVATE_FUNDING_MULTIPLIER,
-                PUBLIC_FUNDING_MULTIPLIER
+                getSeedFundingMultiplier(),
+                getPrivateFundingMultiplier(),
+                getPublicFundingMultiplier()
             );
 
         invPool.initialize{value: msg.value}(
-            HOST,
-            GELATO_OPS,
+            getSuperfluidHost(),
+            getGelatoOps(),
             projectDetails,
             multipliers,
-            INVESTMENT_WITHDRAW_FEE,
+            getInvestmentWithdrawPercentageFee(),
             _milestones,
-            governancePool
+            getGovernancePool()
         );
 
         // After creating investment pool, call governance pool with investment pool address
-        governancePool.activateInvestmentPool(address(invPool));
+        getGovernancePool().activateInvestmentPool(address(invPool));
 
         // Final level is required by the Superfluid's spec right now
         // We only really care about termination callbacks, others - noop
@@ -192,7 +193,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     }
 
     function setGovernancePool(address _governancePool) external onlyOwner {
-        if (address(governancePool) == address(0)) {
+        if (address(getGovernancePool()) == address(0)) {
             governancePool = IGovernancePool(_governancePool);
         } else {
             revert InvestmentPoolFactory__GovernancePoolAlreadyDefined();
@@ -203,8 +204,81 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         gelatoFeeAllocationForProject = _newAmount;
     }
 
+    /** PUBLIC FUNCTIONS */
+
+    /** GETTERS */
+    function getMaxMilestoneCount() public pure returns (uint32) {
+        return MAX_MILESTONE_COUNT;
+    }
+
+    function getTerminationWindow() public view returns (uint48) {
+        return TERMINATION_WINDOW;
+    }
+
+    function getAutomatedTerminationWindow() public view returns (uint48) {
+        return AUTOMATED_TERMINATION_WINDOW;
+    }
+
+    function getPercentageDivider() public pure returns (uint256) {
+        return PERCENTAGE_DIVIDER;
+    }
+
+    function getMilestoneMinDuration() public view returns (uint256) {
+        return MILESTONE_MIN_DURATION;
+    }
+
+    function getMilestoneMaxDuration() public view returns (uint256) {
+        return MILESTONE_MAX_DURATION;
+    }
+
+    function getFundraiserMinDuration() public view returns (uint256) {
+        return FUNDRAISER_MIN_DURATION;
+    }
+
+    function getFundraiserMaxDuration() public view returns (uint256) {
+        return FUNDRAISER_MAX_DURATION;
+    }
+
+    function getInvestmentWithdrawPercentageFee() public view returns (uint256) {
+        return INVESTMENT_WITHDRAW_FEE;
+    }
+
+    function getSeedFundingMultiplier() public view returns (uint256) {
+        return SEED_FUNDING_MULTIPLIER;
+    }
+
+    function getPrivateFundingMultiplier() public view returns (uint256) {
+        return PRIVATE_FUNDING_MULTIPLIER;
+    }
+
+    function getPublicFundingMultiplier() public view returns (uint256) {
+        return PUBLIC_FUNDING_MULTIPLIER;
+    }
+
+    function getGelatoFeeAllocationForProject() public view returns (uint256) {
+        return gelatoFeeAllocationForProject;
+    }
+
+    function getGovernancePool() public view returns (IGovernancePool) {
+        return governancePool;
+    }
+
+    function getSuperfluidHost() public view returns (ISuperfluid) {
+        return HOST;
+    }
+
+    function getGelatoOps() public view returns (IGelatoOps) {
+        return GELATO_OPS;
+    }
+
+    function getInvestmentPoolImplementation() public view returns (address) {
+        return investmentPoolImplementation;
+    }
+
+    /** INTERNAL FUNCITONS */
+
     function _deployClone() internal virtual returns (IInitializableInvestmentPool pool) {
-        pool = IInitializableInvestmentPool(payable(investmentPoolImplementation.clone()));
+        pool = IInitializableInvestmentPool(payable(getInvestmentPoolImplementation().clone()));
     }
 
     function _assertPoolInitArguments(
@@ -219,7 +293,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         uint96 _fundraiserEndAt,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
     ) internal view {
-        if (address(governancePool) == address(0))
+        if (address(getGovernancePool()) == address(0))
             revert InvestmentPoolFactory__GovernancePoolNotDefined();
 
         if (address(_superToken) == address(0))
@@ -242,15 +316,15 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         if (_fundraiserEndAt < _fundraiserStartAt)
             revert InvestmentPoolFactory__FundraiserStartTimeIsGreaterThanEndTime();
 
-        if (_fundraiserEndAt - _fundraiserStartAt > FUNDRAISER_MAX_DURATION)
+        if (_fundraiserEndAt - _fundraiserStartAt > getFundraiserMaxDuration())
             revert InvestmentPoolFactory__FundraiserExceedsMaxDuration();
 
-        if (_fundraiserEndAt - _fundraiserStartAt < FUNDRAISER_MIN_DURATION)
+        if (_fundraiserEndAt - _fundraiserStartAt < getFundraiserMinDuration())
             revert InvestmentPoolFactory__FundraiserDurationIsTooShort();
 
         if (_milestones.length == 0) revert InvestmentPoolFactory__NoMilestonesAdded();
 
-        if (_milestones.length > MAX_MILESTONE_COUNT)
+        if (_milestones.length > getMaxMilestoneCount())
             revert InvestmentPoolFactory__MilestonesCountExceedsMaxCount();
 
         // Special case for the first milestone
@@ -264,7 +338,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         if (
             !_validateMilestonePercentageAllocation(
                 _milestones[0],
-                (50 * PERCENTAGE_DIVIDER) / 100
+                (50 * getPercentageDivider()) / 100
             )
         ) revert InvestmentPoolFactory__SeedFundsAllocationExceedsMax();
 
@@ -286,7 +360,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
             if (
                 !_validateMilestonePercentageAllocation(
                     _milestones[0],
-                    (10 * PERCENTAGE_DIVIDER) / 100
+                    (10 * getPercentageDivider()) / 100
                 )
             ) revert InvestmentPoolFactory__SeedFundsAllocationExceedsMax();
 
@@ -297,10 +371,10 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
                 _milestones[i].intervalStreamingPortion;
         }
 
-        if (totalPercentage != PERCENTAGE_DIVIDER)
+        if (totalPercentage != getPercentageDivider())
             revert InvestmentPoolFactory__PercentagesAreNotAddingUp(
                 totalPercentage,
-                PERCENTAGE_DIVIDER
+                getPercentageDivider()
             );
     }
 
@@ -316,21 +390,21 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         returns (bool)
     {
         return (milestone.endDate > milestone.startDate &&
-            (milestone.endDate - milestone.startDate >= MILESTONE_MIN_DURATION) &&
-            (milestone.endDate - milestone.startDate <= MILESTONE_MAX_DURATION));
+            (milestone.endDate - milestone.startDate >= getMilestoneMinDuration()) &&
+            (milestone.endDate - milestone.startDate <= getMilestoneMaxDuration()));
     }
 
     function _validateMilestonePercentageAllocation(
         IInvestmentPool.MilestoneInterval memory milestone,
         uint256 allowedSeedFundsAllocation
     ) internal pure returns (bool) {
-        if (allowedSeedFundsAllocation > PERCENTAGE_DIVIDER)
+        if (allowedSeedFundsAllocation > getPercentageDivider())
             revert InvestmentPoolFactory__SeedFundsAllocationGreaterThanTotal();
         uint milestoneMaxPercentages = milestone.intervalSeedPortion +
             milestone.intervalStreamingPortion;
 
         return
-            (milestone.intervalSeedPortion * PERCENTAGE_DIVIDER) / milestoneMaxPercentages <=
+            (milestone.intervalSeedPortion * getPercentageDivider()) / milestoneMaxPercentages <=
             allowedSeedFundsAllocation;
     }
 }

@@ -104,7 +104,7 @@ const defineVariablesFromIPF = async () => {
 };
 
 const definePercentageDivider = async (invPoolFactory: InvestmentPoolFactoryMock) => {
-    percentageDivider = await invPoolFactory.PERCENTAGE_DIVIDER();
+    percentageDivider = await invPoolFactory.getPercentageDivider();
     percent5InIpBigNumber = percentToIpBigNumber(5);
     percent10InIpBigNumber = percentToIpBigNumber(10);
     percent20InIpBigNumber = percentToIpBigNumber(20);
@@ -114,7 +114,7 @@ const definePercentageDivider = async (invPoolFactory: InvestmentPoolFactoryMock
 };
 
 const defineGelatoFeeAllocation = async (invPoolFactory: InvestmentPoolFactoryMock) => {
-    gelatoFeeAllocation = await invPoolFactory.gelatoFeeAllocationForProject();
+    gelatoFeeAllocation = await invPoolFactory.getGelatoFeeAllocationForProject();
 };
 
 const investMoney = async (
@@ -418,7 +418,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
                 investmentPoolFactory.connect(deployer).setGovernancePool(governancePool.address)
             ).not.to.be.reverted;
 
-            const definedGovernancePool = await investmentPoolFactory.governancePool();
+            const definedGovernancePool = await investmentPoolFactory.getGovernancePool();
             assert.equal(governancePool.address, definedGovernancePool);
         });
 
@@ -504,7 +504,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
 
             // Approve and invest money
             await investMoney(fUSDTx, investment, investorA, investedAmount);
-            const seedFundingMultiplier = await investment.seedFundingMultiplier();
+            const seedFundingMultiplier = await investment.getSeedFundingMultiplier();
             const totalSupply = await governancePool.getVotingTokensSupply(investment.address);
 
             assert.equal(
@@ -581,7 +581,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             await investment.setTimestamp(timeStamp);
             await governancePool.setTimestamp(timeStamp);
 
-            const seedFundingMultiplier = await investment.seedFundingMultiplier();
+            const seedFundingMultiplier = await investment.getSeedFundingMultiplier();
             const votesAgainst = seedFundingMultiplier.mul(investedAmount).mul(2).div(3);
 
             // Approve the governance pool contract to spend investor's tokens

@@ -3,8 +3,10 @@
 
 pragma solidity ^0.8.9;
 
-import {ISuperToken} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
+import {ISuperToken, ISuperfluid} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {IInvestmentPool} from "./IInvestmentPool.sol";
+import {IGovernancePool} from "./IGovernancePool.sol";
+import {IGelatoOps} from "./IGelatoOps.sol";
 
 interface IInvestmentPoolFactory {
     /**
@@ -28,4 +30,38 @@ interface IInvestmentPoolFactory {
         ProxyType _proxyType,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
     ) external payable returns (IInvestmentPool);
+
+    function getMaxMilestoneCount() external pure returns (uint32);
+
+    function getTerminationWindow() external view returns (uint48);
+
+    function getAutomatedTerminationWindow() external view returns (uint48);
+
+    function getPercentageDivider() external pure returns (uint256);
+
+    function getMilestoneMinDuration() external view returns (uint256);
+
+    function getMilestoneMaxDuration() external view returns (uint256);
+
+    function getFundraiserMinDuration() external view returns (uint256);
+
+    function getFundraiserMaxDuration() external view returns (uint256);
+
+    function getInvestmentWithdrawPercentageFee() external view returns (uint256);
+
+    function getSeedFundingMultiplier() external view returns (uint256);
+
+    function getPrivateFundingMultiplier() external view returns (uint256);
+
+    function getPublicFundingMultiplier() external view returns (uint256);
+
+    function getGelatoFeeAllocationForProject() external view returns (uint256);
+
+    function getGovernancePool() external view returns (IGovernancePool);
+
+    function getSuperfluidHost() external view returns (ISuperfluid);
+
+    function getGelatoOps() external view returns (IGelatoOps);
+
+    function getInvestmentPoolImplementation() external view returns (address);
 }

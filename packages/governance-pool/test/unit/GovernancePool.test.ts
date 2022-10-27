@@ -24,13 +24,13 @@ let votesWithdrawFee: BigNumber;
 
 const getInvestmentPoolStatus = async (address: string): Promise<number> => {
     const investmentPoolId = await governancePool.getInvestmentPoolId(address);
-    const investmentPoolStatus = await governancePool.investmentPoolStatus(investmentPoolId);
+    const investmentPoolStatus = await governancePool.getInvestmentPoolStatus(investmentPoolId);
     return investmentPoolStatus;
 };
 
 const defineVotesWithdrawFee = async () => {
     await deployContracts();
-    votesWithdrawFee = await governancePool.VOTES_WITHDRAW_FEE();
+    votesWithdrawFee = await governancePool.getVotesWithdrawPercentageFee();
 };
 
 const deployContracts = async () => {
@@ -108,10 +108,10 @@ describe("Governance Pool", async () => {
                 );
                 await governancePool.deployed();
 
-                const VT = await governancePool.VOTING_TOKEN();
-                const IPF = await governancePool.INVESTMENT_POOL_FACTORY_ADDRESS();
-                const VPT = await governancePool.VOTES_PERCENTAGE_THRESHOLD();
-                const VWF = await governancePool.VOTES_WITHDRAW_FEE();
+                const VT = await governancePool.getVotingTokenAddress();
+                const IPF = await governancePool.getInvestmentPoolFactoryAddress();
+                const VPT = await governancePool.getVotesPercentageThreshold();
+                const VWF = await governancePool.getVotesWithdrawPercentageFee();
 
                 assert.equal(VT, votingToken.address);
                 assert.equal(IPF, investmentPoolFactoryAsUser.address);
@@ -446,12 +446,12 @@ describe("Governance Pool", async () => {
 
                 await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
 
-                const firstMilestoneId = await governancePool.milestonesIdsInWhichInvestorInvested(
-                    investorA.address,
-                    investmentPoolId,
-                    0
-                );
-                assert.equal(firstMilestoneId.toString(), "0");
+                const firstMilestoneId =
+                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                        investorA.address,
+                        investmentPoolId
+                    );
+                assert.equal(firstMilestoneId[0].toString(), "0");
             });
 
             it("[GP][4.1.6] Should update memActiveTokens on second and other mints", async () => {
@@ -494,13 +494,12 @@ describe("Governance Pool", async () => {
                 await investmentPoolMock.mintVotingTokens(2, investorA.address, tokensToMintB);
 
                 const secondMilestoneId =
-                    await governancePool.milestonesIdsInWhichInvestorInvested(
+                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
                         investorA.address,
-                        investmentPoolId,
-                        1
+                        investmentPoolId
                     );
 
-                assert.equal(secondMilestoneId.toString(), "2");
+                assert.equal(secondMilestoneId[1].toString(), "2");
             });
 
             it("[GP][4.1.8] Should not update milestonesIdsInWhichInvestorInvested if milestone has already been pushed", async () => {
@@ -519,13 +518,12 @@ describe("Governance Pool", async () => {
                 await investmentPoolMock.mintVotingTokens(2, investorA.address, tokensToMintB);
                 await investmentPoolMock.mintVotingTokens(2, investorA.address, tokensToMintB);
 
-                await expect(
-                    governancePool.milestonesIdsInWhichInvestorInvested(
-                        investorA.address,
-                        investmentPoolId,
-                        2
-                    )
-                ).to.be.reverted;
+                const list = await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                    investorA.address,
+                    investmentPoolId
+                );
+
+                assert.equal(list.length, 2);
             });
         });
 
@@ -777,7 +775,7 @@ describe("Governance Pool", async () => {
                     .connect(investorA)
                     .voteAgainst(investmentPoolMock.address, votesAgainst);
 
-                const votesAmount = await governancePool.votesAmount(
+                const votesAmount = await governancePool.getVotesAmount(
                     investorA.address,
                     investmentPoolId
                 );
@@ -816,7 +814,9 @@ describe("Governance Pool", async () => {
                     .connect(investorB)
                     .voteAgainst(investmentPoolMock.address, votesAgainst);
 
-                const totalVotesAmount = await governancePool.totalVotesAmount(investmentPoolId);
+                const totalVotesAmount = await governancePool.getTotalVotesAmount(
+                    investmentPoolId
+                );
 
                 assert.equal(totalVotesAmount.toString(), votesAgainst.mul(2).toString());
             });
@@ -1186,7 +1186,7 @@ describe("Governance Pool", async () => {
                     investmentPoolMock.address
                 );
 
-                const votesAmount = await governancePool.votesAmount(
+                const votesAmount = await governancePool.getVotesAmount(
                     investorA.address,
                     investmentPoolId
                 );
@@ -1225,7 +1225,9 @@ describe("Governance Pool", async () => {
                     investmentPoolMock.address
                 );
 
-                const totalVotesAmount = await governancePool.totalVotesAmount(investmentPoolId);
+                const totalVotesAmount = await governancePool.getTotalVotesAmount(
+                    investmentPoolId
+                );
 
                 assert.equal(totalVotesAmount.toString(), votesLeft.toString());
             });
@@ -1344,7 +1346,7 @@ describe("Governance Pool", async () => {
                     .connect(investorA)
                     .voteAgainst(investmentPoolMock.address, votesAgainst);
 
-                const delegatedVotes = await governancePool.votesAmount(
+                const delegatedVotes = await governancePool.getVotesAmount(
                     investorA.address,
                     investmentPoolId
                 );

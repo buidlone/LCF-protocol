@@ -44,4 +44,29 @@ interface IGovernancePool {
         external
         view
         returns (bool);
+
+    function getVotingTokenAddress() external view returns (address);
+
+    function getInvestmentPoolFactoryAddress() external view returns (address);
+
+    function getVotesPercentageThreshold() external view returns (uint8);
+
+    function getVotesWithdrawPercentageFee() external view returns (uint256);
+
+    function getInvestmentPoolStatus(uint256 _investmentPoolId)
+        external
+        view
+        returns (InvestmentPoolStatus);
+
+    function getVotesAmount(address _investor, uint256 _investmentPoolId)
+        external
+        view
+        returns (uint256);
+
+    function getTotalVotesAmount(uint256 _investmentPoolId) external view returns (uint256);
+
+    function getMilestonesIdsInWhichInvestorInvested(address _investor, uint256 _investmentPoolId)
+        external
+        view
+        returns (uint256[] memory);
 }
