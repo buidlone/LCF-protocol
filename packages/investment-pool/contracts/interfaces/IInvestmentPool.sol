@@ -3,6 +3,7 @@
 
 pragma solidity ^0.8.9;
 
+import {CFAv1Library} from "@superfluid-finance/ethereum-contracts/contracts/apps/CFAv1Library.sol";
 import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {IGelatoOps} from "./IGelatoOps.sol";
 import {IGovernancePool} from "./IGovernancePool.sol";
@@ -123,6 +124,85 @@ interface IInvestmentPool is ISuperApp {
     function startGelatoTask() external;
 
     function gelatoTerminateMilestoneStreamFinal(uint256 _milestoneId) external;
+
+    function getCfaId() external pure returns (bytes32);
+
+    function getPercentageDivider() external pure returns (uint256);
+
+    function getCanceledProjectStateValue() external pure returns (uint256);
+
+    function getBeforeFundraiserStateValue() external pure returns (uint256);
+
+    function getFundraiserOngoingStateValue() external pure returns (uint256);
+
+    function getFailedFundraiserStateValue() external pure returns (uint256);
+
+    function getFundraiserEndedNoMilestonesOngoingStateValue() external pure returns (uint256);
+
+    function getMilestonesOngoingBeforeLastStateValue() external pure returns (uint256);
+
+    function getLastMilestoneOngoingStateValue() external pure returns (uint256);
+
+    function getTerminatedByVotingStateValue() external pure returns (uint256);
+
+    function getTerminatedByGelatoStateValue() external pure returns (uint256);
+
+    function getSuccessfullyEndedStateValue() external pure returns (uint256);
+
+    function getUnknownStateValue() external pure returns (uint256);
+
+    function getAnyMilestoneOngoingStateValue() external view returns (uint256);
+
+    function getEthAddress() external pure returns (address);
+
+    function getAcceptedToken() external view returns (ISuperToken);
+
+    function getCreator() external view returns (address);
+
+    function getGelatoOps() external view returns (IGelatoOps);
+
+    function getGelato() external view returns (address payable);
+
+    function getGelatoTask() external view returns (bytes32);
+
+    function getGovernancePool() external view returns (IGovernancePool);
+
+    function getSeedFundingLimit() external view returns (uint96);
+
+    function getSoftCap() external view returns (uint96);
+
+    function getHardCap() external view returns (uint96);
+
+    function getFundraiserStartTime() external view returns (uint48);
+
+    function getFundraiserEndTime() external view returns (uint48);
+
+    function getTotalStreamingDuration() external view returns (uint48);
+
+    function getTerminationWindow() external view returns (uint48);
+
+    function getAutomatedTerminationWindow() external view returns (uint48);
+
+    function getEmergencyTerminationTimestamp() external view returns (uint48);
+
+    function getTotalInvestedAmount() external view returns (uint256);
+
+    function getInvestedAmount(address _investor, uint256 _milestoneId)
+        external
+        view
+        returns (uint256);
+
+    function getMilestonesCount() external view returns (uint256);
+
+    function getMilestone(uint256 _milestoneId) external view returns (Milestone memory);
+
+    function getInvestmentWithdrawPercentageFee() external view returns (uint256);
+
+    function getSeedFundingMultiplier() external view returns (uint256);
+
+    function getPrivateFundingMultiplier() external view returns (uint256);
+
+    function getPublicFundingMultiplier() external view returns (uint256);
 }
 
 interface IInitializableInvestmentPool is IInvestmentPool {

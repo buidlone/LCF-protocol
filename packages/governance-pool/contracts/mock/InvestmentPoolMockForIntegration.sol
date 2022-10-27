@@ -19,7 +19,7 @@ contract InvestmentPoolMockForIntegration {
         address _investor,
         uint256 _amount
     ) public {
-        governancePool.mintVotingTokens(_milestoneId, _investor, _amount);
+        getGovernancePool().mintVotingTokens(_milestoneId, _investor, _amount);
     }
 
     function cancelDuringMilestones() external pure {}
@@ -38,5 +38,9 @@ contract InvestmentPoolMockForIntegration {
 
     function setIsAnyMilestoneOngoing(bool _isOngoing) external {
         anyMilestoneOngoingNow = _isOngoing;
+    }
+
+    function getGovernancePool() public view returns (IGovernancePool) {
+        return governancePool;
     }
 }

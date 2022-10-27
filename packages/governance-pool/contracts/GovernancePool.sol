@@ -29,17 +29,17 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     using Arrays for uint256[];
 
     // ERC1155 contract where all voting tokens are stored
-    VotingToken public immutable VOTING_TOKEN;
-    address public immutable INVESTMENT_POOL_FACTORY_ADDRESS;
-    uint8 public immutable VOTES_PERCENTAGE_THRESHOLD;
-    uint256 public immutable VOTES_WITHDRAW_FEE; // number out of 100%; E.g. 1 or 13
+    VotingToken internal immutable VOTING_TOKEN;
+    address internal immutable INVESTMENT_POOL_FACTORY_ADDRESS;
+    uint8 internal immutable VOTES_PERCENTAGE_THRESHOLD;
+    uint256 internal immutable VOTES_WITHDRAW_FEE; // number out of 100%; E.g. 1 or 13
 
     /// @notice mapping from investment pool id => status
-    mapping(uint256 => InvestmentPoolStatus) public investmentPoolStatus;
+    mapping(uint256 => InvestmentPoolStatus) internal investmentPoolStatus;
     /// @notice mapping from investor address => investment pool id => votes amount against the project
-    mapping(address => mapping(uint256 => uint256)) public votesAmount;
+    mapping(address => mapping(uint256 => uint256)) internal votesAmount;
     /// @notice mapping from investment pool id => total votes amount against the project
-    mapping(uint256 => uint256) public totalVotesAmount;
+    mapping(uint256 => uint256) internal totalVotesAmount;
 
     /**
      * @notice It's a memoization mapping from investor address => investment pool id => milestone id => amount of voting tokens
@@ -53,7 +53,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      * @notice mapping from investor address => investment pool id => list of milestones in which voting tokens amount increaced
      * @dev Array returns all milestones, in which at least 1 investment was made by investor.
      */
-    mapping(address => mapping(uint256 => uint256[])) public milestonesIdsInWhichInvestorInvested;
+    mapping(address => mapping(uint256 => uint256[]))
+        internal milestonesIdsInWhichInvestorInvested;
 
     event ActivateVoting(address indexed investmentPool);
     event VoteAgainstProject(
@@ -98,10 +99,12 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     }
 
     modifier onlyInvestmentPoolFactory() {
-        if (_msgSender() != INVESTMENT_POOL_FACTORY_ADDRESS)
+        if (_msgSender() != getInvestmentPoolFactoryAddress())
             revert GovernancePool__NotInvestmentPoolFactory();
         _;
     }
+
+    /** EXTERNAL FUNCTIONS */
 
     /** @notice Activate voting process for given investment pool. It will only be called once for every investment pool at the creation stage stage.
      *  @dev Is called by INVESTMENT POOL FACTORY.
@@ -138,9 +141,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
 
         // Get all milestones in which investor invested. This array allows us to know when the voting tokens balance increased.
-        uint256[] memory milestonesIds = milestonesIdsInWhichInvestorInvested[_investor][
+        uint256[] memory milestonesIds = getMilestonesIdsInWhichInvestorInvested(
+            _investor,
             investmentPoolId
-        ];
+        );
 
         if (milestonesIds.length == 0) {
             // If array is zero, it means no investments exist and therefore investor doesn't own any voting tokens from past.
@@ -200,7 +204,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
 
         // Get amount of votes investor owns. Remove the votes that were used for voting already.
         uint256 votesLeft = investorActiveVotingTokensBalance -
-            votesAmount[_msgSender()][investmentPoolId];
+            getVotesAmount(_msgSender(), investmentPoolId);
 
         if (votesLeft == 0) revert GovernancePool__NoActiveVotingTokensOwned();
         if (_amount > votesLeft)
@@ -237,7 +241,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     {
         if (_retractAmount == 0) revert GovernancePool__AmountIsZero();
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        uint256 investorVotesAmount = votesAmount[_msgSender()][investmentPoolId];
+        uint256 investorVotesAmount = getVotesAmount(_msgSender(), investmentPoolId);
 
         if (investorVotesAmount == 0) revert GovernancePool__NoVotesAgainstProject();
         if (_retractAmount > investorVotesAmount)
@@ -263,6 +267,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
 
         emit RetractVotes(_investmentPool, _msgSender(), _retractAmount);
     }
+
+    /** PUBLIC FUNCTIONS */
 
     /** @notice Calculate the votes against to the total tokens supply percentage
      *  @param _investmentPool investment pool address
@@ -299,7 +305,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
 
-        uint256 votesCountAgainst = totalVotesAmount[investmentPoolId];
+        uint256 votesCountAgainst = getTotalVotesAmount(investmentPoolId);
 
         // Calculate new percentage with investors votes
         uint256 newCountVotesAgainst = votesCountAgainst + _investorVotesCount;
@@ -310,7 +316,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
 
         // Check if investors money will reach threshold percent or more
         // Percentages is going to be rounded down. That means no matter how high decimals are, they will be ignored.
-        if (newPercentageAgainst >= VOTES_PERCENTAGE_THRESHOLD) {
+        if (newPercentageAgainst >= getVotesPercentageThreshold()) {
             return true;
         } else {
             return false;
@@ -319,12 +325,12 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
 
     function isInvestmentPoolUnavailable(address _investmentPool) public view returns (bool) {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        return investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.Unavailable;
+        return getInvestmentPoolStatus(investmentPoolId) == InvestmentPoolStatus.Unavailable;
     }
 
     function isInvestmentPoolVotingActive(address _investmentPool) public view returns (bool) {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        return investmentPoolStatus[investmentPoolId] == InvestmentPoolStatus.ActiveVoting;
+        return getInvestmentPoolStatus(investmentPoolId) == InvestmentPoolStatus.ActiveVoting;
     }
 
     /** @notice Get balance of active voting tokens for specified milestone.
@@ -343,9 +349,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         address _account
     ) public view returns (uint256) {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        uint256[] memory milestonesIds = milestonesIdsInWhichInvestorInvested[_account][
+        uint256[] memory milestonesIds = getMilestonesIdsInWhichInvestorInvested(
+            _account,
             investmentPoolId
-        ];
+        );
 
         if (milestonesIds.length == 0) {
             // If milestonesIds array is empty that means that no investments were made
@@ -433,6 +440,52 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      */
     function getInvestmentPoolId(address _investmentPool) public pure returns (uint256) {
         return uint256(uint160(_investmentPool));
+    }
+
+    /** GETTERS */
+
+    function getVotingTokenAddress() public view returns (address) {
+        return address(VOTING_TOKEN);
+    }
+
+    function getInvestmentPoolFactoryAddress() public view returns (address) {
+        return INVESTMENT_POOL_FACTORY_ADDRESS;
+    }
+
+    function getVotesPercentageThreshold() public view returns (uint8) {
+        return VOTES_PERCENTAGE_THRESHOLD;
+    }
+
+    function getVotesWithdrawPercentageFee() public view returns (uint256) {
+        return VOTES_WITHDRAW_FEE;
+    }
+
+    function getInvestmentPoolStatus(uint256 _investmentPoolId)
+        public
+        view
+        returns (InvestmentPoolStatus)
+    {
+        return investmentPoolStatus[_investmentPoolId];
+    }
+
+    function getVotesAmount(address _investor, uint256 _investmentPoolId)
+        public
+        view
+        returns (uint256)
+    {
+        return votesAmount[_investor][_investmentPoolId];
+    }
+
+    function getTotalVotesAmount(uint256 _investmentPoolId) public view returns (uint256) {
+        return totalVotesAmount[_investmentPoolId];
+    }
+
+    function getMilestonesIdsInWhichInvestorInvested(address _investor, uint256 _investmentPoolId)
+        public
+        view
+        returns (uint256[] memory)
+    {
+        return milestonesIdsInWhichInvestorInvested[_investor][_investmentPoolId];
     }
 
     /** INTERNAL FUNCTIONS */

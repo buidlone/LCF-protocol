@@ -121,7 +121,7 @@ const dateToSeconds = (date: string, isBigNumber: boolean = true): BigNumber | n
 };
 
 const definePercentageDivider = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
-    percentageDivider = await investmentPoolFactory.PERCENTAGE_DIVIDER();
+    percentageDivider = await investmentPoolFactory.getPercentageDivider();
     percent5InIpBigNumber = percentToIpBigNumber(5);
     percent20InIpBigNumber = percentToIpBigNumber(20);
     percent25InIpBigNumber = percentToIpBigNumber(25);
@@ -130,37 +130,37 @@ const definePercentageDivider = async (investmentPoolFactory: InvestmentPoolFact
 };
 
 const defineProjectStateByteValues = async (investment: InvestmentPoolMock) => {
-    canceledProjectStateValue = await investment.CANCELED_PROJECT_STATE_VALUE();
-    beforeFundraiserStateValue = await investment.BEFORE_FUNDRAISER_STATE_VALUE();
-    fundraiserOngoingStateValue = await investment.FUNDRAISER_ONGOING_STATE_VALUE();
-    failedFundraiserStateValue = await investment.FAILED_FUNDRAISER_STATE_VALUE();
+    canceledProjectStateValue = await investment.getCanceledProjectStateValue();
+    beforeFundraiserStateValue = await investment.getBeforeFundraiserStateValue();
+    fundraiserOngoingStateValue = await investment.getFundraiserOngoingStateValue();
+    failedFundraiserStateValue = await investment.getFailedFundraiserStateValue();
     fundraiserEndedNoMilestonesOngoingStateValue =
-        await investment.FUNDRAISER_ENDED_NO_MILESTONES_ONGOING_STATE_VALUE();
+        await investment.getFundraiserEndedNoMilestonesOngoingStateValue();
     milestonesOngoingBeforeLastStateValue =
-        await investment.MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE();
-    lastMilestoneOngoingStateValue = await investment.LAST_MILESTONE_ONGOING_STATE_VALUE();
-    terminatedByVotingStateValue = await investment.TERMINATED_BY_VOTING_STATE_VALUE();
-    terminatedByGelatoStateValue = await investment.TERMINATED_BY_GELATO_STATE_VALUE();
-    successfullyEndedStateValue = await investment.SUCCESSFULLY_ENDED_STATE_VALUE();
-    unknownStateValue = await investment.UNKNOWN_STATE_VALUE();
+        await investment.getMilestonesOngoingBeforeLastStateValue();
+    lastMilestoneOngoingStateValue = await investment.getLastMilestoneOngoingStateValue();
+    terminatedByVotingStateValue = await investment.getTerminatedByVotingStateValue();
+    terminatedByGelatoStateValue = await investment.getTerminatedByGelatoStateValue();
+    successfullyEndedStateValue = await investment.getSuccessfullyEndedStateValue();
+    unknownStateValue = await investment.getUnknownStateValue();
 };
 
 const defineGelatoFeeAllocation = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
-    gelatoFeeAllocation = await investmentPoolFactory.gelatoFeeAllocationForProject();
+    gelatoFeeAllocation = await investmentPoolFactory.getGelatoFeeAllocationForProject();
 };
 
 const defineInvestmentWithdrawFee = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
-    investmentWithdrawFee = await investmentPoolFactory.INVESTMENT_WITHDRAW_FEE();
+    investmentWithdrawFee = await investmentPoolFactory.getInvestmentWithdrawPercentageFee();
 };
 
 const defineEthAddress = async (investmentPool: InvestmentPoolMock) => {
-    ethAddress = await investmentPool.ETH();
+    ethAddress = await investmentPool.getEthAddress();
 };
 
 const defineMultipliers = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
-    seedFundingMultiplier = await investmentPoolFactory.SEED_FUNDING_MULTIPLIER();
-    privateFundingMultiplier = await investmentPoolFactory.PRIVATE_FUNDING_MULTIPLIER();
-    publicFundingMultiplier = await investmentPoolFactory.PUBLIC_FUNDING_MULTIPLIER();
+    seedFundingMultiplier = await investmentPoolFactory.getSeedFundingMultiplier();
+    privateFundingMultiplier = await investmentPoolFactory.getPrivateFundingMultiplier();
+    publicFundingMultiplier = await investmentPoolFactory.getPublicFundingMultiplier();
 };
 
 const deployGovernancePoolMock = async () => {
@@ -393,64 +393,67 @@ describe("Investment Pool", async () => {
     describe("1. Investment pool creation", () => {
         describe("1.1 Public state", () => {
             it("[IP][1.1.1] Should assign accepted token correctly", async () => {
-                const acceptedToken = await investment.acceptedToken();
+                const acceptedToken = await investment.getAcceptedToken();
                 assert.equal(fUSDTx.address, acceptedToken, "Token addresses are not the same");
             });
 
             it("[IP][1.1.2] Should assign creator correctly", async () => {
-                const contractCreator = await investment.creator();
+                const contractCreator = await investment.getCreator();
                 assert.equal(creator.address, contractCreator);
             });
 
             it("[IP][1.1.3] Should assign gelato ops correctly", async () => {
-                const contractGelatoOps = await investment.gelatoOps();
+                const contractGelatoOps = await investment.getGelatoOps();
                 assert.equal(gelatoOpsMock.address, contractGelatoOps);
             });
 
             it("[IP][1.1.4] Should assign soft cap correctly", async () => {
-                const contractSoftCap = await investment.softCap();
+                const contractSoftCap = await investment.getSoftCap();
                 assert.deepEqual(softCap, contractSoftCap);
             });
 
             it("[IP][1.1.5] Should assign hard cap correctly", async () => {
-                const contractHardCap = await investment.hardCap();
+                const contractHardCap = await investment.getHardCap();
                 assert.deepEqual(hardCap, contractHardCap);
             });
 
             it("[IP][1.1.6] Should assign fundraiser start time correctly", async () => {
                 const contractFundraiserStart = BigNumber.from(
-                    await investment.fundraiserStartAt()
+                    await investment.getFundraiserStartTime()
                 );
                 assert.deepEqual(campaignStartDate, contractFundraiserStart);
             });
 
             it("[IP][1.1.7] Should assign fundraiser end time correctly", async () => {
-                const contractFundraiserEnd = BigNumber.from(await investment.fundraiserEndAt());
+                const contractFundraiserEnd = BigNumber.from(
+                    await investment.getFundraiserEndTime()
+                );
                 assert.deepEqual(campaignEndDate, contractFundraiserEnd);
             });
 
             it("[IP][1.1.8] Should assign termination window correctly", async () => {
-                const contractTermination = await investment.terminationWindow();
-                const realTermination = await investmentPoolFactory.TERMINATION_WINDOW();
+                const contractTermination = await investment.getTerminationWindow();
+                const realTermination = await investmentPoolFactory.getTerminationWindow();
 
                 assert.deepEqual(realTermination, contractTermination);
             });
 
             it("[IP][1.1.9] Should assign automated termination window correctly", async () => {
-                const contractTermination = await investment.automatedTerminationWindow();
-                const realTermination = await investmentPoolFactory.AUTOMATED_TERMINATION_WINDOW();
+                const contractTermination = await investment.getAutomatedTerminationWindow();
+                const realTermination =
+                    await investmentPoolFactory.getAutomatedTerminationWindow();
 
                 assert.equal(realTermination, contractTermination);
             });
 
             it("[IP][1.1.10] Should assign milestones count correctly", async () => {
-                const contractCount = await investment.milestoneCount();
+                const contractCount = await investment.getMilestonesCount();
                 const realCount = BigNumber.from(2);
                 assert.deepEqual(contractCount, realCount);
             });
 
             it("[IP][1.1.11] Should assign current milestone to zero", async () => {
-                const contractCurrentMilestone = await investment.currentMilestone();
+                const contractCurrentMilestone = await investment.getCurrentMilestoneId();
                 const realMilestone = BigNumber.from(0);
                 assert.deepEqual(contractCurrentMilestone, realMilestone);
             });
@@ -482,62 +485,62 @@ describe("Investment Pool", async () => {
             });
 
             it("[IP][1.1.17] Fundraiser shouldn't have any investments yet", async () => {
-                const invested = await investment.totalInvestedAmount();
+                const invested = await investment.getTotalInvestedAmount();
                 assert.deepEqual(invested, BigNumber.from(0));
             });
 
             it("[IP][1.1.18] Milestones should have a correct start date", async () => {
-                const milestone1 = await investment.milestones(0);
-                const milestone2 = await investment.milestones(1);
+                const milestone1 = await investment.getMilestone(0);
+                const milestone2 = await investment.getMilestone(1);
                 assert.deepEqual(BigNumber.from(milestone1.startDate), milestoneStartDate);
                 assert.deepEqual(BigNumber.from(milestone2.startDate), milestoneStartDate2);
             });
 
             it("[IP][1.1.19] Milestones should have a correct end date", async () => {
-                const milestone1 = await investment.milestones(0);
-                const milestone2 = await investment.milestones(1);
+                const milestone1 = await investment.getMilestone(0);
+                const milestone2 = await investment.getMilestone(1);
                 assert.deepEqual(BigNumber.from(milestone1.endDate), milestoneEndDate);
                 assert.deepEqual(BigNumber.from(milestone2.endDate), milestoneEndDate2);
             });
 
             it("[IP][1.1.20] Milestones should not be paid initially", async () => {
-                const milestone1 = await investment.milestones(0);
-                const milestone2 = await investment.milestones(1);
+                const milestone1 = await investment.getMilestone(0);
+                const milestone2 = await investment.getMilestone(1);
                 assert.isFalse(milestone1.paid);
                 assert.isFalse(milestone2.paid);
             });
 
             it("[IP][1.1.21] Milestones' seed amounts should not be paid initially", async () => {
-                const milestone1 = await investment.milestones(0);
-                const milestone2 = await investment.milestones(1);
+                const milestone1 = await investment.getMilestone(0);
+                const milestone2 = await investment.getMilestone(1);
                 assert.isFalse(milestone1.seedAmountPaid);
                 assert.isFalse(milestone2.seedAmountPaid);
             });
 
             it("[IP][1.1.22] Milestones' streams should not be ongoing from the start", async () => {
-                const milestones1 = await investment.milestones(0);
-                const milestones2 = await investment.milestones(1);
+                const milestones1 = await investment.getMilestone(0);
+                const milestones2 = await investment.getMilestone(1);
                 assert.isFalse(milestones1.streamOngoing);
                 assert.isFalse(milestones2.streamOngoing);
             });
 
             it("[IP][1.1.23] Should have paid 0 in funds upon creation", async () => {
-                const milestone1 = await investment.milestones(0);
-                const milestone2 = await investment.milestones(1);
+                const milestone1 = await investment.getMilestone(0);
+                const milestone2 = await investment.getMilestone(1);
                 assert.deepEqual(milestone1.paidAmount, BigNumber.from(0));
                 assert.deepEqual(milestone2.paidAmount, BigNumber.from(0));
             });
 
             it("[IP][1.1.24] Milestones should have a correct seed portions", async () => {
-                const milestone1 = await investment.milestones(0);
-                const milestone2 = await investment.milestones(1);
+                const milestone1 = await investment.getMilestone(0);
+                const milestone2 = await investment.getMilestone(1);
                 assert.deepEqual(milestone1.intervalSeedPortion, percent5InIpBigNumber);
                 assert.deepEqual(milestone2.intervalSeedPortion, percent5InIpBigNumber);
             });
 
             it("[IP][1.1.25] Milestones should have a correct stream portions", async () => {
-                const milestone1 = await investment.milestones(0);
-                const milestone2 = await investment.milestones(1);
+                const milestone1 = await investment.getMilestone(0);
+                const milestone2 = await investment.getMilestone(1);
                 assert.deepEqual(milestone1.intervalStreamingPortion, percent70InIpBigNumber);
                 assert.deepEqual(milestone2.intervalStreamingPortion, percent20InIpBigNumber);
             });
@@ -552,7 +555,7 @@ describe("Investment Pool", async () => {
             });
 
             it("[IP][1.1.27] Should assign total streaming duration correctly", async () => {
-                const totalStreamingDuration = await investment.totalStreamingDuration();
+                const totalStreamingDuration = await investment.getTotalStreamingDuration();
                 const realDuration =
                     milestoneEndDate.toNumber() -
                     milestoneStartDate.toNumber() +
@@ -591,7 +594,7 @@ describe("Investment Pool", async () => {
                     "Cancel"
                 );
 
-                assert.notEqual(await investment.emergencyTerminationTimestamp(), 0);
+                assert.notEqual(await investment.getEmergencyTerminationTimestamp(), 0);
             });
 
             it("[IP][2.1.2] Before the fundraiser, it should return the correct state", async () => {
@@ -688,7 +691,7 @@ describe("Investment Pool", async () => {
 
                 await investMoney(fUSDTx, investment, investorA, investedAmount);
 
-                const contractInvestedAmount = await investment.investedAmount(
+                const contractInvestedAmount = await investment.getInvestedAmount(
                     investorA.address,
                     0
                 );
@@ -705,7 +708,7 @@ describe("Investment Pool", async () => {
 
                 await investMoney(fUSDTx, investment, investorA, investedAmount);
 
-                const totalInvestedAmount = await investment.totalInvestedAmount();
+                const totalInvestedAmount = await investment.getTotalInvestedAmount();
 
                 assert.deepEqual(investedAmount, totalInvestedAmount);
             });
@@ -812,7 +815,7 @@ describe("Investment Pool", async () => {
 
                 await investMoney(fUSDTx, investment, investorB, investedAmount2);
 
-                const amount = await investment.investedAmount(investorB.address, 1);
+                const amount = await investment.getInvestedAmount(investorB.address, 1);
                 assert.deepEqual(investedAmount2, amount);
             });
 
@@ -832,7 +835,7 @@ describe("Investment Pool", async () => {
 
                 await investMoney(fUSDTx, investment, investorB, investedAmount2);
 
-                const amount = await investment.totalInvestedAmount();
+                const amount = await investment.getTotalInvestedAmount();
                 assert.deepEqual(investedAmount.add(investedAmount2), amount);
             });
 
@@ -1113,13 +1116,13 @@ describe("Investment Pool", async () => {
                 await investment.connect(creator).startFirstFundsStream();
 
                 // Do milestone jump from milestone id 0 to 1
-                let terminationWindow = await investment.terminationWindow();
+                let terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
                 await timeTravelToDate(timeStamp);
                 await investment.connect(creator).milestoneJumpOrFinalProjectTermination();
 
                 // Terminate milestone id 1
-                terminationWindow = await investment.terminationWindow();
+                terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate2.toNumber() - terminationWindow / 2;
                 await timeTravelToDate(timeStamp);
                 await investment.connect(creator).milestoneJumpOrFinalProjectTermination();
@@ -1369,7 +1372,7 @@ describe("Investment Pool", async () => {
 
                 await investment.connect(investorA).unpledge(investedAmount.div(2));
 
-                const currentTotalInvestedAmount = await investment.totalInvestedAmount();
+                const currentTotalInvestedAmount = await investment.getTotalInvestedAmount();
                 assert.deepEqual(currentTotalInvestedAmount, investedAmount.div(2));
             });
 
@@ -1383,7 +1386,7 @@ describe("Investment Pool", async () => {
 
                 await investment.connect(investorA).unpledge(investedAmount.div(2));
 
-                const currentInvestedAmount = await investment.investedAmount(
+                const currentInvestedAmount = await investment.getInvestedAmount(
                     investorA.address,
                     0
                 );
@@ -1510,7 +1513,7 @@ describe("Investment Pool", async () => {
 
                 await investment.connect(investorB).unpledge(investedAmount2.div(2));
 
-                const amount = await investment.investedAmount(investorB.address, 1);
+                const amount = await investment.getInvestedAmount(investorB.address, 1);
                 assert.deepEqual(amount, investedAmount2.div(2));
             });
 
@@ -1530,7 +1533,7 @@ describe("Investment Pool", async () => {
 
                 await investment.connect(investorB).unpledge(investedAmount2.div(2));
 
-                const amount = await investment.totalInvestedAmount();
+                const amount = await investment.getTotalInvestedAmount();
                 assert.deepEqual(amount, investedAmount.add(investedAmount2.div(2)));
             });
 
@@ -1747,13 +1750,13 @@ describe("Investment Pool", async () => {
                 await investment.connect(creator).startFirstFundsStream();
 
                 // Do milestone jump from milestone id 0 to 1
-                let terminationWindow = await investment.terminationWindow();
+                let terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
                 await timeTravelToDate(timeStamp);
                 await investment.connect(creator).milestoneJumpOrFinalProjectTermination();
 
                 // Terminate milestone id 1
-                terminationWindow = await investment.terminationWindow();
+                terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate2.toNumber() - terminationWindow / 2;
                 await timeTravelToDate(timeStamp);
                 await investment.connect(creator).milestoneJumpOrFinalProjectTermination();
@@ -1950,7 +1953,10 @@ describe("Investment Pool", async () => {
 
                 await investment.connect(investorA).refund();
 
-                const leftInvestedAmount = await investment.investedAmount(investorA.address, 0);
+                const leftInvestedAmount = await investment.getInvestedAmount(
+                    investorA.address,
+                    0
+                );
                 assert.deepEqual(leftInvestedAmount, BigNumber.from(0));
             });
 
@@ -2023,7 +2029,10 @@ describe("Investment Pool", async () => {
 
                 await investment.connect(investorA).refund();
 
-                const leftInvestedAmount = await investment.investedAmount(investorA.address, 0);
+                const leftInvestedAmount = await investment.getInvestedAmount(
+                    investorA.address,
+                    0
+                );
                 assert.deepEqual(leftInvestedAmount, BigNumber.from(0));
             });
 
@@ -2111,7 +2120,8 @@ describe("Investment Pool", async () => {
 
                 await investment.connect(creator).startFirstFundsStream();
 
-                const automatedTerminationWindow = await investment.automatedTerminationWindow();
+                const automatedTerminationWindow =
+                    await investment.getAutomatedTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
                 // NOTE: Here we we want explicitly the chain reported time
                 await timeTravelToDate(timeStamp);
@@ -2531,7 +2541,7 @@ describe("Investment Pool", async () => {
 
                 await investment.connect(creator).startFirstFundsStream();
 
-                const milestone = await investment.milestones(0);
+                const milestone = await investment.getMilestone(0);
                 assert.isTrue(milestone.seedAmountPaid);
             });
 
@@ -2550,7 +2560,7 @@ describe("Investment Pool", async () => {
 
                 await investment.connect(creator).startFirstFundsStream();
 
-                const milestone = await investment.milestones(0);
+                const milestone = await investment.getMilestone(0);
                 const seedAmount = await investment.getMilestoneSeedAmount(0);
                 assert.deepEqual(milestone.paidAmount, seedAmount);
             });
@@ -2595,7 +2605,7 @@ describe("Investment Pool", async () => {
                         providerOrSigner: buidl1Admin,
                     })
                 );
-                const milestone = await investment.milestones(0);
+                const milestone = await investment.getMilestone(0);
                 assert.deepEqual(creatorPriorBalance.add(milestone.paidAmount), creatorBalance);
                 assert.deepEqual(contractPriorBalance.sub(milestone.paidAmount), contractBalance);
             });
@@ -2632,7 +2642,7 @@ describe("Investment Pool", async () => {
 
                 await investment.connect(creator).startFirstFundsStream();
 
-                const milestone = await investment.milestones(0);
+                const milestone = await investment.getMilestone(0);
                 assert.isTrue(milestone.seedAmountPaid);
             });
 
@@ -2650,7 +2660,7 @@ describe("Investment Pool", async () => {
 
                 await investment.connect(creator).startFirstFundsStream();
 
-                const milestone = await investment.milestones(0);
+                const milestone = await investment.getMilestone(0);
                 const seedAmount = await investment.getMilestoneSeedAmount(0);
                 assert.deepEqual(milestone.paidAmount, seedAmount);
             });
@@ -2698,7 +2708,7 @@ describe("Investment Pool", async () => {
                         providerOrSigner: buidl1Admin,
                     })
                 );
-                const milestone = await investment.milestones(0);
+                const milestone = await investment.getMilestone(0);
 
                 // Stream was opened, so we can't get the specific balance, we just check if seed amount was transfered
                 assert.isTrue(creatorPriorBalance.add(milestone.paidAmount).lt(creatorBalance));
@@ -2736,7 +2746,7 @@ describe("Investment Pool", async () => {
 
                 await investment.connect(creator).startFirstFundsStream();
 
-                const milestone = await investment.milestones(0);
+                const milestone = await investment.getMilestone(0);
                 assert.isTrue(milestone.paid);
             });
 
@@ -2767,7 +2777,7 @@ describe("Investment Pool", async () => {
                     })
                 );
 
-                const milestone = await investment.milestones(0);
+                const milestone = await investment.getMilestone(0);
                 const milestoneAllocation =
                     await investment.callStatic.getTotalMilestoneTokenAllocation(0);
                 assert.deepEqual(milestone.paidAmount, milestoneAllocation);
@@ -2851,7 +2861,7 @@ describe("Investment Pool", async () => {
 
                 await investment.connect(creator).startFirstFundsStream();
 
-                const milestone = await investment.milestones(0);
+                const milestone = await investment.getMilestone(0);
                 assert.isTrue(milestone.streamOngoing);
             });
 
@@ -2980,13 +2990,13 @@ describe("Investment Pool", async () => {
                 await investment.connect(creator).startFirstFundsStream();
 
                 // Do milestone jump from milestone id 0 to 1
-                let terminationWindow = await investment.terminationWindow();
+                let terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
                 await timeTravelToDate(timeStamp);
                 await investment.connect(creator).milestoneJumpOrFinalProjectTermination();
 
                 // Terminate milestone id 1
-                terminationWindow = await investment.terminationWindow();
+                terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate2.toNumber() - terminationWindow / 2;
                 await timeTravelToDate(timeStamp);
                 await investment.connect(creator).milestoneJumpOrFinalProjectTermination();
@@ -3105,7 +3115,7 @@ describe("Investment Pool", async () => {
                 await investMoney(fUSDTx, investment, investorA, investedAmount);
 
                 // NOTE: Time traveling to the end of milestone 0
-                const terminationWindow = await investment.terminationWindow();
+                const terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
                 await investment.setTimestamp(timeStamp);
 
@@ -3118,7 +3128,7 @@ describe("Investment Pool", async () => {
                     })
                 );
 
-                const milestone = await investment.milestones(0);
+                const milestone = await investment.getMilestone(0);
                 const milestoneAllocation =
                     await investment.callStatic.getTotalMilestoneTokenAllocation(0);
                 assert.deepEqual(milestone.paidAmount, milestoneAllocation);
@@ -3158,7 +3168,7 @@ describe("Investment Pool", async () => {
                 const timeLeft = milestoneEndDate.sub(
                     BigNumber.from(flowInfo.timestamp.getTime() / 1000)
                 );
-                const seedAmount = (await investment.milestones(0)).paidAmount;
+                const seedAmount = (await investment.getMilestone(0)).paidAmount;
                 const tokenAllocation =
                     await investment.callStatic.getTotalMilestoneTokenAllocation(0);
                 const flowRate = tokenAllocation.sub(seedAmount).div(timeLeft);
@@ -3202,7 +3212,7 @@ describe("Investment Pool", async () => {
                 await investment.connect(creator).startFirstFundsStream();
 
                 // Do milestone jump from milestone id 0 to 1
-                let terminationWindow = await investment.terminationWindow();
+                let terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
                 await timeTravelToDate(timeStamp);
                 await investment.connect(creator).milestoneJumpOrFinalProjectTermination();
@@ -3317,7 +3327,7 @@ describe("Investment Pool", async () => {
                     })
                 );
 
-                const milestone = await investment.milestones(0);
+                const milestone = await investment.getMilestone(0);
                 const paidAmount = milestone.paidAmount;
                 assert.deepEqual(paidAmount, creatorBalance.sub(initialCreatorBalance));
                 assert.isFalse(milestone.paid);
@@ -3345,7 +3355,7 @@ describe("Investment Pool", async () => {
 
                 await investment.connect(creator).startFirstFundsStream();
 
-                const terminationWindow = BigNumber.from(await investment.terminationWindow());
+                const terminationWindow = BigNumber.from(await investment.getTerminationWindow());
                 timeStamp = milestoneEndDate.sub(terminationWindow.div(2)).toNumber();
                 // NOTE: Here we we want explicitly the chain reported time
                 await timeTravelToDate(timeStamp);
@@ -3367,7 +3377,7 @@ describe("Investment Pool", async () => {
                     })
                 );
 
-                const milestone = await investment.milestones(0);
+                const milestone = await investment.getMilestone(0);
                 const paidAmount = milestone.paidAmount;
                 const tokenAllocation =
                     await investment.callStatic.getTotalMilestoneTokenAllocation(0);
@@ -3495,7 +3505,7 @@ describe("Investment Pool", async () => {
                 await timeTravelToDate(timeStamp);
 
                 await investment.connect(creator).startFirstFundsStream();
-                const terminationWindow = BigNumber.from(await investment.terminationWindow());
+                const terminationWindow = BigNumber.from(await investment.getTerminationWindow());
 
                 // Let's make sure we are in the termination window
                 timeStamp = milestoneEndDate.sub(terminationWindow.div(2)).toNumber();
@@ -3512,7 +3522,7 @@ describe("Investment Pool", async () => {
                     })
                 );
 
-                const milestone = await investment.milestones(0);
+                const milestone = await investment.getMilestone(0);
                 const tokenAllocation =
                     await investment.callStatic.getTotalMilestoneTokenAllocation(0);
 
@@ -3572,7 +3582,7 @@ describe("Investment Pool", async () => {
                 await investment.connect(creator).startFirstFundsStream();
 
                 // Let's make sure we are in the termination window
-                const terminationWindow = BigNumber.from(await investment.terminationWindow());
+                const terminationWindow = BigNumber.from(await investment.getTerminationWindow());
                 timeStamp = milestoneEndDate.sub(terminationWindow.div(2)).toNumber();
                 await timeTravelToDate(timeStamp);
 
@@ -3590,7 +3600,7 @@ describe("Investment Pool", async () => {
                         providerOrSigner: creator,
                     })
                 );
-                const milestone = await investment.milestones(0);
+                const milestone = await investment.getMilestone(0);
                 const tokenAllocation =
                     await investment.callStatic.getTotalMilestoneTokenAllocation(0);
 
@@ -3623,7 +3633,7 @@ describe("Investment Pool", async () => {
         describe("11.1 Interactions", () => {
             describe("function -> startGelatoTask", () => {
                 it("[IP][11.1.1] gelatoTask should be assigned", async () => {
-                    const gelatoTask = await investment.gelatoTask();
+                    const gelatoTask = await investment.getGelatoTask();
                     const zeroInBytes32 = ethers.utils.formatBytes32String("");
                     assert.notEqual(gelatoTask, zeroInBytes32);
                 });
@@ -3646,7 +3656,7 @@ describe("Investment Pool", async () => {
 
                     await investment.connect(creator).startFirstFundsStream();
 
-                    const terminationWindow = await investment.terminationWindow();
+                    const terminationWindow = await investment.getTerminationWindow();
                     timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
                     // NOTE: Here we we want explicitly the chain reported time
                     await timeTravelToDate(timeStamp);
@@ -3698,7 +3708,7 @@ describe("Investment Pool", async () => {
                     await investment.setTimestamp(0);
                     await timeTravelToDate(timeStamp);
 
-                    const terminationWindow = await investment.terminationWindow();
+                    const terminationWindow = await investment.getTerminationWindow();
                     timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
                     // NOTE: Here we we want explicitly the chain reported time
                     await timeTravelToDate(timeStamp);
@@ -3724,7 +3734,7 @@ describe("Investment Pool", async () => {
                     await investment.connect(creator).startFirstFundsStream();
 
                     const automatedTerminationWindow =
-                        await investment.automatedTerminationWindow();
+                        await investment.getAutomatedTerminationWindow();
                     timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
                     // NOTE: Here we we want explicitly the chain reported time
                     await timeTravelToDate(timeStamp);
@@ -3757,7 +3767,7 @@ describe("Investment Pool", async () => {
 
                     await investment.connect(creator).startFirstFundsStream();
 
-                    const terminationWindow = await investment.terminationWindow();
+                    const terminationWindow = await investment.getTerminationWindow();
                     timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
                     // NOTE: Here we we want explicitly the chain reported time
                     await timeTravelToDate(timeStamp);
@@ -3812,7 +3822,7 @@ describe("Investment Pool", async () => {
                     await investment.setTimestamp(0);
                     await timeTravelToDate(timeStamp);
 
-                    const terminationWindow = await investment.terminationWindow();
+                    const terminationWindow = await investment.getTerminationWindow();
                     timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
                     // NOTE: Here we we want explicitly the chain reported time
                     await timeTravelToDate(timeStamp);
@@ -3842,7 +3852,7 @@ describe("Investment Pool", async () => {
                     await investment.connect(creator).startFirstFundsStream();
 
                     const automatedTerminationWindow =
-                        await investment.automatedTerminationWindow();
+                        await investment.getAutomatedTerminationWindow();
                     timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
                     // NOTE: Here we we want explicitly the chain reported time
                     await timeTravelToDate(timeStamp);
@@ -3879,7 +3889,7 @@ describe("Investment Pool", async () => {
                     await investment.connect(creator).startFirstFundsStream();
 
                     const automatedTerminationWindow =
-                        await investment.automatedTerminationWindow();
+                        await investment.getAutomatedTerminationWindow();
                     timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
                     // NOTE: Here we we want explicitly the chain reported time
                     await timeTravelToDate(timeStamp);
@@ -3916,7 +3926,7 @@ describe("Investment Pool", async () => {
                     await investment.connect(creator).startFirstFundsStream();
 
                     const automatedTerminationWindow =
-                        await investment.automatedTerminationWindow();
+                        await investment.getAutomatedTerminationWindow();
                     timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
                     // NOTE: Here we we want explicitly the chain reported time
                     await timeTravelToDate(timeStamp);
@@ -3949,7 +3959,7 @@ describe("Investment Pool", async () => {
                     await investment.connect(creator).startFirstFundsStream();
 
                     const automatedTerminationWindow =
-                        await investment.automatedTerminationWindow();
+                        await investment.getAutomatedTerminationWindow();
                     timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
                     // NOTE: Here we we want explicitly the chain reported time
                     await timeTravelToDate(timeStamp);
@@ -3977,7 +3987,7 @@ describe("Investment Pool", async () => {
                     await investment.connect(creator).startFirstFundsStream();
 
                     const automatedTerminationWindow =
-                        await investment.automatedTerminationWindow();
+                        await investment.getAutomatedTerminationWindow();
                     timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
                     // NOTE: Here we we want explicitly the chain reported time
                     await timeTravelToDate(timeStamp);
@@ -4005,7 +4015,7 @@ describe("Investment Pool", async () => {
                     await investment.connect(creator).startFirstFundsStream();
 
                     const automatedTerminationWindow =
-                        await investment.automatedTerminationWindow();
+                        await investment.getAutomatedTerminationWindow();
                     timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
                     // NOTE: Here we we want explicitly the chain reported time
                     await timeTravelToDate(timeStamp);
@@ -4049,7 +4059,7 @@ describe("Investment Pool", async () => {
                 ).to.emit(investment, "Cancel");
 
                 const emergencyTerminationTimestamp =
-                    await investment.emergencyTerminationTimestamp();
+                    await investment.getEmergencyTerminationTimestamp();
                 assert.notEqual(emergencyTerminationTimestamp, 0);
             });
 
@@ -4100,7 +4110,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await governancePoolMock.cancelDuringMilestones(investment.address);
 
-                const milestone = await investment.milestones(0);
+                const milestone = await investment.getMilestone(0);
 
                 assert.isFalse(milestone.streamOngoing);
             });
@@ -4118,14 +4128,14 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await investment.connect(creator).startFirstFundsStream();
 
-                const priorMilestone = await investment.milestones(0);
+                const priorMilestone = await investment.getMilestone(0);
 
                 // NOTE: Time traveling to 2100/09/30
                 timeStamp = dateToSeconds("2100/09/30");
                 await investment.setTimestamp(timeStamp);
                 await governancePoolMock.cancelDuringMilestones(investment.address);
 
-                const milestone = await investment.milestones(0);
+                const milestone = await investment.getMilestone(0);
 
                 assert.isTrue(priorMilestone.paidAmount.lt(milestone.paidAmount));
             });
@@ -4262,13 +4272,13 @@ describe("Investment Pool", async () => {
                 await investment.connect(creator).startFirstFundsStream();
 
                 // Do milestone jump from milestone id 0 to 1
-                let terminationWindow = await investment.terminationWindow();
+                let terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
                 await timeTravelToDate(timeStamp);
                 await investment.connect(creator).milestoneJumpOrFinalProjectTermination();
 
                 // Terminate milestone id 1
-                terminationWindow = await investment.terminationWindow();
+                terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate2.toNumber() - terminationWindow / 2;
                 await timeTravelToDate(timeStamp);
                 await investment.connect(creator).milestoneJumpOrFinalProjectTermination();
@@ -4340,7 +4350,7 @@ describe("Investment Pool", async () => {
                     providerOrSigner: creator,
                 });
 
-                const terminationWindow = await investment.terminationWindow();
+                const terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
                 // NOTE: Here we we want explicitly the chain reported time
                 await timeTravelToDate(timeStamp);
@@ -4378,14 +4388,14 @@ describe("Investment Pool", async () => {
                 await timeTravelToDate(timeStamp);
                 await investment.connect(creator).startFirstFundsStream();
 
-                const terminationWindow = await investment.terminationWindow();
+                const terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
                 // NOTE: Here we we want explicitly the chain reported time
                 await timeTravelToDate(timeStamp);
 
                 await investment.connect(creator).milestoneJumpOrFinalProjectTermination();
 
-                const currentMilestone = await investment.currentMilestone();
+                const currentMilestone = await investment.getCurrentMilestoneId();
                 assert.deepEqual(currentMilestone, BigNumber.from(1));
             });
 
@@ -4404,7 +4414,7 @@ describe("Investment Pool", async () => {
                 await timeTravelToDate(timeStamp);
                 await investment.connect(creator).startFirstFundsStream();
 
-                const terminationWindow = await investment.terminationWindow();
+                const terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
                 // NOTE: Here we we want explicitly the chain reported time
                 await timeTravelToDate(timeStamp);
@@ -4431,7 +4441,7 @@ describe("Investment Pool", async () => {
                 await timeTravelToDate(timeStamp);
                 await investment.connect(creator).startFirstFundsStream();
 
-                const terminationWindow = await investment.terminationWindow();
+                const terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
                 // NOTE: Here we we want explicitly the chain reported time
                 await timeTravelToDate(timeStamp);
@@ -4446,7 +4456,7 @@ describe("Investment Pool", async () => {
                     investment.connect(creator).milestoneJumpOrFinalProjectTermination()
                 ).to.emit(gelatoOpsMock, "CancelGelatoTask");
 
-                const currentMilestone = await investment.currentMilestone();
+                const currentMilestone = await investment.getCurrentMilestoneId();
                 const flowInfo = await sf.cfaV1.getFlow({
                     superToken: fUSDTx.address,
                     sender: investment.address,
@@ -4473,7 +4483,7 @@ describe("Investment Pool", async () => {
                 await timeTravelToDate(timeStamp);
                 await investment.connect(creator).startFirstFundsStream();
 
-                const terminationWindow = await investment.terminationWindow();
+                const terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
                 // NOTE: Here we we want explicitly the chain reported time
                 await timeTravelToDate(timeStamp);
@@ -4616,13 +4626,13 @@ describe("Investment Pool", async () => {
                 await investment.connect(creator).startFirstFundsStream();
 
                 // Do milestone jump from milestone id 0 to 1
-                let terminationWindow = await investment.terminationWindow();
+                let terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
                 await timeTravelToDate(timeStamp);
                 await investment.connect(creator).milestoneJumpOrFinalProjectTermination();
 
                 // Terminate milestone id 1
-                terminationWindow = await investment.terminationWindow();
+                terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate2.toNumber() - terminationWindow / 2;
                 await timeTravelToDate(timeStamp);
                 await investment.connect(creator).milestoneJumpOrFinalProjectTermination();
@@ -4671,7 +4681,7 @@ describe("Investment Pool", async () => {
                 await investMoney(fUSDTx, investment, investorA, investedAmount);
 
                 // Do milestone jump from milestone id 0 to 1
-                let terminationWindow = await investment.terminationWindow();
+                let terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
                 await timeTravelToDate(timeStamp);
 
@@ -4769,13 +4779,13 @@ describe("Investment Pool", async () => {
                 await investment.connect(creator).startFirstFundsStream();
 
                 // Do milestone jump from milestone id 0 to 1
-                let terminationWindow = await investment.terminationWindow();
+                let terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
                 await timeTravelToDate(timeStamp);
                 await investment.connect(creator).milestoneJumpOrFinalProjectTermination();
 
                 // Terminate milestone id 1
-                terminationWindow = await investment.terminationWindow();
+                terminationWindow = await investment.getTerminationWindow();
                 timeStamp = milestoneEndDate2.toNumber() - terminationWindow / 2;
                 await timeTravelToDate(timeStamp);
                 await investment.connect(creator).milestoneJumpOrFinalProjectTermination();
@@ -4897,7 +4907,8 @@ describe("Investment Pool", async () => {
 
                 await investment.connect(creator).startFirstFundsStream();
 
-                const automatedTerminationWindow = await investment.automatedTerminationWindow();
+                const automatedTerminationWindow =
+                    await investment.getAutomatedTerminationWindow();
                 timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
                 // NOTE: Here we we want explicitly the chain reported time
                 await timeTravelToDate(timeStamp);

@@ -107,7 +107,7 @@ const getConstantVariablesFromContract = async () => {
 };
 
 const definePercentageDivider = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
-    percentageDivider = await investmentPoolFactory.PERCENTAGE_DIVIDER();
+    percentageDivider = await investmentPoolFactory.getPercentageDivider();
     percent5InIpBigNumber = percentToIpBigNumber(5);
     percent6InIpBigNumber = percentToIpBigNumber(6);
     percent10InIpBigNumber = percentToIpBigNumber(10);
@@ -120,7 +120,7 @@ const definePercentageDivider = async (investmentPoolFactory: InvestmentPoolFact
 };
 
 const defineGelatoFeeAllocation = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
-    gelatoFeeAllocation = await investmentPoolFactory.gelatoFeeAllocationForProject();
+    gelatoFeeAllocation = await investmentPoolFactory.getGelatoFeeAllocationForProject();
 };
 
 describe("Investment Pool Factory", async () => {
@@ -202,10 +202,10 @@ describe("Investment Pool Factory", async () => {
                 );
                 await investmentPoolFactory.deployed();
 
-                const contractHost = await investmentPoolFactory.HOST();
-                const contractGelatoOps = await investmentPoolFactory.GELATO_OPS();
+                const contractHost = await investmentPoolFactory.getSuperfluidHost();
+                const contractGelatoOps = await investmentPoolFactory.getGelatoOps();
                 const implementationContractAddress =
-                    await investmentPoolFactory.investmentPoolImplementation();
+                    await investmentPoolFactory.getInvestmentPoolImplementation();
 
                 assert.equal(contractHost, sf.settings.config.hostAddress);
                 assert.equal(contractGelatoOps, gelatoOpsMock.address);
@@ -336,7 +336,7 @@ describe("Investment Pool Factory", async () => {
                     investmentPoolFactory.connect(buidl1Admin).setGelatoFeeAllocation(newEthFee)
                 ).not.to.be.reverted;
 
-                const gelatoFee = await investmentPoolFactory.gelatoFeeAllocationForProject();
+                const gelatoFee = await investmentPoolFactory.getGelatoFeeAllocationForProject();
                 assert.deepEqual(newEthFee, gelatoFee);
             });
 
@@ -359,7 +359,7 @@ describe("Investment Pool Factory", async () => {
                     investmentPoolFactory.connect(foreignActor).setGelatoFeeAllocation(newEthFee)
                 ).to.be.revertedWith("Ownable: caller is not the owner");
 
-                const gelatoFee = await investmentPoolFactory.gelatoFeeAllocationForProject();
+                const gelatoFee = await investmentPoolFactory.getGelatoFeeAllocationForProject();
                 assert.deepEqual(gelatoFee, gelatoFeeAllocation);
             });
 
@@ -391,7 +391,7 @@ describe("Investment Pool Factory", async () => {
                         .setGovernancePool(governancePoolMock.address)
                 ).not.to.be.reverted;
 
-                const updatedGovernancePool = await investmentPoolFactory.governancePool();
+                const updatedGovernancePool = await investmentPoolFactory.getGovernancePool();
                 assert.equal(governancePoolMock.address, updatedGovernancePool);
             });
 
@@ -459,7 +459,7 @@ describe("Investment Pool Factory", async () => {
                         .setGovernancePool(governancePoolMock.address)
                 ).to.be.revertedWith("Ownable: caller is not the owner");
 
-                const updatedGovernancePool = await investmentPoolFactory.governancePool();
+                const updatedGovernancePool = await investmentPoolFactory.getGovernancePool();
                 assert.equal(constants.AddressZero, updatedGovernancePool);
             });
         });
@@ -587,15 +587,15 @@ describe("Investment Pool Factory", async () => {
 
                 const pool = contractFactory.attach(poolAddress);
 
-                const creatorAddress = await pool.creator();
-                const invested = await pool.totalInvestedAmount();
-                const fundraiserStartAt = await pool.fundraiserStartAt();
-                const fundraiserEndAt = await pool.fundraiserEndAt();
-                const poolSoftCap = await pool.softCap();
-                const poolHardCap = await pool.hardCap();
-                const milestoneCount = await pool.milestoneCount();
-                const milestone = await pool.milestones(0);
-                const gelatoOpsAddress = await pool.gelatoOps();
+                const creatorAddress = await pool.getCreator();
+                const invested = await pool.getTotalInvestedAmount();
+                const fundraiserStartAt = await pool.getFundraiserStartTime();
+                const fundraiserEndAt = await pool.getFundraiserEndTime();
+                const poolSoftCap = await pool.getSoftCap();
+                const poolHardCap = await pool.getHardCap();
+                const milestoneCount = await pool.getMilestonesCount();
+                const milestone = await pool.getMilestone(0);
+                const gelatoOpsAddress = await pool.getGelatoOps();
 
                 // Verify the campaign variables
                 assert.deepEqual(poolSoftCap, softCap, "Wrong soft cap");
@@ -904,7 +904,7 @@ describe("Investment Pool Factory", async () => {
 
                 // 30 days
                 const milestoneDuration = BigNumber.from(30 * 24 * 60 * 60);
-                const maxMilestones = await investmentPoolFactory.MAX_MILESTONE_COUNT();
+                const maxMilestones = await investmentPoolFactory.getMaxMilestoneCount();
 
                 await expect(
                     investmentPoolFactory.connect(creator).createInvestmentPool(
@@ -940,7 +940,7 @@ describe("Investment Pool Factory", async () => {
                 // 30 days
                 const milestoneDuration = BigNumber.from(30 * 24 * 60 * 60);
 
-                const maxMilestones = await investmentPoolFactory.MAX_MILESTONE_COUNT();
+                const maxMilestones = await investmentPoolFactory.getMaxMilestoneCount();
 
                 const milestones = generateGaplessMilestones(
                     milestoneStartDate,
