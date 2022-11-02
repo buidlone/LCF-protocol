@@ -34,7 +34,9 @@ async function main() {
     investmentPool = await investmentPoolDep.deploy();
     await investmentPool.deployed();
     console.log("Investment pool logic address: ", investmentPool.address);
-    await investmentPool.deployTransaction.wait(6);
+    // await investmentPool.deployTransaction.wait(6);
+    let receipt = await investmentPool.deployTransaction.wait(6);
+    console.log(receipt.cumulativeGasUsed);
     await verify(investmentPool.address, []);
 
     // Deploy investment pool factory contract
@@ -50,7 +52,9 @@ async function main() {
     );
     await investmentPoolFactory.deployed();
     console.log("Investment pool factory address: ", investmentPoolFactory.address);
-    await investmentPoolFactory.deployTransaction.wait(6);
+    // await investmentPoolFactory.deployTransaction.wait(6);
+    receipt = await investmentPoolFactory.deployTransaction.wait(6);
+    console.log(receipt.cumulativeGasUsed);
     await verify(investmentPoolFactory.address, [
         superfluidHostAddress,
         gelatoOpsAddress,
@@ -63,7 +67,9 @@ async function main() {
     votingToken = await votingTokensDep.deploy();
     await votingToken.deployed();
     console.log("Voting token address: ", votingToken.address);
-    await votingToken.deployTransaction.wait(6);
+    // await votingToken.deployTransaction.wait(6);
+    receipt = await votingToken.deployTransaction.wait(6);
+    console.log(receipt.cumulativeGasUsed);
     await verify(votingToken.address, []);
 
     // Deploy governance pool
@@ -77,7 +83,9 @@ async function main() {
     );
     await governancePool.deployed();
     console.log("Governance pool address: ", governancePool.address);
-    await governancePool.deployTransaction.wait(6);
+    // await governancePool.deployTransaction.wait(6);
+    receipt = await governancePool.deployTransaction.wait(6);
+    console.log(receipt.cumulativeGasUsed);
     await verify(governancePool.address, [
         votingToken.address,
         investmentPoolFactory.address,
@@ -88,14 +96,18 @@ async function main() {
     // Transfer ownership to governance pool
     console.log("Transfering voting token ownership to governance pool...");
     const tokenTx = await votingToken.connect(deployer).transferOwnership(governancePool.address);
-    await tokenTx.wait();
+    // await tokenTx.wait();
+    receipt = await tokenTx.wait();
+    console.log(receipt.cumulativeGasUsed);
 
     // Assign governance pool to the IPF
     console.log("Setting governance pool address in investment pool factory...");
     const ipFactoryTx = await investmentPoolFactory
         .connect(deployer)
         .setGovernancePool(governancePool.address);
-    await ipFactoryTx.wait();
+    // await ipFactoryTx.wait();
+    receipt = await ipFactoryTx.wait();
+    console.log(receipt.cumulativeGasUsed);
 }
 
 main().catch((error) => {

@@ -45,7 +45,7 @@ async function main() {
 
     investmentPoolFactory = await ethers.getContractAt(
         "InvestmentPoolFactoryMock",
-        "0x1d13caAf1F1C56A008e5A0bFC55ACa89376Eaa25"
+        "0xC87A724d82ED5b7D6530c5Ed8392C74Dc49D234b"
     );
 
     const creationTx = await investmentPoolFactory.connect(deployer).createInvestmentPool(
