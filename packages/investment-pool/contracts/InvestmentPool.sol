@@ -331,7 +331,6 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         }
 
         uint256 investToMilestoneId = isFundraiserOngoingNow() ? 0 : getCurrentMilestoneId() + 1;
-
         _investToMilestone(_msgSender(), investToMilestoneId, _amount);
 
         bool successfulTransfer = getAcceptedToken().transferFrom(
