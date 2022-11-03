@@ -45,6 +45,12 @@ interface IGovernancePool {
         view
         returns (bool);
 
+    function getActiveVotingTokensBalance(
+        address _investmentPool,
+        uint256 _milestoneId,
+        address _account
+    ) external view returns (uint256);
+
     function getVotingTokenAddress() external view returns (address);
 
     function getInvestmentPoolFactoryAddress() external view returns (address);
