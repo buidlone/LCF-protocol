@@ -23,6 +23,7 @@ error GovernancePool__TotalSupplyIsZero();
 error GovernancePool__TotalSupplyIsSmallerThanVotesAgainst(uint256 totalSupply, uint256 votes);
 error GovernancePool__ThresholdNumberIsGreaterThan100();
 error GovernancePool__InvestmentPoolStateNotAllowed();
+error GovernancePool__BurnAmountIsLargerThanBalance();
 
 /// @title Governance Pool contract.
 contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
@@ -104,6 +105,12 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         _;
     }
 
+    /// @notice Ensures that given amount is not zero
+    modifier notZeroAmount(uint256 _amount) {
+        if (_amount == 0) revert GovernancePool__AmountIsZero();
+        _;
+    }
+
     /** EXTERNAL FUNCTIONS */
 
     /** @notice Activate voting process for given investment pool. It will only be called once for every investment pool at the creation stage stage.
@@ -135,9 +142,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         uint256 _milestoneId,
         address _investor,
         uint256 _amount
-    ) external onActiveInvestmentPool(_msgSender()) {
-        if (_amount == 0) revert GovernancePool__AmountIsZero();
-
+    ) external onActiveInvestmentPool(_msgSender()) notZeroAmount(_amount) {
         uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
 
         // Get all milestones in which investor invested. This array allows us to know when the voting tokens balance increased.
@@ -182,9 +187,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     function voteAgainst(address _investmentPool, uint256 _amount)
         external
         onActiveInvestmentPool(_investmentPool)
+        notZeroAmount(_amount)
     {
-        if (_amount == 0) revert GovernancePool__AmountIsZero();
-
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         IInvestmentPool investmentPool = IInvestmentPool(_investmentPool);
         uint256 currentMilestoneId = investmentPool.getCurrentMilestoneId();
@@ -238,8 +242,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     function retractVotes(address _investmentPool, uint256 _retractAmount)
         external
         onActiveInvestmentPool(_investmentPool)
+        notZeroAmount(_retractAmount)
     {
-        if (_retractAmount == 0) revert GovernancePool__AmountIsZero();
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         uint256 investorVotesAmount = getVotesAmount(_msgSender(), investmentPoolId);
 
@@ -255,7 +259,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         totalVotesAmount[investmentPoolId] -= _retractAmount;
 
         // Apply fee for votes withdrawal
-        uint256 amountToTransfer = (_retractAmount * (100 - VOTES_WITHDRAW_FEE)) / 100;
+        uint256 amountToTransfer = (_retractAmount * (100 - getVotesWithdrawPercentageFee())) /
+            100;
 
         VOTING_TOKEN.safeTransferFrom(
             address(this),
@@ -266,6 +271,33 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         );
 
         emit RetractVotes(_investmentPool, _msgSender(), _retractAmount);
+    }
+
+    /** @notice Burn voting tokens, when user unpledges the investment. Prior voting token approval is needed.
+     *  @dev Is called by INVESTMENT POOL.
+     *  @dev Reverts if function is called not by investment pool, if burn amount is zero, if burn amount is larger than balance.
+     *  @param _investor investors, who wants to unpledge and burn votes.
+     *  @param _milestoneId milestone, in which investor invested previously.
+     *  @param _burnAmount amount to burn.
+     */
+    function burnVotes(
+        uint256 _milestoneId,
+        address _investor,
+        uint256 _burnAmount
+    ) external onActiveInvestmentPool(_msgSender()) notZeroAmount(_burnAmount) {
+        uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
+        uint256 tokensBalance = memActiveTokens[_investor][investmentPoolId][_milestoneId];
+
+        if (_burnAmount > tokensBalance) revert GovernancePool__BurnAmountIsLargerThanBalance();
+
+        if (_burnAmount == tokensBalance) {
+            // We can pop the last milestone if investor wants to burn all of the milestone tokens
+            // Unpledge function can only be executed with current milestone that is why we know that current milestone is the last item
+            milestonesIdsInWhichInvestorInvested[_investor][investmentPoolId].pop();
+        }
+
+        memActiveTokens[_investor][investmentPoolId][_milestoneId] -= _burnAmount;
+        VOTING_TOKEN.burn(_investor, investmentPoolId, _burnAmount);
     }
 
     /** PUBLIC FUNCTIONS */
