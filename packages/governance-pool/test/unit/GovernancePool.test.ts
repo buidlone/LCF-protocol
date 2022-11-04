@@ -1668,4 +1668,15 @@ describe("Governance Pool", async () => {
             });
         });
     });
+    describe("10. Transfer voting tokens", () => {
+        beforeEach(async () => {
+            await deployContracts();
+        });
+
+        describe("10.1 Public state", () => {});
+
+        describe("10.2 Public state", () => {
+            it("[GP][10.2.1] Should update spender milestonesIdsInWhichInvestorInvested array", async () => {});
+        });
+    });
 });
