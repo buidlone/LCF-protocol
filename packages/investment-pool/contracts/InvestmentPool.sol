@@ -156,7 +156,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      * @param _token The Super Token streamed in. MUST be the in-token.
      */
     modifier validCallback(ISuperToken _token) {
-        if (_token != getAcceptedToken()) revert InvestmentPool__InvalidToken();
+        if (_token != acceptedToken) revert InvestmentPool__InvalidToken();
 
         /**
          * @dev Checking msg.sender here instead of _msgSender()
@@ -174,14 +174,13 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     /// @notice Ensures that the message sender is the gelato ops contract
     modifier onlyGelatoOps() {
-        if (address(getGelatoOps()) != _msgSender()) revert InvestmentPool__NotGelatoOps();
+        if (getGelatoOps() != _msgSender()) revert InvestmentPool__NotGelatoOps();
         _;
     }
 
     modifier onlyGovernancePoolOrGelato() {
-        if (
-            address(getGovernancePool()) != _msgSender() && address(getGelatoOps()) != _msgSender()
-        ) revert InvestmentPool__NotGovernancePoolOrGelato();
+        if (getGovernancePool() != _msgSender() && getGelatoOps() != _msgSender())
+            revert InvestmentPool__NotGovernancePoolOrGelato();
         _;
     }
 
@@ -250,7 +249,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             getLastMilestoneOngoingStateValue();
 
         gelatoOps = _gelatoOps;
-        gelato = getGelatoOps().gelato();
+        gelato = gelatoOps.gelato();
 
         acceptedToken = _projectInfo.acceptedToken;
         creator = _projectInfo.creator;
@@ -333,18 +332,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         uint256 investToMilestoneId = isFundraiserOngoingNow() ? 0 : getCurrentMilestoneId() + 1;
         _investToMilestone(_msgSender(), investToMilestoneId, _amount);
 
-        bool successfulTransfer = getAcceptedToken().transferFrom(
-            _msgSender(),
-            address(this),
-            _amount
-        );
+        bool successfulTransfer = acceptedToken.transferFrom(_msgSender(), address(this), _amount);
         if (!successfulTransfer) revert InvestmentPool__SuperTokenTransferFailed();
 
-        getGovernancePool().mintVotingTokens(
-            investToMilestoneId,
-            _msgSender(),
-            votingTokensToMint
-        );
+        governancePool.mintVotingTokens(investToMilestoneId, _msgSender(), votingTokensToMint);
 
         emit Invest(_msgSender(), _amount);
     }
@@ -382,7 +373,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         // Apply fee for withdrawal during the same period as invested (milestone or fundraiser)
         uint256 amountToTransfer = (_amount * (100 - getInvestmentWithdrawPercentageFee())) / 100;
 
-        bool successfulTransfer = getAcceptedToken().transfer(_msgSender(), amountToTransfer);
+        bool successfulTransfer = acceptedToken.transfer(_msgSender(), amountToTransfer);
         if (!successfulTransfer) revert InvestmentPool__SuperTokenTransferFailed();
 
         emit Unpledge(_msgSender(), _amount);
@@ -406,7 +397,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             if (investment == 0) revert InvestmentPool__NoMoneyInvested();
 
             investedAmount[_msgSender()][0] = 0;
-            bool successfulTransfer1 = getAcceptedToken().transfer(_msgSender(), investment);
+            bool successfulTransfer1 = acceptedToken.transfer(_msgSender(), investment);
             if (!successfulTransfer1) revert InvestmentPool__SuperTokenTransferFailed();
 
             emit Refund(_msgSender(), investment);
@@ -451,7 +442,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
         if (tokensOwned == 0) revert InvestmentPool__NoMoneyInvested();
 
-        bool successfulTransfer2 = getAcceptedToken().transfer(_msgSender(), tokensOwned);
+        bool successfulTransfer2 = acceptedToken.transfer(_msgSender(), tokensOwned);
         if (!successfulTransfer2) revert InvestmentPool__SuperTokenTransferFailed();
 
         emit Refund(_msgSender(), tokensOwned);
@@ -483,7 +474,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         allowedProjectStates(getBeforeFundraiserStateValue())
     {
         emergencyTerminationTimestamp = uint48(_getNow());
-        getGelatoOps().cancelTask(getGelatoTask());
+        gelatoOps.cancelTask(getGelatoTask());
         emit Cancel();
     }
 
@@ -503,7 +494,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             currentMilestone++;
             _claim(curMil + 1);
         } else {
-            getGelatoOps().cancelTask(getGelatoTask());
+            gelatoOps.cancelTask(getGelatoTask());
         }
     }
 
@@ -542,7 +533,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         emergencyTerminationTimestamp = uint48(_getNow());
 
         (uint256 timestamp, int96 flowRate, , ) = cfaV1Lib.cfa.getFlow(
-            getAcceptedToken(),
+            acceptedToken,
             address(this),
             getCreator()
         );
@@ -551,13 +542,13 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         if (timestamp != 0) {
             uint256 streamedAmount = (_getNow() - timestamp) * uint256(int256(flowRate));
 
-            cfaV1Lib.deleteFlow(address(this), getCreator(), getAcceptedToken());
+            cfaV1Lib.deleteFlow(address(this), getCreator(), acceptedToken);
 
             // Update the milestone paid amount, don't transfer rest of the funds
             _afterMilestoneStreamTermination(getCurrentMilestoneId(), streamedAmount, false);
         }
 
-        getGelatoOps().cancelTask(getGelatoTask());
+        gelatoOps.cancelTask(getGelatoTask());
         emit Cancel();
     }
 
@@ -783,16 +774,16 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         return ETH;
     }
 
-    function getAcceptedToken() public view returns (ISuperToken) {
-        return acceptedToken;
+    function getAcceptedToken() public view returns (address) {
+        return address(acceptedToken);
     }
 
     function getCreator() public view returns (address) {
         return creator;
     }
 
-    function getGelatoOps() public view returns (IGelatoOps) {
-        return gelatoOps;
+    function getGelatoOps() public view returns (address) {
+        return address(gelatoOps);
     }
 
     function getGelato() public view returns (address payable) {
@@ -803,8 +794,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         return gelatoTask;
     }
 
-    function getGovernancePool() public view returns (IGovernancePool) {
-        return governancePool;
+    function getGovernancePool() public view returns (address) {
+        return address(governancePool);
     }
 
     function getSeedFundingLimit() public view returns (uint96) {
@@ -937,7 +928,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
                 milestone.seedAmountPaid = true;
                 milestone.paidAmount = seedAmount;
 
-                bool successfulTransfer = getAcceptedToken().transfer(getCreator(), seedAmount);
+                bool successfulTransfer = acceptedToken.transfer(getCreator(), seedAmount);
                 if (!successfulTransfer) revert InvestmentPool__SuperTokenTransferFailed();
 
                 emit ClaimFunds(_milestoneId, true, false, false);
@@ -953,7 +944,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             milestone.seedAmountPaid = true;
             milestone.paidAmount = amount;
 
-            bool successfulTransfer = getAcceptedToken().transfer(getCreator(), amount);
+            bool successfulTransfer = acceptedToken.transfer(getCreator(), amount);
             if (!successfulTransfer) revert InvestmentPool__SuperTokenTransferFailed();
 
             emit ClaimFunds(_milestoneId, true, false, false);
@@ -970,7 +961,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             milestone.paid = true;
             milestone.paidAmount = tokenPortion;
 
-            bool successfulTransfer = getAcceptedToken().transfer(getCreator(), owedAmount);
+            bool successfulTransfer = acceptedToken.transfer(getCreator(), owedAmount);
             if (!successfulTransfer) revert InvestmentPool__SuperTokenTransferFailed();
 
             emit ClaimFunds(_milestoneId, false, true, false);
@@ -984,7 +975,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             uint leftStreamDuration = milestone.endDate - _getNow();
             int96 flowRate = int96(int256(owedAmount / leftStreamDuration));
 
-            cfaV1Lib.createFlow(getCreator(), getAcceptedToken(), flowRate);
+            cfaV1Lib.createFlow(getCreator(), acceptedToken, flowRate);
             emit ClaimFunds(_milestoneId, false, false, true);
         }
     }
@@ -998,14 +989,14 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         canTerminateMilestoneFinal(_milestoneId)
     {
         (uint256 timestamp, int96 flowRate, , ) = cfaV1Lib.cfa.getFlow(
-            getAcceptedToken(),
+            acceptedToken,
             address(this),
             getCreator()
         );
 
         if (timestamp != 0) {
             uint256 streamedAmount = (_getNow() - timestamp) * uint256(int256(flowRate));
-            cfaV1Lib.deleteFlow(address(this), getCreator(), getAcceptedToken());
+            cfaV1Lib.deleteFlow(address(this), getCreator(), acceptedToken);
 
             // Perform final termination. Rest of the token buffer gets instantly sent
             _afterMilestoneStreamTermination(_milestoneId, streamedAmount, true);
@@ -1035,7 +1026,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             milestone.paidAmount = tokenPortion;
             milestone.paid = true;
             if (owedAmount > 0) {
-                bool successfulTransfer = getAcceptedToken().transfer(getCreator(), owedAmount);
+                bool successfulTransfer = acceptedToken.transfer(getCreator(), owedAmount);
                 if (!successfulTransfer) revert InvestmentPool__SuperTokenTransferFailed();
             }
         } else {
@@ -1291,7 +1282,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     /// @notice Register gelato task, to make termination automated
     function startGelatoTask() public {
         // Register task to run it automatically
-        bytes32 taskId = getGelatoOps().createTaskNoPrepayment(
+        bytes32 taskId = gelatoOps.createTaskNoPrepayment(
             address(this),
             this.gelatoTerminateMilestoneStreamFinal.selector,
             address(this),
@@ -1310,10 +1301,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     {
         cancelDuringMilestones();
 
-        (uint256 fee, address feeToken) = getGelatoOps().getFeeDetails();
+        (uint256 fee, address feeToken) = gelatoOps.getFeeDetails();
         _gelatoTransfer(fee, feeToken);
 
-        getGelatoOps().cancelTask(getGelatoTask());
+        gelatoOps.cancelTask(getGelatoTask());
         gelatoTask = bytes32(0);
     }
 

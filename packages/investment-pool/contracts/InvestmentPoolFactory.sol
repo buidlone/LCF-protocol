@@ -120,14 +120,14 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         uint48 _fundraiserEndAt,
         ProxyType _proxyType,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
-    ) external payable returns (IInvestmentPool) {
+    ) external payable returns (address) {
         if (msg.value < getGelatoFeeAllocationForProject())
             revert InvestmentPoolFactory__NotEnoughEthValue();
 
         IInitializableInvestmentPool invPool;
 
         _assertPoolInitArguments(
-            getSuperfluidHost(),
+            HOST,
             _acceptedToken,
             _msgSender(),
             _seedFundingLimit,
@@ -165,17 +165,17 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
             );
 
         invPool.initialize{value: msg.value}(
-            getSuperfluidHost(),
-            getGelatoOps(),
+            HOST,
+            GELATO_OPS,
             projectDetails,
             multipliers,
             getInvestmentWithdrawPercentageFee(),
             _milestones,
-            getGovernancePool()
+            governancePool
         );
 
         // After creating investment pool, call governance pool with investment pool address
-        getGovernancePool().activateInvestmentPool(address(invPool));
+        governancePool.activateInvestmentPool(address(invPool));
 
         // Final level is required by the Superfluid's spec right now
         // We only really care about termination callbacks, others - noop
@@ -189,11 +189,11 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
 
         emit Created(_msgSender(), address(invPool), _proxyType);
 
-        return invPool;
+        return address(invPool);
     }
 
     function setGovernancePool(address _governancePool) external onlyOwner {
-        if (address(getGovernancePool()) == address(0)) {
+        if (getGovernancePool() == address(0)) {
             governancePool = IGovernancePool(_governancePool);
         } else {
             revert InvestmentPoolFactory__GovernancePoolAlreadyDefined();
@@ -259,16 +259,16 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         return gelatoFeeAllocationForProject;
     }
 
-    function getGovernancePool() public view returns (IGovernancePool) {
-        return governancePool;
+    function getGovernancePool() public view returns (address) {
+        return address(governancePool);
     }
 
-    function getSuperfluidHost() public view returns (ISuperfluid) {
-        return HOST;
+    function getSuperfluidHost() public view returns (address) {
+        return address(HOST);
     }
 
-    function getGelatoOps() public view returns (IGelatoOps) {
-        return GELATO_OPS;
+    function getGelatoOps() public view returns (address) {
+        return address(GELATO_OPS);
     }
 
     function getInvestmentPoolImplementation() public view returns (address) {
@@ -293,7 +293,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         uint96 _fundraiserEndAt,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
     ) internal view {
-        if (address(getGovernancePool()) == address(0))
+        if (getGovernancePool() == address(0))
             revert InvestmentPoolFactory__GovernancePoolNotDefined();
 
         if (address(_superToken) == address(0))
