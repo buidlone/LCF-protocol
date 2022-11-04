@@ -27,7 +27,7 @@ contract InvestmentPoolMockForIntegration {
         address _investor,
         uint256 _burnAmount
     ) public {
-        getGovernancePool().burnVotes(_milestoneId, _investor, _burnAmount);
+        governancePool.burnVotes(_milestoneId, _investor, _burnAmount);
     }
 
     function cancelDuringMilestones() external pure {}
