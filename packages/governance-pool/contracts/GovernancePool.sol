@@ -37,7 +37,9 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     // TODO: investment pool also hold the values of state. Only in one contract value should be hardcode and others should get from it.
     // This will prevent for later bugs when changing state values
     uint256 internal constant FUNDRAISER_ONGOING_STATE_VALUE = 4;
-    uint256 internal constant ANY_MILESTONE_ONGOING_STATE_VALUE = 96;
+    uint256 internal constant MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE = 32;
+    uint256 internal constant LAST_MILESTONE_ONGOING_STATE_VALUE = 64;
+    uint256 internal ANY_MILESTONE_ONGOING_STATE_VALUE;
 
     /// @notice mapping from investment pool id => is initialized
     mapping(uint256 => bool) internal investmentPoolExists;
@@ -88,6 +90,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         INVESTMENT_POOL_FACTORY_ADDRESS = _investmentPoolFactory;
         VOTES_PERCENTAGE_THRESHOLD = _threshold;
         VOTES_WITHDRAW_FEE = _votestWithdrawFee;
+
+        ANY_MILESTONE_ONGOING_STATE_VALUE =
+            getMilestonesOngoingBeforeLastStateValue() |
+            getLastMilestoneOngoingStateValue();
     }
 
     /// @notice Ensures that provided current project state is one of the provided. It uses bitwise operations in condition
@@ -159,7 +165,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         notZeroAmount(_amount)
         allowedInvestmentPoolStates(
             _msgSender(),
-            getFundraiserOngoingStateValue() | getAnyMilestoneOngoingStateValue()
+            getFundraiserOngoingStateValue() | getMilestonesOngoingBeforeLastStateValue()
         )
     {
         uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
@@ -504,7 +510,15 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         return FUNDRAISER_ONGOING_STATE_VALUE;
     }
 
-    function getAnyMilestoneOngoingStateValue() public pure returns (uint256) {
+    function getMilestonesOngoingBeforeLastStateValue() public pure returns (uint256) {
+        return MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE;
+    }
+
+    function getLastMilestoneOngoingStateValue() public pure returns (uint256) {
+        return LAST_MILESTONE_ONGOING_STATE_VALUE;
+    }
+
+    function getAnyMilestoneOngoingStateValue() public view returns (uint256) {
         return ANY_MILESTONE_ONGOING_STATE_VALUE;
     }
 

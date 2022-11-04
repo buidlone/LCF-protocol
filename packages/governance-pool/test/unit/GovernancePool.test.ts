@@ -23,6 +23,8 @@ let investmentPoolMock: InvestmentPoolMockForIntegration;
 let votesWithdrawFee: BigNumber;
 let fundraiserOngoingStateValue: BigNumber;
 let anyMilestoneOngoingStateValue: BigNumber;
+let milestonesOngoingBeforeLastStateValue: BigNumber;
+let lastMilestoneOngoingStateValue: BigNumber;
 
 const doesInvestmentPoolExist = async (address: string): Promise<boolean> => {
     const investmentPoolId = await governancePool.getInvestmentPoolId(address);
@@ -37,6 +39,9 @@ const defineVotesWithdrawFee = async () => {
 const defineStateValues = async () => {
     fundraiserOngoingStateValue = await governancePool.getFundraiserOngoingStateValue();
     anyMilestoneOngoingStateValue = await governancePool.getAnyMilestoneOngoingStateValue();
+    milestonesOngoingBeforeLastStateValue =
+        await governancePool.getMilestonesOngoingBeforeLastStateValue();
+    lastMilestoneOngoingStateValue = await governancePool.getLastMilestoneOngoingStateValue();
 };
 
 const deployContracts = async () => {
@@ -627,27 +632,27 @@ describe("Governance Pool", async () => {
                 ).not.to.be.reverted;
             });
 
-            it("[GP][4.2.9] Should be able to mint tokens if IP any milestone is ongoing", async () => {
+            it("[GP][4.2.9] Should be able to mint tokens if IP milestone before last is ongoing", async () => {
                 const tokensToMint = ethers.utils.parseEther("10");
 
                 await governancePool
                     .connect(investmentPoolFactoryAsUser)
                     .activateInvestmentPool(investmentPoolMock.address);
 
-                await investmentPoolMock.setProjectState(anyMilestoneOngoingStateValue);
+                await investmentPoolMock.setProjectState(milestonesOngoingBeforeLastStateValue);
                 await expect(
                     investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint)
                 ).not.to.be.reverted;
             });
 
-            it("[GP][4.2.9] Shouldn't be able to mint tokens if fundraiser and milestone isn't ongoing", async () => {
+            it("[GP][4.2.10] Shouldn't be able to mint tokens if last milestone is ongoing", async () => {
                 const tokensToMint = ethers.utils.parseEther("10");
 
                 await governancePool
                     .connect(investmentPoolFactoryAsUser)
                     .activateInvestmentPool(investmentPoolMock.address);
 
-                await investmentPoolMock.setProjectState(0);
+                await investmentPoolMock.setProjectState(lastMilestoneOngoingStateValue);
                 await expect(
                     investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint)
                 )
@@ -655,7 +660,7 @@ describe("Governance Pool", async () => {
                         governancePool,
                         "GovernancePool__InvestmentPoolStateNotAllowed"
                     )
-                    .withArgs(0);
+                    .withArgs(lastMilestoneOngoingStateValue);
             });
         });
     });
