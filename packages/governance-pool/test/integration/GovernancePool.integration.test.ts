@@ -336,8 +336,6 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             const poolAddress = (await creationRes.wait(1)).events?.find(
                 (e) => e.event === "Created"
             )?.args?.pool;
-
-            assert.isTrue(await governancePool.isInvestmentPoolVotingActive(poolAddress));
         });
 
         it("[IPF-GP][1.2] Reverts creation if governance pool is not defined", async () => {

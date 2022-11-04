@@ -104,8 +104,6 @@ interface IInvestmentPool is ISuperApp {
 
     function didProjectEnd() external view returns (bool);
 
-    function isAnyMilestoneOngoingAndActive() external view returns (bool);
-
     function getProjectStateByteValue() external view returns (uint256 stateNumber);
 
     function canTerminateMilestoneStreamFinal(uint256 _milestoneId) external view returns (bool);

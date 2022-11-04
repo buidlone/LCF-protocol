@@ -26,14 +26,8 @@ contract GovernancePoolMock is GovernancePool {
         return timestamp == 0 ? block.timestamp : timestamp;
     }
 
-    function updateInvestmentPoolStatusToActiveVoting(address _investmentPool) public {
-        uint256 id = getInvestmentPoolId(_investmentPool);
-        investmentPoolStatus[id] = IGovernancePool.InvestmentPoolStatus.ActiveVoting;
-    }
-
-    function updateInvestmentPoolStatusToVotedAgainst(address _investmentPool) public {
-        uint256 id = getInvestmentPoolId(_investmentPool);
-        investmentPoolStatus[id] = IGovernancePool.InvestmentPoolStatus.VotedAgainst;
+    function setInvestmentPoolExists(uint256 _investmentPool, bool _exists) public {
+        investmentPoolExists[_investmentPool] = _exists;
     }
 
     function getMemActiveTokens(

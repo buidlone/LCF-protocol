@@ -561,19 +561,6 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         emit Cancel();
     }
 
-    /**
-     * @notice Checks if project state is "any milestone ongoing"
-     * @return bool -> true if state is "any milestones ongoing", else false
-     */
-    function isAnyMilestoneOngoingAndActive() public view returns (bool) {
-        uint256 currentState = getProjectStateByteValue();
-        if (getAnyMilestoneOngoingStateValue() & currentState == 0) {
-            return false;
-        } else {
-            return true;
-        }
-    }
-
     /// @notice Checks if project was canceled
     function isEmergencyTerminated() public view returns (bool) {
         return getEmergencyTerminationTimestamp() != 0;

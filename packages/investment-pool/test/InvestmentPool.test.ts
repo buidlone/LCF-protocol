@@ -929,13 +929,11 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
 
                 const projectState = await investment.getProjectStateByteValue();
-                const isStateMilestonesOngoing = await investment.isAnyMilestoneOngoingAndActive();
 
                 assert.equal(
                     projectState.toString(),
                     milestonesOngoingBeforeLastStateValue.toString()
                 );
-                assert.isTrue(isStateMilestonesOngoing);
             });
 
             it("[IP][3.1.12] In milestone 1 period, project should have last milestone ongoing state", async () => {
@@ -952,10 +950,8 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
 
                 const projectState = await investment.getProjectStateByteValue();
-                const isStateMilestonesOngoing = await investment.isAnyMilestoneOngoingAndActive();
 
                 assert.equal(projectState.toString(), lastMilestoneOngoingStateValue.toString());
-                assert.isTrue(isStateMilestonesOngoing);
             });
         });
 
@@ -4501,10 +4497,8 @@ describe("Investment Pool", async () => {
                 await timeTravelToDate(timeStamp);
 
                 const projectState = await investment.getProjectStateByteValue();
-                const isStateMilestonesOngoing = await investment.isAnyMilestoneOngoingAndActive();
 
                 assert.equal(projectState.toString(), successfullyEndedStateValue.toString());
-                assert.isFalse(isStateMilestonesOngoing);
             });
         });
 

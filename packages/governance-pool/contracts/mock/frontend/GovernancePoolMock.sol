@@ -11,8 +11,8 @@ import {IInvestmentPool} from "@buidlone/investment-pool/contracts/interfaces/II
 import {IGovernancePool} from "@buidlone/investment-pool/contracts/interfaces/IGovernancePool.sol";
 import {VotingToken} from "../../VotingToken.sol";
 
-error GovernancePool__StatusIsNotUnavailable();
-error GovernancePool__StatusIsNotActiveVoting();
+error GovernancePool__InvestmentPoolAlreadyExists();
+error GovernancePool__InvestmentPoolDoesNotExist();
 error GovernancePool__NotInvestmentPoolFactory();
 error GovernancePool__AmountIsZero();
 error GovernancePool__NoActiveVotingTokensOwned();
@@ -22,7 +22,8 @@ error GovernancePool__AmountIsGreaterThanDelegatedVotes(uint256 amount, uint256 
 error GovernancePool__TotalSupplyIsZero();
 error GovernancePool__TotalSupplyIsSmallerThanVotesAgainst(uint256 totalSupply, uint256 votes);
 error GovernancePool__ThresholdNumberIsGreaterThan100();
-error GovernancePool__InvestmentPoolStateNotAllowed();
+error GovernancePool__InvestmentPoolStateNotAllowed(uint256 stateValue);
+error GovernancePool__BurnAmountIsLargerThanBalance();
 
 /// @title Governance Pool contract.
 contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
@@ -33,9 +34,13 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     address internal immutable INVESTMENT_POOL_FACTORY_ADDRESS;
     uint8 internal immutable VOTES_PERCENTAGE_THRESHOLD;
     uint256 internal immutable VOTES_WITHDRAW_FEE; // number out of 100%; E.g. 1 or 13
+    // TODO: investment pool also hold the values of state. Only in one contract value should be hardcode and others should get from it.
+    // This will prevent for later bugs when changing state values
+    uint256 internal constant FUNDRAISER_ONGOING_STATE_VALUE = 4;
+    uint256 internal constant ANY_MILESTONE_ONGOING_STATE_VALUE = 96;
 
-    /// @notice mapping from investment pool id => status
-    mapping(uint256 => InvestmentPoolStatus) internal investmentPoolStatus;
+    /// @notice mapping from investment pool id => is initialized
+    mapping(uint256 => bool) internal investmentPoolExists;
     /// @notice mapping from investor address => investment pool id => votes amount against the project
     mapping(address => mapping(uint256 => uint256)) internal votesAmount;
     /// @notice mapping from investment pool id => total votes amount against the project
@@ -60,7 +65,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     mapping(address => mapping(uint256 => uint256[]))
         internal milestonesIdsInWhichInvestorInvested;
 
-    event ActivateVoting(address indexed investmentPool);
+    event ActivateInvestmentPool(address indexed investmentPool);
     event VoteAgainstProject(
         address indexed investmentPool,
         address indexed investor,
@@ -89,16 +94,24 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         VOTES_WITHDRAW_FEE = _votestWithdrawFee;
     }
 
-    modifier onUnavailableInvestmentPool(address _investmentPool) {
-        if (!isInvestmentPoolUnavailable(_investmentPool)) {
-            revert GovernancePool__StatusIsNotUnavailable();
-        }
+    /// @notice Ensures that provided current project state is one of the provided. It uses bitwise operations in condition
+    modifier allowedInvestmentPoolStates(address _investmentPool, uint256 _states) {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        if (!doesInvestmentPoolExist(investmentPoolId))
+            revert GovernancePool__InvestmentPoolDoesNotExist();
+
+        IInvestmentPool investmentPool = IInvestmentPool(_investmentPool);
+        uint256 currentInvestmentPoolState = investmentPool.getProjectStateByteValue();
+        if (_states & currentInvestmentPoolState == 0)
+            revert GovernancePool__InvestmentPoolStateNotAllowed(currentInvestmentPoolState);
         _;
     }
 
-    modifier onActiveInvestmentPool(address _investmentPool) {
-        if (!isInvestmentPoolVotingActive(_investmentPool))
-            revert GovernancePool__StatusIsNotActiveVoting();
+    modifier investmentPoolDoesNotExist(address _investmentPool) {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        if (doesInvestmentPoolExist(investmentPoolId)) {
+            revert GovernancePool__InvestmentPoolAlreadyExists();
+        }
         _;
     }
 
@@ -108,51 +121,38 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         _;
     }
 
+    /// @notice Ensures that given amount is not zero
+    modifier notZeroAmount(uint256 _amount) {
+        if (_amount == 0) revert GovernancePool__AmountIsZero();
+        _;
+    }
+
     /**
-     * @notice Should be called by Investment Pool
+     * @notice Should be called by Investment Pool when changing states.
      * @param _investments holds two dimensional array, in which milestones investor invested. Each array item holds another array with 2 places.
      * First for milestone id and second for amount. For example: [[0, 200], [2, 150]].
      */
-    function setProjectState(
-        uint256 _stateValue,
+    function resetGovernancePoolValues(
         address _investmentPool,
         address _investor,
         uint256[][] calldata _investments
     ) public {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        IInvestmentPool ip = IInvestmentPool(_investmentPool);
+        investmentPoolExists[investmentPoolId] = true;
 
-        if (
-            _stateValue == ip.getCanceledProjectStateValue() ||
-            _stateValue == ip.getBeforeFundraiserStateValue() ||
-            _stateValue == ip.getUnknownStateValue()
-        ) {
-            // Even if it is canceled, the investment pool status remains active. voteAgainst() function has another check condition, to see
-            // if investment pool milestones are ongoing or not. We don't want to add another state for canceled voting
-            // because a lot of checks in IP are made by looking to current time.
-            investmentPoolStatus[investmentPoolId] = InvestmentPoolStatus.ActiveVoting;
-        } else if (
-            _stateValue == ip.getFundraiserOngoingStateValue() ||
-            _stateValue == ip.getFailedFundraiserStateValue() ||
-            _stateValue == ip.getFundraiserEndedNoMilestonesOngoingStateValue() ||
-            _stateValue == ip.getMilestonesOngoingBeforeLastStateValue() ||
-            _stateValue == ip.getLastMilestoneOngoingStateValue() ||
-            _stateValue == ip.getTerminatedByGelatoStateValue() ||
-            _stateValue == ip.getSuccessfullyEndedStateValue()
-        ) {
-            for (uint256 i = 0; i < _investments.length; i++) {
-                mintVotingTokens(_investments[i][0], _investor, _investments[i][1]);
-            }
-            // Even if it failed or was terminated, the investment pool status remains active. voteAgainst() function has another check condition, to see
-            // if investment pool milestones are ongoing or not. We don't want to add another state for canceled voting
-            // because a lot of checks in IP are made by looking to current time.
-            investmentPoolStatus[investmentPoolId] = InvestmentPoolStatus.ActiveVoting;
-        } else if (_stateValue == ip.getTerminatedByVotingStateValue()) {
-            for (uint256 i = 0; i < _investments.length; i++) {
-                mintVotingTokens(_investments[i][0], _investor, _investments[i][1]);
-            }
-            investmentPoolStatus[investmentPoolId] = InvestmentPoolStatus.VotedAgainst;
+        for (uint256 i = 0; i < _investments.length; i++) {
+            mintTokensByInvestor(
+                _investmentPool,
+                _investments[i][0],
+                _investor,
+                _investments[i][1]
+            );
         }
+
+        votesAmount[_investor][investmentPoolId] = 0;
+        tokensBalance[investmentPoolId][_investor] = 0;
+        totalVotesAmount[investmentPoolId] = 0;
+        tokensTotalSupply[investmentPoolId] = 0;
     }
 
     /** @notice Activate voting process for given investment pool. It will only be called once for every investment pool at the creation stage stage.
@@ -164,12 +164,12 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     function activateInvestmentPool(address _investmentPool)
         public
         onlyInvestmentPoolFactory
-        onUnavailableInvestmentPool(_investmentPool)
+        investmentPoolDoesNotExist(_investmentPool)
     {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
 
-        investmentPoolStatus[investmentPoolId] = InvestmentPoolStatus.ActiveVoting;
-        emit ActivateVoting(_investmentPool);
+        investmentPoolExists[investmentPoolId] = true;
+        emit ActivateInvestmentPool(_investmentPool);
     }
 
     /** @notice Mint new tokens for specified investment pool. Tokens are minted for investor, but they are not active from the begining
@@ -184,41 +184,67 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         uint256 _milestoneId,
         address _investor,
         uint256 _amount
-    ) public onActiveInvestmentPool(_msgSender()) {
-        if (_amount == 0) revert GovernancePool__AmountIsZero();
-
+    ) public {
         uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
+        _mintVotingTokensBase(_milestoneId, _investor, _amount, investmentPoolId);
+    }
 
+    /// @notice function that mints tokens for specified investment pool.
+    /// @notice used when changing the governance pool state.
+    function mintTokensByInvestor(
+        address _investmentPool,
+        uint256 _milestoneId,
+        address _investor,
+        uint256 _amount
+    )
+        public
+        notZeroAmount(_amount)
+        allowedInvestmentPoolStates(
+            _investmentPool,
+            getFundraiserOngoingStateValue() | getAnyMilestoneOngoingStateValue()
+        )
+    {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        _mintVotingTokensBase(_milestoneId, _investor, _amount, investmentPoolId);
+    }
+
+    /// @notice function that mints tokens for specified investment pool
+    function _mintVotingTokensBase(
+        uint256 _milestoneId,
+        address _investor,
+        uint256 _amount,
+        uint256 _investmentPoolId
+    ) internal {
         // Get all milestones in which investor invested. This array allows us to know when the voting tokens balance increased.
         uint256[] memory milestonesIds = getMilestonesIdsInWhichInvestorInvested(
             _investor,
-            investmentPoolId
+            _investmentPoolId
         );
 
         if (milestonesIds.length == 0) {
             // If array is zero, it means no investments exist and therefore investor doesn't own any voting tokens from past.
-            memActiveTokens[_investor][investmentPoolId][_milestoneId] = _amount;
-            milestonesIdsInWhichInvestorInvested[_investor][investmentPoolId].push(_milestoneId);
+            memActiveTokens[_investor][_investmentPoolId][_milestoneId] = _amount;
+            milestonesIdsInWhichInvestorInvested[_investor][_investmentPoolId].push(_milestoneId);
         } else {
             // If array is not zero, it means investor has made investments before.
             // Now we should add the voting tokens amount from previous investments and add the current amount.
             // This allows us to know the specific amount that investor started owning from the provided milestone start.
             uint256 milestoneIdOfLastIncrease = milestonesIds[milestonesIds.length - 1];
-            memActiveTokens[_investor][investmentPoolId][_milestoneId] =
-                memActiveTokens[_investor][investmentPoolId][milestoneIdOfLastIncrease] +
+            memActiveTokens[_investor][_investmentPoolId][_milestoneId] =
+                memActiveTokens[_investor][_investmentPoolId][milestoneIdOfLastIncrease] +
                 _amount;
 
             if (milestoneIdOfLastIncrease != _milestoneId) {
                 // If it's first investment for this milestone, add milestone id to the array.
-                milestonesIdsInWhichInvestorInvested[_investor][investmentPoolId].push(
+                milestonesIdsInWhichInvestorInvested[_investor][_investmentPoolId].push(
                     _milestoneId
                 );
             }
         }
 
         // Simulate minting
-        tokensBalance[investmentPoolId][_investor] += _amount;
-        tokensTotalSupply[investmentPoolId] += _amount;
+        tokensBalance[_investmentPoolId][_investor] += _amount;
+        tokensTotalSupply[_investmentPoolId] += _amount;
     }
 
     /** @notice Vote against the project by transfering investor vote tokens to the governance pool contract.
@@ -231,24 +257,15 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      */
     function voteAgainst(address _investmentPool, uint256 _amount)
         public
-        onActiveInvestmentPool(_investmentPool)
+        notZeroAmount(_amount)
+        allowedInvestmentPoolStates(_investmentPool, getAnyMilestoneOngoingStateValue())
     {
-        if (_amount == 0) revert GovernancePool__AmountIsZero();
-
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        IInvestmentPool investmentPool = IInvestmentPool(_investmentPool);
-        uint256 currentMilestoneId = investmentPool.getCurrentMilestoneId();
-        bool anyMilestoneOngoing = investmentPool.isAnyMilestoneOngoingAndActive();
-
-        // Check investment pool state. If any milestone is ongoing, it means voting is still active.
-        if (!anyMilestoneOngoing) {
-            revert GovernancePool__InvestmentPoolStateNotAllowed();
-        }
 
         // Get the voting tokens that are active and can be used for voting
         uint256 investorActiveVotingTokensBalance = getActiveVotingTokensBalance(
             _investmentPool,
-            currentMilestoneId,
+            IInvestmentPool(_investmentPool).getCurrentMilestoneId(),
             _msgSender()
         );
 
@@ -280,9 +297,9 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      */
     function retractVotes(address _investmentPool, uint256 _retractAmount)
         public
-        onActiveInvestmentPool(_investmentPool)
+        notZeroAmount(_retractAmount)
+        allowedInvestmentPoolStates(_investmentPool, getAnyMilestoneOngoingStateValue())
     {
-        if (_retractAmount == 0) revert GovernancePool__AmountIsZero();
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         uint256 investorVotesAmount = getVotesAmount(_msgSender(), investmentPoolId);
 
@@ -303,6 +320,41 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         emit RetractVotes(_investmentPool, _msgSender(), _retractAmount);
     }
 
+    /** @notice Burn voting tokens, when user unpledges the investment. Prior voting token approval is needed.
+     *  @dev Is called by INVESTMENT POOL.
+     *  @dev Reverts if function is called not by investment pool, if burn amount is zero, if burn amount is larger than balance.
+     *  @param _investor investors, who wants to unpledge and burn votes.
+     *  @param _milestoneId milestone, in which investor invested previously.
+     *  @param _burnAmount amount to burn.
+     */
+    function burnVotes(
+        uint256 _milestoneId,
+        address _investor,
+        uint256 _burnAmount
+    )
+        external
+        notZeroAmount(_burnAmount)
+        allowedInvestmentPoolStates(
+            _msgSender(),
+            getFundraiserOngoingStateValue() | getAnyMilestoneOngoingStateValue()
+        )
+    {
+        uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
+        uint256 balance = memActiveTokens[_investor][investmentPoolId][_milestoneId];
+
+        if (_burnAmount > balance) revert GovernancePool__BurnAmountIsLargerThanBalance();
+
+        if (_burnAmount == balance) {
+            // We can pop the last milestone if investor wants to burn all of the milestone tokens
+            // Unpledge function can only be executed with current milestone that is why we know that current milestone is the last item
+            milestonesIdsInWhichInvestorInvested[_investor][investmentPoolId].pop();
+        }
+
+        memActiveTokens[_investor][investmentPoolId][_milestoneId] -= _burnAmount;
+        tokensTotalSupply[investmentPoolId] -= _burnAmount;
+        tokensBalance[investmentPoolId][_investor] -= _burnAmount;
+    }
+
     function votesAgainstPercentageCount(
         address, /**_investmentPool*/
         uint256 /**_votesAgainst*/
@@ -317,32 +369,12 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         return false;
     }
 
-    function updateInvestmentPoolStatusToActiveVoting(address _investmentPool) public {
-        uint256 id = getInvestmentPoolId(_investmentPool);
-        investmentPoolStatus[id] = InvestmentPoolStatus.ActiveVoting;
-    }
-
-    function updateInvestmentPoolStatusToVotedAgainst(address _investmentPool) public {
-        uint256 id = getInvestmentPoolId(_investmentPool);
-        investmentPoolStatus[id] = InvestmentPoolStatus.VotedAgainst;
-    }
-
     function getMemActiveTokens(
         address _investor,
         uint256 _ipId,
         uint256 _milestoneId
     ) public view returns (uint256) {
         return memActiveTokens[_investor][_ipId][_milestoneId];
-    }
-
-    function isInvestmentPoolUnavailable(address _investmentPool) public view returns (bool) {
-        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        return getInvestmentPoolStatus(investmentPoolId) == InvestmentPoolStatus.Unavailable;
-    }
-
-    function isInvestmentPoolVotingActive(address _investmentPool) public view returns (bool) {
-        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        return getInvestmentPoolStatus(investmentPoolId) == InvestmentPoolStatus.ActiveVoting;
     }
 
     /** @notice Get balance of active voting tokens for specified milestone.
@@ -472,12 +504,16 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         return VOTES_WITHDRAW_FEE;
     }
 
-    function getInvestmentPoolStatus(uint256 _investmentPoolId)
-        public
-        view
-        returns (InvestmentPoolStatus)
-    {
-        return investmentPoolStatus[_investmentPoolId];
+    function getFundraiserOngoingStateValue() public pure returns (uint256) {
+        return FUNDRAISER_ONGOING_STATE_VALUE;
+    }
+
+    function getAnyMilestoneOngoingStateValue() public pure returns (uint256) {
+        return ANY_MILESTONE_ONGOING_STATE_VALUE;
+    }
+
+    function doesInvestmentPoolExist(uint256 _investmentPoolId) public view returns (bool) {
+        return investmentPoolExists[_investmentPoolId];
     }
 
     function getVotesAmount(address _investor, uint256 _investmentPoolId)
