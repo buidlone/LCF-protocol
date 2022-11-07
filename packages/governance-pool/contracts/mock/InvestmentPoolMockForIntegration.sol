@@ -7,8 +7,8 @@ import {IGovernancePool} from "@buidlone/investment-pool/contracts/interfaces/IG
 
 contract InvestmentPoolMockForIntegration {
     IGovernancePool public governancePool;
-    bool anyMilestoneOngoingNow = false;
     uint256 currentMilestone = 0;
+    uint256 investmentPoolStateValue;
 
     constructor(IGovernancePool _governancePool) {
         governancePool = _governancePool;
@@ -27,7 +27,7 @@ contract InvestmentPoolMockForIntegration {
         address _investor,
         uint256 _burnAmount
     ) public {
-        getGovernancePool().burnVotes(_milestoneId, _investor, _burnAmount);
+        governancePool.burnVotes(_milestoneId, _investor, _burnAmount);
     }
 
     function cancelDuringMilestones() external pure {}
@@ -40,12 +40,12 @@ contract InvestmentPoolMockForIntegration {
         currentMilestone += 1;
     }
 
-    function isAnyMilestoneOngoingAndActive() external view returns (bool) {
-        return anyMilestoneOngoingNow;
+    function setProjectState(uint256 _state) public {
+        investmentPoolStateValue = _state;
     }
 
-    function setIsAnyMilestoneOngoing(bool _isOngoing) external {
-        anyMilestoneOngoingNow = _isOngoing;
+    function getProjectStateByteValue() public view returns (uint256 stateNumber) {
+        return investmentPoolStateValue;
     }
 
     function getGovernancePool() public view returns (address) {
