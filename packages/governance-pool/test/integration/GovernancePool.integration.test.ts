@@ -45,7 +45,6 @@ let votingToken: VotingToken;
 let snapshotId: string;
 let gelatoFeeAllocation: BigNumber;
 
-let seedFundingLimit: BigNumber;
 let softCap: BigNumber;
 let hardCap: BigNumber;
 let milestoneStartDate: BigNumber;
@@ -148,7 +147,6 @@ const getInvestmentFromTx = async (tx: ContractTransaction): Promise<InvestmentP
 const createInvestmentWithTwoMilestones = async (feeAmount: BigNumber = gelatoFeeAllocation) => {
     creationRes = await investmentPoolFactory.connect(creator).createInvestmentPool(
         fUSDTx.address,
-        seedFundingLimit,
         softCap,
         hardCap,
         campaignStartDate,
@@ -257,7 +255,6 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
         campaignEndDate = dateToSeconds("2100/08/01") as BigNumber;
         hardCap = ethers.utils.parseEther("15000");
         softCap = ethers.utils.parseEther("1500");
-        seedFundingLimit = ethers.utils.parseEther("500");
     });
 
     describe("1. IPF request to activate investment pool (in GP)", () => {
@@ -316,7 +313,6 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
 
             const creationRes = await investmentPoolFactory.connect(creator).createInvestmentPool(
                 fUSDTx.address,
-                seedFundingLimit,
                 softCap,
                 hardCap,
                 campaignStartDate,
@@ -342,7 +338,6 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             await expect(
                 investmentPoolFactory.connect(creator).createInvestmentPool(
                     fUSDTx.address,
-                    seedFundingLimit,
                     softCap,
                     hardCap,
                     campaignStartDate,
@@ -502,11 +497,11 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
 
             // Approve and invest money
             await investMoney(fUSDTx, investment, investorA, investedAmount);
-            const seedFundingMultiplier = await investment.getSeedFundingMultiplier();
+            const privateFundingMultiplier = await investment.getPrivateFundingMultiplier();
             const totalSupply = await governancePool.getVotingTokensSupply(investment.address);
 
             assert.equal(
-                investedAmount.mul(seedFundingMultiplier).toString(),
+                investedAmount.mul(privateFundingMultiplier).toString(),
                 totalSupply.toString()
             );
         });
@@ -579,8 +574,8 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             await investment.setTimestamp(timeStamp);
             await governancePool.setTimestamp(timeStamp);
 
-            const seedFundingMultiplier = await investment.getSeedFundingMultiplier();
-            const votesAgainst = seedFundingMultiplier.mul(investedAmount).mul(2).div(3);
+            const privateFundingMultiplier = await investment.getPrivateFundingMultiplier();
+            const votesAgainst = privateFundingMultiplier.mul(investedAmount).mul(2).div(3);
 
             // Approve the governance pool contract to spend investor's tokens
             await votingToken.connect(investorA).setApprovalForAll(governancePool.address, true);

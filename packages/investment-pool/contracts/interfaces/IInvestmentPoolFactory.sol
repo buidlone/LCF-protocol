@@ -22,7 +22,6 @@ interface IInvestmentPoolFactory {
 
     function createInvestmentPool(
         ISuperToken _acceptedToken,
-        uint96 _seedFundingLimit,
         uint96 _softCap,
         uint96 _hardCap,
         uint48 _fundraiserStartAt,
@@ -48,8 +47,6 @@ interface IInvestmentPoolFactory {
     function getFundraiserMaxDuration() external view returns (uint256);
 
     function getInvestmentWithdrawPercentageFee() external view returns (uint256);
-
-    function getSeedFundingMultiplier() external view returns (uint256);
 
     function getPrivateFundingMultiplier() external view returns (uint256);
 

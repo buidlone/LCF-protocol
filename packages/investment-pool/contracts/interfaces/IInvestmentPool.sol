@@ -12,7 +12,6 @@ interface IInvestmentPool is ISuperApp {
     struct ProjectInfo {
         ISuperToken acceptedToken;
         address creator;
-        uint96 seedFundingLimit;
         uint96 softCap;
         uint96 hardCap;
         uint48 fundraiserStartAt;
@@ -22,7 +21,6 @@ interface IInvestmentPool is ISuperApp {
     }
 
     struct VotingTokensMultipliers {
-        uint256 seedFundingMultiplier;
         uint256 privateFundingMultiplier;
         uint256 publicFundingMultiplier;
     }
@@ -165,8 +163,6 @@ interface IInvestmentPool is ISuperApp {
 
     function getGovernancePool() external view returns (address);
 
-    function getSeedFundingLimit() external view returns (uint96);
-
     function getSoftCap() external view returns (uint96);
 
     function getHardCap() external view returns (uint96);
@@ -195,8 +191,6 @@ interface IInvestmentPool is ISuperApp {
     function getMilestone(uint256 _milestoneId) external view returns (Milestone memory);
 
     function getInvestmentWithdrawPercentageFee() external view returns (uint256);
-
-    function getSeedFundingMultiplier() external view returns (uint256);
 
     function getPrivateFundingMultiplier() external view returns (uint256);
 
