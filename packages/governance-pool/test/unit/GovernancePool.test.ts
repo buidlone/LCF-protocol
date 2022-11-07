@@ -1840,10 +1840,381 @@ describe("Governance Pool", async () => {
             await deployContracts();
         });
 
-        describe("10.1 Public state", () => {});
+        describe("10.1 Public state", () => {
+            it("[GP][10.1.1] Should update milestonesIdsInWhichInvestorInvested for sender", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+                const transferAmount = ethers.utils.parseEther("0.4");
 
-        describe("10.2 Public state", () => {
-            it("[GP][10.2.1] Should update spender milestonesIdsInWhichInvestorInvested array", async () => {});
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolMock.address);
+
+                await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
+                await investmentPoolMock.setMilestoneId(1);
+                const currentMilestoneId = await investmentPoolMock.getCurrentMilestoneId();
+                const investmentPoolId = await governancePool.getInvestmentPoolId(
+                    investmentPoolMock.address
+                );
+                await votingToken
+                    .connect(investorA)
+                    .setApprovalForAll(governancePool.address, true);
+
+                const priorSenderMilestonesIds =
+                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                        investorA.address,
+                        investmentPoolId
+                    );
+
+                await governancePool
+                    .connect(investorA)
+                    .transferVotes(investmentPoolMock.address, investorB.address, transferAmount);
+
+                const endingSenderMilestonesIds =
+                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                        investorA.address,
+                        investmentPoolId
+                    );
+
+                const expectedIds = [
+                    ...priorSenderMilestonesIds,
+                    BigNumber.from(currentMilestoneId),
+                ];
+                assert.deepEqual(endingSenderMilestonesIds, expectedIds);
+            });
+
+            it("[GP][10.1.2] Should update milestonesIdsInWhichInvestorInvested for recipient", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+                const transferAmount = ethers.utils.parseEther("0.4");
+
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolMock.address);
+
+                await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
+                await investmentPoolMock.setMilestoneId(1);
+                const currentMilestoneId = await investmentPoolMock.getCurrentMilestoneId();
+                const investmentPoolId = await governancePool.getInvestmentPoolId(
+                    investmentPoolMock.address
+                );
+                await votingToken
+                    .connect(investorA)
+                    .setApprovalForAll(governancePool.address, true);
+
+                const priorRecipientMilestonesIds =
+                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                        investorB.address,
+                        investmentPoolId
+                    );
+
+                await governancePool
+                    .connect(investorA)
+                    .transferVotes(investmentPoolMock.address, investorB.address, transferAmount);
+
+                const endingRecipientMilestonesIds =
+                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                        investorB.address,
+                        investmentPoolId
+                    );
+
+                const expectedIds = [
+                    ...priorRecipientMilestonesIds,
+                    BigNumber.from(currentMilestoneId),
+                ];
+                assert.deepEqual(endingRecipientMilestonesIds, expectedIds);
+            });
+
+            it("[GP][10.1.3] Shouldn't update milestonesIdsInWhichInvestorInvested for sender if it current milestone already exists", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+                const transferAmount = ethers.utils.parseEther("0.4");
+
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolMock.address);
+
+                await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
+                const investmentPoolId = await governancePool.getInvestmentPoolId(
+                    investmentPoolMock.address
+                );
+                await votingToken
+                    .connect(investorA)
+                    .setApprovalForAll(governancePool.address, true);
+
+                const priorSenderMilestonesIds =
+                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                        investorA.address,
+                        investmentPoolId
+                    );
+
+                await governancePool
+                    .connect(investorA)
+                    .transferVotes(investmentPoolMock.address, investorB.address, transferAmount);
+
+                const endingSenderMilestonesIds =
+                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                        investorA.address,
+                        investmentPoolId
+                    );
+
+                assert.deepEqual(endingSenderMilestonesIds, priorSenderMilestonesIds);
+            });
+
+            it("[GP][10.1.4] Shouldn't update milestonesIdsInWhichInvestorInvested for recipient if it current milestone already exists", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+                const transferAmount = ethers.utils.parseEther("0.4");
+
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolMock.address);
+
+                await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
+                const investmentPoolId = await governancePool.getInvestmentPoolId(
+                    investmentPoolMock.address
+                );
+
+                await votingToken
+                    .connect(investorA)
+                    .setApprovalForAll(governancePool.address, true);
+
+                await governancePool
+                    .connect(investorA)
+                    .transferVotes(investmentPoolMock.address, investorB.address, transferAmount);
+
+                const priorRecipientMilestonesIds =
+                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                        investorB.address,
+                        investmentPoolId
+                    );
+                await governancePool
+                    .connect(investorA)
+                    .transferVotes(investmentPoolMock.address, investorB.address, transferAmount);
+                const endingRecipientMilestonesIds =
+                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                        investorB.address,
+                        investmentPoolId
+                    );
+
+                assert.deepEqual(endingRecipientMilestonesIds, priorRecipientMilestonesIds);
+            });
+
+            it("[GP][10.1.5] Should update memActiveTokens for sender", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+                const transferAmount = ethers.utils.parseEther("0.4");
+
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolMock.address);
+
+                await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
+                await investmentPoolMock.setMilestoneId(1);
+                const currentMilestoneId = await investmentPoolMock.getCurrentMilestoneId();
+                await votingToken
+                    .connect(investorA)
+                    .setApprovalForAll(governancePool.address, true);
+
+                const priorSenderBalance = await governancePool.getMemActiveTokens(
+                    investorA.address,
+                    investmentPoolMock.address,
+                    currentMilestoneId
+                );
+
+                const priorSenderActiveBalance = await governancePool.getActiveVotingTokensBalance(
+                    investmentPoolMock.address,
+                    currentMilestoneId,
+                    investorA.address
+                );
+
+                await governancePool
+                    .connect(investorA)
+                    .transferVotes(investmentPoolMock.address, investorB.address, transferAmount);
+
+                const endingSenderBalance = await governancePool.getMemActiveTokens(
+                    investorA.address,
+                    investmentPoolMock.address,
+                    currentMilestoneId
+                );
+
+                assert.equal(priorSenderBalance.toString(), "0");
+                assert.equal(
+                    endingSenderBalance.toString(),
+                    priorSenderActiveBalance.sub(transferAmount).toString()
+                );
+            });
+
+            it("[GP][10.1.6] Should update memActiveTokens for recipient", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+                const transferAmount = ethers.utils.parseEther("0.4");
+
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolMock.address);
+
+                await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
+                await investmentPoolMock.setMilestoneId(1);
+                const currentMilestoneId = await investmentPoolMock.getCurrentMilestoneId();
+                await votingToken
+                    .connect(investorA)
+                    .setApprovalForAll(governancePool.address, true);
+
+                const priorRecipientBalance = await governancePool.getMemActiveTokens(
+                    investorB.address,
+                    investmentPoolMock.address,
+                    currentMilestoneId
+                );
+
+                await governancePool
+                    .connect(investorA)
+                    .transferVotes(investmentPoolMock.address, investorB.address, transferAmount);
+
+                const endingRecipientBalance = await governancePool.getMemActiveTokens(
+                    investorB.address,
+                    investmentPoolMock.address,
+                    currentMilestoneId
+                );
+
+                assert.equal(
+                    endingRecipientBalance.toString(),
+                    priorRecipientBalance.add(transferAmount).toString()
+                );
+            });
+        });
+
+        describe("10.2 Interactions", () => {
+            it("[GP][10.2.1] Shouldn't be able to transfer 0 votes", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolMock.address);
+
+                await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
+
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .transferVotes(investmentPoolMock.address, investorB.address, 0)
+                ).to.be.revertedWithCustomError(governancePool, "GovernancePool__AmountIsZero");
+            });
+
+            it("[GP][10.2.2] Shouldn't be able to transfer more votes than in balance", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolMock.address);
+
+                await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
+
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .transferVotes(
+                            investmentPoolMock.address,
+                            investorB.address,
+                            tokensToMint.add(100)
+                        )
+                ).to.be.revertedWithCustomError(
+                    governancePool,
+                    "GovernancePool__CannotTransferMoreThanUnlockedTokens"
+                );
+            });
+
+            it("[GP][10.2.3] Should be able to transfer full voting tokens amount", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolMock.address);
+
+                await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
+                await votingToken
+                    .connect(investorA)
+                    .setApprovalForAll(governancePool.address, true);
+
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .transferVotes(investmentPoolMock.address, investorB.address, tokensToMint)
+                ).to.emit(votingToken, "TransferSingle");
+            });
+
+            it("[GP][10.2.4] Should be able to transfer part of voting tokens", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+                const transferAmount = ethers.utils.parseEther("0.4");
+
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolMock.address);
+
+                await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
+                await votingToken
+                    .connect(investorA)
+                    .setApprovalForAll(governancePool.address, true);
+
+                await expect(
+                    governancePool
+                        .connect(investorA)
+                        .transferVotes(
+                            investmentPoolMock.address,
+                            investorB.address,
+                            transferAmount
+                        )
+                ).to.emit(votingToken, "TransferSingle");
+            });
+
+            it("[GP][10.2.5] Should update sender's and recipient's balances", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+                const transferAmount = ethers.utils.parseEther("0.4");
+
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolMock.address);
+
+                await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
+                await votingToken
+                    .connect(investorA)
+                    .setApprovalForAll(governancePool.address, true);
+
+                const priorSenderBalance = await governancePool.getVotingTokenBalance(
+                    investmentPoolMock.address,
+                    investorA.address
+                );
+                const priorRecipientBalance = await governancePool.getVotingTokenBalance(
+                    investmentPoolMock.address,
+                    investorB.address
+                );
+                await governancePool
+                    .connect(investorA)
+                    .transferVotes(investmentPoolMock.address, investorB.address, transferAmount);
+
+                const senderBalance = await governancePool.getVotingTokenBalance(
+                    investmentPoolMock.address,
+                    investorA.address
+                );
+                const recipientBalance = await governancePool.getVotingTokenBalance(
+                    investmentPoolMock.address,
+                    investorB.address
+                );
+
+                assert.equal(
+                    senderBalance.toString(),
+                    priorSenderBalance.sub(transferAmount).toString()
+                );
+                assert.equal(
+                    recipientBalance.toString(),
+                    priorRecipientBalance.add(transferAmount).toString()
+                );
+            });
         });
     });
 
@@ -1853,7 +2224,96 @@ describe("Governance Pool", async () => {
         });
 
         describe("11.1 Interactions", () => {
-            it("[GP][11.1.1] Should return full active voting tokens amount when no votes were used", async () => {});
+            it("[GP][11.1.1] Should return full active voting tokens amount when no votes were used", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolMock.address);
+
+                await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
+
+                const votesAmount = await governancePool
+                    .connect(investorA)
+                    .getUnusedVotesAmount(investmentPoolMock.address);
+
+                assert.equal(votesAmount.toString(), tokensToMint.toString());
+            });
+
+            it("[GP][11.1.2] Should return full active voting tokens amount for later milestones when no votes were used", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolMock.address);
+
+                await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
+                await investmentPoolMock.setMilestoneId(1);
+
+                const votesAmount = await governancePool
+                    .connect(investorA)
+                    .getUnusedVotesAmount(investmentPoolMock.address);
+
+                assert.equal(votesAmount.toString(), tokensToMint.toString());
+            });
+
+            it("[GP][11.1.3] Should return zero if all of the votes were used already", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolMock.address);
+
+                await investmentPoolMock.setProjectState(anyMilestoneOngoingStateValue);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
+
+                // Approve the governance pool contract to spend investor's tokens
+                await votingToken
+                    .connect(investorA)
+                    .setApprovalForAll(governancePool.address, true);
+
+                await governancePool
+                    .connect(investorA)
+                    .voteAgainst(investmentPoolMock.address, tokensToMint);
+
+                const votesAmount = await governancePool
+                    .connect(investorA)
+                    .getUnusedVotesAmount(investmentPoolMock.address);
+
+                assert.equal(votesAmount.toString(), "0");
+            });
+
+            it("[GP][11.1.4] Should return only unused votes if part of them were used", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+                const voteAgainstTokens = ethers.utils.parseEther("0.4");
+
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolMock.address);
+
+                await investmentPoolMock.setProjectState(anyMilestoneOngoingStateValue);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
+
+                // Approve the governance pool contract to spend investor's tokens
+                await votingToken
+                    .connect(investorA)
+                    .setApprovalForAll(governancePool.address, true);
+
+                await governancePool
+                    .connect(investorA)
+                    .voteAgainst(investmentPoolMock.address, voteAgainstTokens);
+
+                const votesAmount = await governancePool
+                    .connect(investorA)
+                    .getUnusedVotesAmount(investmentPoolMock.address);
+
+                assert.equal(
+                    votesAmount.toString(),
+                    tokensToMint.sub(voteAgainstTokens).toString()
+                );
+            });
         });
     });
 });

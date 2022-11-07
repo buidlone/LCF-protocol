@@ -332,7 +332,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
 
         if (_amount > votesLeft) revert GovernancePool__CannotTransferMoreThanUnlockedTokens();
 
-        uint256 spenderActiveVotingTokensBalance = getActiveVotingTokensBalance(
+        uint256 senderActiveVotingTokensBalance = getActiveVotingTokensBalance(
             _investmentPool,
             currentMilestoneId,
             _msgSender()
@@ -356,7 +356,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         }
 
         memActiveTokens[_msgSender()][investmentPoolId][currentMilestoneId] =
-            spenderActiveVotingTokensBalance -
+            senderActiveVotingTokensBalance -
             _amount;
         memActiveTokens[_recipient][investmentPoolId][currentMilestoneId] =
             recipientActiveVotingTokensBalance +
