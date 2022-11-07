@@ -4,12 +4,6 @@
 pragma solidity ^0.8.9;
 
 interface IGovernancePool {
-    enum InvestmentPoolStatus {
-        Unavailable,
-        ActiveVoting,
-        VotedAgainst
-    }
-
     function activateInvestmentPool(address _investmentPool) external;
 
     function mintVotingTokens(
@@ -28,9 +22,7 @@ interface IGovernancePool {
         uint256 _burnAmount
     ) external;
 
-    function isInvestmentPoolUnavailable(address _investmentPool) external view returns (bool);
-
-    function isInvestmentPoolVotingActive(address _investmentPool) external view returns (bool);
+    function doesInvestmentPoolExist(uint256 _investmentPoolId) external view returns (bool);
 
     function getInvestmentPoolId(address _investmentPool) external pure returns (uint256);
 
@@ -51,6 +43,14 @@ interface IGovernancePool {
         view
         returns (bool);
 
+    function getUnusedVotesAmount(address _investmentPool) external view returns (uint256);
+
+    function transferVotes(
+        address _investmentPool,
+        address _recipient,
+        uint256 _amount
+    ) external;
+
     function getActiveVotingTokensBalance(
         address _investmentPool,
         uint256 _milestoneId,
@@ -64,11 +64,6 @@ interface IGovernancePool {
     function getVotesPercentageThreshold() external view returns (uint8);
 
     function getVotesWithdrawPercentageFee() external view returns (uint256);
-
-    function getInvestmentPoolStatus(uint256 _investmentPoolId)
-        external
-        view
-        returns (InvestmentPoolStatus);
 
     function getVotesAmount(address _investor, uint256 _investmentPoolId)
         external

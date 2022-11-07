@@ -29,7 +29,7 @@ interface IInvestmentPoolFactory {
         uint48 _fundraiserEndAt,
         ProxyType _proxyType,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
-    ) external payable returns (IInvestmentPool);
+    ) external payable returns (address);
 
     function getMaxMilestoneCount() external pure returns (uint32);
 
@@ -57,11 +57,11 @@ interface IInvestmentPoolFactory {
 
     function getGelatoFeeAllocationForProject() external view returns (uint256);
 
-    function getGovernancePool() external view returns (IGovernancePool);
+    function getGovernancePool() external view returns (address);
 
-    function getSuperfluidHost() external view returns (ISuperfluid);
+    function getSuperfluidHost() external view returns (address);
 
-    function getGelatoOps() external view returns (IGelatoOps);
+    function getGelatoOps() external view returns (address);
 
     function getInvestmentPoolImplementation() external view returns (address);
 }

@@ -104,8 +104,6 @@ interface IInvestmentPool is ISuperApp {
 
     function didProjectEnd() external view returns (bool);
 
-    function isAnyMilestoneOngoingAndActive() external view returns (bool);
-
     function getProjectStateByteValue() external view returns (uint256 stateNumber);
 
     function canTerminateMilestoneStreamFinal(uint256 _milestoneId) external view returns (bool);
@@ -155,17 +153,17 @@ interface IInvestmentPool is ISuperApp {
 
     function getEthAddress() external pure returns (address);
 
-    function getAcceptedToken() external view returns (ISuperToken);
+    function getAcceptedToken() external view returns (address);
 
     function getCreator() external view returns (address);
 
-    function getGelatoOps() external view returns (IGelatoOps);
+    function getGelatoOps() external view returns (address);
 
     function getGelato() external view returns (address payable);
 
     function getGelatoTask() external view returns (bytes32);
 
-    function getGovernancePool() external view returns (IGovernancePool);
+    function getGovernancePool() external view returns (address);
 
     function getSeedFundingLimit() external view returns (uint96);
 
