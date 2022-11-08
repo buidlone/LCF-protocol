@@ -43,6 +43,14 @@ interface IGovernancePool {
         view
         returns (bool);
 
+    function getUnusedVotesAmount(address _investmentPool) external view returns (uint256);
+
+    function transferVotes(
+        address _investmentPool,
+        address _recipient,
+        uint256 _amount
+    ) external;
+
     function getActiveVotingTokensBalance(
         address _investmentPool,
         uint256 _milestoneId,

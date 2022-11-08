@@ -7,8 +7,8 @@ import {IGovernancePool} from "@buidlone/investment-pool/contracts/interfaces/IG
 
 contract InvestmentPoolMockForIntegration {
     IGovernancePool public governancePool;
-    uint256 currentMilestone = 0;
-    uint256 investmentPoolStateValue;
+    uint256 internal currentMilestone = 0;
+    uint256 internal investmentPoolStateValue;
 
     constructor(IGovernancePool _governancePool) {
         governancePool = _governancePool;
@@ -38,6 +38,10 @@ contract InvestmentPoolMockForIntegration {
 
     function increaseMilestone() external {
         currentMilestone += 1;
+    }
+
+    function setMilestoneId(uint256 _id) external {
+        currentMilestone = _id;
     }
 
     function setProjectState(uint256 _state) public {

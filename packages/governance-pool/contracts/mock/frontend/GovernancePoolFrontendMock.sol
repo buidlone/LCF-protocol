@@ -24,6 +24,7 @@ error GovernancePool__TotalSupplyIsSmallerThanVotesAgainst(uint256 totalSupply, 
 error GovernancePool__ThresholdNumberIsGreaterThan100();
 error GovernancePool__InvestmentPoolStateNotAllowed(uint256 stateValue);
 error GovernancePool__BurnAmountIsLargerThanBalance();
+error GovernancePool__CannotTransferMoreThanUnlockedTokens();
 
 /// @title Governance Pool contract.
 contract GovernancePoolFrontendMock is ERC1155Holder, Context, IGovernancePool {
@@ -191,8 +192,8 @@ contract GovernancePoolFrontendMock is ERC1155Holder, Context, IGovernancePool {
         address _investor,
         uint256 _amount
     ) public {
-        uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
-        _mintVotingTokensBase(_milestoneId, _investor, _amount, investmentPoolId);
+        address investmentPool = _msgSender();
+        _mintVotingTokensBase(_milestoneId, _investor, _amount, investmentPool);
     }
 
     /// @notice function that mints tokens for specified investment pool.
@@ -210,8 +211,7 @@ contract GovernancePoolFrontendMock is ERC1155Holder, Context, IGovernancePool {
             getFundraiserOngoingStateValue() | getAnyMilestoneOngoingStateValue()
         )
     {
-        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
-        _mintVotingTokensBase(_milestoneId, _investor, _amount, investmentPoolId);
+        _mintVotingTokensBase(_milestoneId, _investor, _amount, _investmentPool);
     }
 
     /// @notice function that mints tokens for specified investment pool
@@ -219,38 +219,38 @@ contract GovernancePoolFrontendMock is ERC1155Holder, Context, IGovernancePool {
         uint256 _milestoneId,
         address _investor,
         uint256 _amount,
-        uint256 _investmentPoolId
+        address _investmentPool
     ) internal {
         // Get all milestones in which investor invested. This array allows us to know when the voting tokens balance increased.
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         uint256[] memory milestonesIds = getMilestonesIdsInWhichInvestorInvested(
             _investor,
-            _investmentPoolId
+            investmentPoolId
         );
 
         if (milestonesIds.length == 0) {
             // If array is zero, it means no investments exist and therefore investor doesn't own any voting tokens from past.
-            memActiveTokens[_investor][_investmentPoolId][_milestoneId] = _amount;
-            milestonesIdsInWhichInvestorInvested[_investor][_investmentPoolId].push(_milestoneId);
+            memActiveTokens[_investor][investmentPoolId][_milestoneId] = _amount;
+            milestonesIdsInWhichInvestorInvested[_investor][investmentPoolId].push(_milestoneId);
         } else {
             // If array is not zero, it means investor has made investments before.
             // Now we should add the voting tokens amount from previous investments and add the current amount.
             // This allows us to know the specific amount that investor started owning from the provided milestone start.
-            uint256 milestoneIdOfLastIncrease = milestonesIds[milestonesIds.length - 1];
-            memActiveTokens[_investor][_investmentPoolId][_milestoneId] =
-                memActiveTokens[_investor][_investmentPoolId][milestoneIdOfLastIncrease] +
-                _amount;
-
-            if (milestoneIdOfLastIncrease != _milestoneId) {
+            if (memActiveTokens[_investor][investmentPoolId][_milestoneId] == 0) {
                 // If it's first investment for this milestone, add milestone id to the array.
-                milestonesIdsInWhichInvestorInvested[_investor][_investmentPoolId].push(
+                milestonesIdsInWhichInvestorInvested[_investor][investmentPoolId].push(
                     _milestoneId
                 );
             }
+
+            memActiveTokens[_investor][investmentPoolId][_milestoneId] =
+                getActiveVotingTokensBalance(_investmentPool, _milestoneId, _investor) +
+                _amount;
         }
 
         // Simulate minting
-        tokensBalance[_investmentPoolId][_investor] += _amount;
-        tokensTotalSupply[_investmentPoolId] += _amount;
+        tokensBalance[investmentPoolId][_investor] += _amount;
+        tokensTotalSupply[investmentPoolId] += _amount;
     }
 
     /** @notice Vote against the project by transfering investor vote tokens to the governance pool contract.
@@ -268,16 +268,8 @@ contract GovernancePoolFrontendMock is ERC1155Holder, Context, IGovernancePool {
     {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
 
-        // Get the voting tokens that are active and can be used for voting
-        uint256 investorActiveVotingTokensBalance = getActiveVotingTokensBalance(
-            _investmentPool,
-            IInvestmentPool(_investmentPool).getCurrentMilestoneId(),
-            _msgSender()
-        );
-
         // Get amount of votes investor owns. Remove the votes that were used for voting already.
-        uint256 votesLeft = investorActiveVotingTokensBalance -
-            getVotesAmount(_msgSender(), investmentPoolId);
+        uint256 votesLeft = getUnusedVotesAmount(_investmentPool);
 
         if (votesLeft == 0) revert GovernancePool__NoActiveVotingTokensOwned();
         if (_amount > votesLeft)
@@ -359,6 +351,79 @@ contract GovernancePoolFrontendMock is ERC1155Holder, Context, IGovernancePool {
         memActiveTokens[_investor][investmentPoolId][_milestoneId] -= _burnAmount;
         tokensTotalSupply[investmentPoolId] -= _burnAmount;
         tokensBalance[investmentPoolId][_investor] -= _burnAmount;
+    }
+
+
+
+    /** @notice transfer voting tokens (tokens can be locked too) with the ownership to it
+     *  @param _investmentPool investment pool of token
+     *  @param _recipient transfer recipients
+     *  @param _amount to transfer from sender to recipient
+     */
+    function transferVotes(
+        address _investmentPool,
+        address _recipient,
+        uint256 _amount
+    ) external notZeroAmount(_amount) {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        uint256 currentMilestoneId = IInvestmentPool(_investmentPool).getCurrentMilestoneId();
+        uint256 votesLeft = getUnusedVotesAmount(_investmentPool);
+
+        if (_amount > votesLeft) revert GovernancePool__CannotTransferMoreThanUnlockedTokens();
+
+        uint256 senderActiveVotingTokensBalance = getActiveVotingTokensBalance(
+            _investmentPool,
+            currentMilestoneId,
+            _msgSender()
+        );
+        uint256 recipientActiveVotingTokensBalance = getActiveVotingTokensBalance(
+            _investmentPool,
+            currentMilestoneId,
+            _recipient
+        );
+
+        if (memActiveTokens[_msgSender()][investmentPoolId][currentMilestoneId] == 0) {
+            milestonesIdsInWhichInvestorInvested[_msgSender()][investmentPoolId].push(
+                currentMilestoneId
+            );
+        }
+
+        if (memActiveTokens[_recipient][investmentPoolId][currentMilestoneId] == 0) {
+            milestonesIdsInWhichInvestorInvested[_recipient][investmentPoolId].push(
+                currentMilestoneId
+            );
+        }
+
+        memActiveTokens[_msgSender()][investmentPoolId][currentMilestoneId] =
+            senderActiveVotingTokensBalance -
+            _amount;
+        memActiveTokens[_recipient][investmentPoolId][currentMilestoneId] =
+            recipientActiveVotingTokensBalance +
+            _amount;
+
+        tokensBalance[investmentPoolId][_msgSender()] -= _amount;
+        tokensBalance[investmentPoolId][_recipient] += _amount;
+    }
+
+    /** @notice function returns the amount, which is the max voting tokens he can still use for voting against the project.
+     *  @param _investmentPool address of the investment pool, for which we want to get the token balance
+     *  @return votes that are sill unused
+     */
+    function getUnusedVotesAmount(address _investmentPool) public view returns (uint256) {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        uint256 currentMilestoneId = IInvestmentPool(_investmentPool).getCurrentMilestoneId();
+
+        // Get the voting tokens that are active and can be used for voting
+        uint256 activeVotingTokensBalance = getActiveVotingTokensBalance(
+            _investmentPool,
+            currentMilestoneId,
+            _msgSender()
+        );
+        uint256 usedVotes = getVotesAmount(_msgSender(), investmentPoolId);
+
+        // Get amount of votes investor hasn't used yet. Remove the votes that were used for voting already.
+        uint256 votesLeft = activeVotingTokensBalance - usedVotes;
+        return votesLeft;
     }
 
     function votesAgainstPercentageCount(
