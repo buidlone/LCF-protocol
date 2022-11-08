@@ -195,6 +195,8 @@ interface IInvestmentPool is ISuperApp {
     function getSoftCapMultiplier() external view returns (uint256);
 
     function getHardCapMultiplier() external view returns (uint256);
+
+    function getVotingTokensSupplyCap() external view returns (uint256);
 }
 
 interface IInitializableInvestmentPool is IInvestmentPool {

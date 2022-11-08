@@ -858,6 +858,14 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         return hardCapMultiplier;
     }
 
+    function getVotingTokensSupplyCap() public view returns (uint256) {
+        uint256 onlyHardCapAmount = uint256(getHardCap()) - uint256(getSoftCap());
+        uint256 softCapTokenAllocation = uint256(getSoftCap()) * getSoftCapMultiplier();
+        uint256 hardCapTokenAllocation = onlyHardCapAmount * getHardCapMultiplier();
+        uint256 votingSupplyCap = softCapTokenAllocation + hardCapTokenAllocation;
+        return votingSupplyCap;
+    }
+
     /**
      * @notice This function returns values that shouldn't be used on its own.
      * @notice The amount should be multiplied with the corresponding milestone's allocation percentage

@@ -4882,6 +4882,18 @@ describe("Investment Pool", async () => {
                     assert.equal(investmentsList[1].toString(), "0");
                 });
             });
+
+            describe("function -> getVotingTokensSupplyCap", () => {
+                it("[IP][15.1.3] Should return empty list if no investments were made", async () => {
+                    const onlyHardCapAmount = hardCap.sub(softCap);
+                    const softCapTokenAllocation = softCap.mul(softCapMultiplier);
+                    const hardCapTokenAllocation = onlyHardCapAmount.mul(hardCapMultiplier);
+                    const expectedSupplyCap = softCapTokenAllocation.add(hardCapTokenAllocation);
+
+                    const votingTokensSupplyCap = await investment.getVotingTokensSupplyCap();
+                    assert.equal(votingTokensSupplyCap.toString(), expectedSupplyCap.toString());
+                });
+            });
         });
     });
 
