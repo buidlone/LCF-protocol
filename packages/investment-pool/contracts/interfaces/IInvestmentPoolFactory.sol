@@ -48,9 +48,9 @@ interface IInvestmentPoolFactory {
 
     function getInvestmentWithdrawPercentageFee() external view returns (uint256);
 
-    function getPrivateFundingMultiplier() external view returns (uint256);
+    function getSoftCapMultiplier() external view returns (uint256);
 
-    function getPublicFundingMultiplier() external view returns (uint256);
+    function getHardCapMultiplier() external view returns (uint256);
 
     function getGelatoFeeAllocationForProject() external view returns (uint256);
 

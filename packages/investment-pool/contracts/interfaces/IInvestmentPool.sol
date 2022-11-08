@@ -21,8 +21,8 @@ interface IInvestmentPool is ISuperApp {
     }
 
     struct VotingTokensMultipliers {
-        uint256 privateFundingMultiplier;
-        uint256 publicFundingMultiplier;
+        uint256 softCapMultiplier;
+        uint256 hardCapMultiplier;
     }
 
     struct MilestoneInterval {
@@ -192,9 +192,9 @@ interface IInvestmentPool is ISuperApp {
 
     function getInvestmentWithdrawPercentageFee() external view returns (uint256);
 
-    function getPrivateFundingMultiplier() external view returns (uint256);
+    function getSoftCapMultiplier() external view returns (uint256);
 
-    function getPublicFundingMultiplier() external view returns (uint256);
+    function getHardCapMultiplier() external view returns (uint256);
 }
 
 interface IInitializableInvestmentPool is IInvestmentPool {

@@ -497,13 +497,10 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
 
             // Approve and invest money
             await investMoney(fUSDTx, investment, investorA, investedAmount);
-            const privateFundingMultiplier = await investment.getPrivateFundingMultiplier();
+            const softCapMultiplier = await investment.getSoftCapMultiplier();
             const totalSupply = await governancePool.getVotingTokensSupply(investment.address);
 
-            assert.equal(
-                investedAmount.mul(privateFundingMultiplier).toString(),
-                totalSupply.toString()
-            );
+            assert.equal(investedAmount.mul(softCapMultiplier).toString(), totalSupply.toString());
         });
     });
 
@@ -574,8 +571,8 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             await investment.setTimestamp(timeStamp);
             await governancePool.setTimestamp(timeStamp);
 
-            const privateFundingMultiplier = await investment.getPrivateFundingMultiplier();
-            const votesAgainst = privateFundingMultiplier.mul(investedAmount).mul(2).div(3);
+            const softCapMultiplier = await investment.getSoftCapMultiplier();
+            const votesAgainst = softCapMultiplier.mul(investedAmount).mul(2).div(3);
 
             // Approve the governance pool contract to spend investor's tokens
             await votingToken.connect(investorA).setApprovalForAll(governancePool.address, true);

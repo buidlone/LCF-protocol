@@ -84,8 +84,8 @@ let successfullyEndedStateValue: BigNumber;
 let unknownStateValue: BigNumber;
 
 // Multipliers
-let privateFundingMultiplier: BigNumber;
-let publicFundingMultiplier: BigNumber;
+let softCapMultiplier: BigNumber;
+let hardCapMultiplier: BigNumber;
 
 const percentToIpBigNumber = (percent: number): BigNumber => {
     return percentageDivider.mul(percent).div(100);
@@ -156,8 +156,8 @@ const defineEthAddress = async (investmentPool: InvestmentPoolMock) => {
 };
 
 const defineMultipliers = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
-    privateFundingMultiplier = await investmentPoolFactory.getPrivateFundingMultiplier();
-    publicFundingMultiplier = await investmentPoolFactory.getPublicFundingMultiplier();
+    softCapMultiplier = await investmentPoolFactory.getSoftCapMultiplier();
+    hardCapMultiplier = await investmentPoolFactory.getHardCapMultiplier();
 };
 
 const deployGovernancePoolMock = async () => {
@@ -1234,7 +1234,7 @@ describe("Investment Pool", async () => {
 
                     assert.equal(
                         tokensToMint.toString(),
-                        investedAmountB.mul(privateFundingMultiplier).toString()
+                        investedAmountB.mul(softCapMultiplier).toString()
                     );
                 });
 
@@ -1255,10 +1255,10 @@ describe("Investment Pool", async () => {
 
                     const tokensInPrivateFunding = softCap
                         .sub(investedAmountA)
-                        .mul(privateFundingMultiplier);
+                        .mul(softCapMultiplier);
                     const tokensInPublicFunding = investedAmountB
                         .sub(softCap.sub(investedAmountA))
-                        .mul(publicFundingMultiplier);
+                        .mul(hardCapMultiplier);
 
                     assert.equal(
                         tokensToMint.toString(),
@@ -1282,7 +1282,7 @@ describe("Investment Pool", async () => {
                         investedAmountB
                     );
 
-                    const tokensInPublicFunding = investedAmountB.mul(publicFundingMultiplier);
+                    const tokensInPublicFunding = investedAmountB.mul(hardCapMultiplier);
 
                     assert.equal(tokensToMint.toString(), tokensInPublicFunding.toString());
                 });

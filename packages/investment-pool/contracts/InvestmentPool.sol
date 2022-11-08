@@ -114,8 +114,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     uint256 internal currentMilestone;
 
     uint256 internal investmentWithdrawFee;
-    uint256 internal privateFundingMultiplier;
-    uint256 internal publicFundingMultiplier;
+    uint256 internal softCapMultiplier;
+    uint256 internal hardCapMultiplier;
 
     /**
      * @dev It's a memoization mapping for milestone Portions
@@ -258,8 +258,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         terminationWindow = _projectInfo.terminationWindow;
         automatedTerminationWindow = _projectInfo.automatedTerminationWindow;
 
-        privateFundingMultiplier = _multipliers.privateFundingMultiplier;
-        publicFundingMultiplier = _multipliers.publicFundingMultiplier;
+        softCapMultiplier = _multipliers.softCapMultiplier;
+        hardCapMultiplier = _multipliers.hardCapMultiplier;
 
         investmentWithdrawFee = _investmentWithdrawFee;
         milestoneCount = _milestones.length;
@@ -850,12 +850,12 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         return investmentWithdrawFee;
     }
 
-    function getPrivateFundingMultiplier() public view returns (uint256) {
-        return privateFundingMultiplier;
+    function getSoftCapMultiplier() public view returns (uint256) {
+        return softCapMultiplier;
     }
 
-    function getPublicFundingMultiplier() public view returns (uint256) {
-        return publicFundingMultiplier;
+    function getHardCapMultiplier() public view returns (uint256) {
+        return hardCapMultiplier;
     }
 
     /**
@@ -1055,29 +1055,25 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             // Private funding
             if (getTotalInvestedAmount() + _amount <= getSoftCap()) {
                 // Multiplier will be the same for all voting tokens
-                return _amount * getPrivateFundingMultiplier();
+                return _amount * getSoftCapMultiplier();
             } else if (getTotalInvestedAmount() + _amount <= getHardCap()) {
                 // Multiplier is going to be different. That's why we need to calculate
                 // the amount which is going to be invested in private funding and which in public funding.
                 // Investor invested while in private funding. Remaining funds went to public funding.
+                uint256 amountInSoftCap = getSoftCap() - getTotalInvestedAmount();
+                uint256 ticketsForSoftCap = amountInSoftCap * getSoftCapMultiplier();
+                uint256 amountInHardCap = _amount - amountInSoftCap;
+                uint256 ticketsForHardCap = amountInHardCap * getHardCapMultiplier();
 
-                uint256 amountInPrivateFunding = getSoftCap() - getTotalInvestedAmount();
-                uint256 ticketsForPrivateFunding = amountInPrivateFunding *
-                    getPrivateFundingMultiplier();
-
-                uint256 amountInPublicFunding = _amount - amountInPrivateFunding;
-                uint256 ticketsForPublicFunding = amountInPublicFunding *
-                    getPublicFundingMultiplier();
-
-                return ticketsForPrivateFunding + ticketsForPublicFunding;
+                return ticketsForSoftCap + ticketsForHardCap;
             }
         } else if (
-            getTotalInvestedAmount() > getSoftCap() && getTotalInvestedAmount() < getHardCap()
+            getTotalInvestedAmount() > getSoftCap() && getTotalInvestedAmount() <= getHardCap()
         ) {
             // Public limited funding
             if (getTotalInvestedAmount() + _amount <= getHardCap()) {
                 // Multiplier will be the same for all voting tokens
-                return _amount * getPublicFundingMultiplier();
+                return _amount * getHardCapMultiplier();
             }
         }
 
