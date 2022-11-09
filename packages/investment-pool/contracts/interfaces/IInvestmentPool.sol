@@ -5,7 +5,6 @@ pragma solidity ^0.8.9;
 
 import {CFAv1Library} from "@superfluid-finance/ethereum-contracts/contracts/apps/CFAv1Library.sol";
 import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
-import {IGelatoOps} from "./IGelatoOps.sol";
 import {IGovernancePool} from "./IGovernancePool.sol";
 
 interface IInvestmentPool is ISuperApp {
@@ -119,7 +118,7 @@ interface IInvestmentPool is ISuperApp {
 
     function gelatoChecker() external view returns (bool canExec, bytes memory execPayload);
 
-    function startGelatoTask() external;
+    function startGelatoTask() external payable;
 
     function gelatoTerminateMilestoneStreamFinal(uint256 _milestoneId) external;
 
@@ -153,6 +152,8 @@ interface IInvestmentPool is ISuperApp {
 
     function getEthAddress() external pure returns (address);
 
+    function getGelatoOpsProxyFactory() external view returns (address);
+
     function getAcceptedToken() external view returns (address);
 
     function getCreator() external view returns (address);
@@ -160,6 +161,8 @@ interface IInvestmentPool is ISuperApp {
     function getGelatoOps() external view returns (address);
 
     function getGelato() external view returns (address payable);
+
+    function getGelatoDedicatedMsgSender() external view returns (address);
 
     function getGelatoTask() external view returns (bytes32);
 
@@ -206,7 +209,7 @@ interface IInvestmentPool is ISuperApp {
 interface IInitializableInvestmentPool is IInvestmentPool {
     function initialize(
         ISuperfluid _host,
-        IGelatoOps _gelatoOps,
+        address payable _gelatoOps,
         IInvestmentPool.ProjectInfo calldata _projectInfo,
         IInvestmentPool.VotingTokensMultipliers calldata _multipliers,
         uint256 _investmentWithdrawFee,

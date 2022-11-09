@@ -6,7 +6,6 @@ pragma solidity ^0.8.9;
 import {ISuperToken, ISuperfluid} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {IInvestmentPool} from "./IInvestmentPool.sol";
 import {IGovernancePool} from "./IGovernancePool.sol";
-import {IGelatoOps} from "./IGelatoOps.sol";
 
 interface IInvestmentPoolFactory {
     /**
@@ -61,7 +60,7 @@ interface IInvestmentPoolFactory {
 
     function getSuperfluidHost() external view returns (address);
 
-    function getGelatoOps() external view returns (address);
+    function getGelatoOps() external view returns (address payable);
 
     function getInvestmentPoolImplementation() external view returns (address);
 }

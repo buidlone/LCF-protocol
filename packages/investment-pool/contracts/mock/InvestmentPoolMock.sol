@@ -70,4 +70,8 @@ contract InvestmentPoolMock is InvestmentPool {
     function getVotingTokensAmountToMint(uint256 _amount) public view returns (uint256) {
         return _getVotingTokensAmountToMint(_amount);
     }
+
+    function getGelatoOpsProxyFactory() public view override returns (address) {
+        return address(gelatoOps);
+    }
 }

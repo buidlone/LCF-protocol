@@ -3745,7 +3745,10 @@ describe("Investment Pool", async () => {
                 it("[IP][11.1.6] Non gelato address should not be able to call gelato stream termination", async () => {
                     await expect(
                         investment.connect(foreignActor).gelatoTerminateMilestoneStreamFinal(0)
-                    ).to.be.revertedWithCustomError(investment, "InvestmentPool__NotGelatoOps");
+                    ).to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__NotGelatoDedicatedSender"
+                    );
                 });
                 it("[IP][11.1.7] Gelato should not be able to terminate stream if gelatoTask is not assigned", async () => {
                     const investedAmount: BigNumber = ethers.utils.parseEther("2000");
@@ -3857,7 +3860,7 @@ describe("Investment Pool", async () => {
 
                     await expect(gelatoOpsMock.gelatoTerminateMilestoneStream(0))
                         .to.emit(investment, "GelatoFeeTransfer")
-                        .withArgs(feeDetails.fee, feeDetails.feeToken);
+                        .withArgs(feeDetails[0], feeDetails[1]);
                 });
 
                 it("[IP][11.1.11] Investment pool should transfer fee to Gelato", async () => {
@@ -3899,10 +3902,10 @@ describe("Investment Pool", async () => {
                     const feeDetails = await gelatoOpsMock.getFeeDetails();
 
                     assert.deepEqual(
-                        investmentPoolPriorBalance.sub(feeDetails.fee),
+                        investmentPoolPriorBalance.sub(feeDetails[0]),
                         investmentPoolBalance
                     );
-                    assert.deepEqual(gelatoPriorBalance.add(feeDetails.fee), gelatoBalance);
+                    assert.deepEqual(gelatoPriorBalance.add(feeDetails[0]), gelatoBalance);
                 });
 
                 it("[IP][11.1.12] Investment pool shouldn't be able to transfer fee to Gelato if not enough tokens", async () => {
@@ -3934,7 +3937,7 @@ describe("Investment Pool", async () => {
                         gelatoOpsMock.gelatoTerminateMilestoneStream(0)
                     ).to.be.revertedWithCustomError(
                         investment,
-                        "InvestmentPool__GelatoEthTransferFailed"
+                        "InvestmentPool__EthTransferFailed"
                     );
                 });
 

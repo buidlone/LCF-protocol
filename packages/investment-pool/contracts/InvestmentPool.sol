@@ -8,17 +8,16 @@ import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinition
 import {IConstantFlowAgreementV1} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/agreements/IConstantFlowAgreementV1.sol";
 import {CFAv1Library} from "@superfluid-finance/ethereum-contracts/contracts/apps/CFAv1Library.sol";
 import {SuperAppBase} from "@superfluid-finance/ethereum-contracts/contracts/apps/SuperAppBase.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 // Openzepelin imports
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import {IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
+import {IInitializableInvestmentPool, IInvestmentPool} from "./interfaces/IInvestmentPool.sol";
 import {IGovernancePool} from "./interfaces/IGovernancePool.sol";
-import {IGelatoOps} from "./interfaces/IGelatoOps.sol";
-
-import "hardhat/console.sol";
+import "./interfaces/GelatoTypes.sol";
 
 /// @notice Superfluid ERRORS for callbacks
 /// @dev Thrown when the wrong token is streamed to the contract.
@@ -28,26 +27,27 @@ error InvestmentPool__Unauthorized();
 
 /// @notice InvestmentPool ERRORS
 error InvestmentPool__NotCreator();
-error InvestmentPool__NotGelatoOps();
 error InvestmentPool__NotGovernancePoolOrGelato();
+error InvestmentPool__NotGovernancePool();
 error InvestmentPool__MilestoneStillLocked();
 error InvestmentPool__MilestoneStreamTerminationUnavailable();
 error InvestmentPool__GelatoMilestoneStreamTerminationUnavailable();
 error InvestmentPool__NoMoneyInvested();
 error InvestmentPool__AlreadyStreamingForMilestone(uint256 milestone);
 error InvestmentPool__AlreadyPaidForMilestone(uint256 milestone);
-error InvestmentPool__GelatoEthTransferFailed();
 error InvestmentPool__CannotInvestAboveHardCap();
 error InvestmentPool__ZeroAmountProvided();
 error InvestmentPool__AmountIsGreaterThanInvested(uint256 givenAmount, uint256 investedAmount);
 error InvestmentPool__CurrentStateIsNotAllowed(uint256 currentStateByteValue);
 error InvestmentPool__NoSeedAmountDedicated();
 error InvestmentPool__NotInFirstMilestonePeriod();
-error InvestmentPool__EthTransferFailed();
 error InvestmentPool__NoEthLeftToWithdraw();
 error InvestmentPool__SuperTokenTransferFailed();
+error InvestmentPool__GelatoTaskAlreadyStarted();
+error InvestmentPool__EthTransferFailed();
+error InvestmentPool__NotGelatoDedicatedSender();
 
-contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, Initializable {
+contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, OwnableUpgradeable {
     using CFAv1Library for CFAv1Library.InitData;
 
     /** STATE VARIABLES */
@@ -73,8 +73,6 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     uint256 internal constant UNKNOWN_STATE_VALUE = 1024;
     uint256 internal ANY_MILESTONE_ONGOING_STATE_VALUE;
 
-    address internal constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-
     /* WARNING: NEVER RE-ORDER VARIABLES! Always double-check that new
        variables are added APPEND-ONLY. Re-ordering variables can
        permanently BREAK the deployed proxy contract. */
@@ -86,10 +84,16 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     ISuperToken internal acceptedToken;
 
     address internal creator;
-    IGelatoOps internal gelatoOps;
-    address payable internal gelato;
-    bytes32 internal gelatoTask;
     IGovernancePool internal governancePool;
+
+    // Gelato variables
+    IOps internal gelatoOps;
+    address internal gelatoDedicatedMsgSender;
+    address payable internal gelato;
+    address internal constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+    address internal constant GELATO_OPS_PROXY_FACTORY =
+        0xC815dB16D4be6ddf2685C201937905aBf338F5D7;
+    bytes32 internal gelatoTask;
 
     // TODO: validate that uint96 for soft cap is enough
     uint96 internal seedFundingLimit;
@@ -172,15 +176,14 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         _;
     }
 
-    /// @notice Ensures that the message sender is the gelato ops contract
-    modifier onlyGelatoOps() {
-        if (getGelatoOps() != _msgSender()) revert InvestmentPool__NotGelatoOps();
+    modifier onlyGovernancePoolOrGelato() {
+        if (getGovernancePool() != _msgSender() && getGelatoDedicatedMsgSender() != _msgSender())
+            revert InvestmentPool__NotGovernancePoolOrGelato();
         _;
     }
 
-    modifier onlyGovernancePoolOrGelato() {
-        if (getGovernancePool() != _msgSender() && getGelatoOps() != _msgSender())
-            revert InvestmentPool__NotGovernancePoolOrGelato();
+    modifier onlyGovernancePool() {
+        if (getGovernancePool() != _msgSender()) revert InvestmentPool__NotGovernancePool();
         _;
     }
 
@@ -212,6 +215,13 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         _;
     }
 
+    /// @notice Only tasks created by investment pool defined in initializer can call the functions with this modifier.
+    modifier onlyGelatoDedicatedMsgSender() {
+        if (msg.sender != getGelatoDedicatedMsgSender())
+            revert InvestmentPool__NotGelatoDedicatedSender();
+        _;
+    }
+
     /// @notice allow investment pool to receive funds from other accounts
     receive() external payable {}
 
@@ -221,7 +231,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      * @notice This function is like contructor. It defines all the important variables for further processes.
      * @dev This function is called by INVESTMENT POOL FACTORY on new project creation
      * @param _host superfluid contract, which is responsible for most of interactions with streams
-     * @param _gelatoOps gelato contract, which is responsible for creating automated tasks and accepting fee
+     * @param _gelatoOps gelato ops address, which is responsible for creating automated tasks and accepting fee
      * @param _projectInfo information about the project milestones, fundraiser, termination.
      * @param _multipliers numbers, which are going to be used for calculating the voting tokens amount for minting
      * @param _investmentWithdrawFee fee, which is going to be used when unpledging investment
@@ -230,13 +240,14 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      */
     function initialize(
         ISuperfluid _host,
-        IGelatoOps _gelatoOps,
-        ProjectInfo calldata _projectInfo,
-        VotingTokensMultipliers calldata _multipliers,
+        address payable _gelatoOps,
+        IInvestmentPool.ProjectInfo calldata _projectInfo,
+        IInvestmentPool.VotingTokensMultipliers calldata _multipliers,
         uint256 _investmentWithdrawFee,
         MilestoneInterval[] calldata _milestones,
         IGovernancePool _governancePool
     ) external payable initializer {
+        __Ownable_init();
         /// @dev Parameter validation was already done for us by the Factory, so it's safe to use "as is" and save gas
 
         // Resolve the agreement address and initialize the lib
@@ -247,9 +258,6 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         ANY_MILESTONE_ONGOING_STATE_VALUE =
             getMilestonesOngoingBeforeLastStateValue() |
             getLastMilestoneOngoingStateValue();
-
-        gelatoOps = _gelatoOps;
-        gelato = gelatoOps.gelato();
 
         acceptedToken = _projectInfo.acceptedToken;
         creator = _projectInfo.creator;
@@ -269,6 +277,12 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         milestoneCount = _milestones.length;
         currentMilestone = 0;
         governancePool = _governancePool;
+
+        gelatoOps = IOps(_gelatoOps);
+        gelato = IOps(_gelatoOps).gelato();
+        (gelatoDedicatedMsgSender, ) = IOpsProxyFactory(getGelatoOpsProxyFactory()).getProxyOf(
+            address(this)
+        );
 
         MilestoneInterval memory interval;
         uint48 streamDurationsTotal = 0;
@@ -474,7 +488,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         allowedProjectStates(getBeforeFundraiserStateValue())
     {
         emergencyTerminationTimestamp = uint48(_getNow());
-        gelatoOps.cancelTask(getGelatoTask());
+        _cancelTask(getGelatoTask());
         emit Cancel();
     }
 
@@ -494,7 +508,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             currentMilestone++;
             _claim(curMil + 1);
         } else {
-            gelatoOps.cancelTask(getGelatoTask());
+            _cancelTask(getGelatoTask());
         }
     }
 
@@ -548,7 +562,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             _afterMilestoneStreamTermination(getCurrentMilestoneId(), streamedAmount, false);
         }
 
-        gelatoOps.cancelTask(getGelatoTask());
+        _cancelTask(getGelatoTask());
         emit Cancel();
     }
 
@@ -657,11 +671,11 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         } else if (isLastMilestoneOngoing() && !isEmergencyTerminated() && !isFailedFundraiser()) {
             return getLastMilestoneOngoingStateValue();
         } else if (
-            getGelatoTask() != bytes32(0) && isCanceledDuringMilestones() && !isFailedFundraiser()
+            getGelatoTask() != bytes32("") && isCanceledDuringMilestones() && !isFailedFundraiser()
         ) {
             return getTerminatedByVotingStateValue();
         } else if (
-            getGelatoTask() == bytes32(0) && isCanceledDuringMilestones() && !isFailedFundraiser()
+            getGelatoTask() == bytes32("") && isCanceledDuringMilestones() && !isFailedFundraiser()
         ) {
             return getTerminatedByGelatoStateValue();
         } else if (didProjectEnd() && !isEmergencyTerminated() && !isFailedFundraiser()) {
@@ -687,7 +701,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         return
             milestone.streamOngoing &&
             milestone.endDate - getAutomatedTerminationWindow() <= _getNow() &&
-            getGelatoTask() != bytes32(0);
+            getGelatoTask() != bytes32("");
     }
 
     /// @notice get seed amount dedicated to the milestone
@@ -774,6 +788,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         return ETH;
     }
 
+    function getGelatoOpsProxyFactory() public view virtual returns (address) {
+        return GELATO_OPS_PROXY_FACTORY;
+    }
+
     function getAcceptedToken() public view returns (address) {
         return address(acceptedToken);
     }
@@ -788,6 +806,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     function getGelato() public view returns (address payable) {
         return gelato;
+    }
+
+    function getGelatoDedicatedMsgSender() public view returns (address) {
+        return gelatoDedicatedMsgSender;
     }
 
     function getGelatoTask() public view returns (bytes32) {
@@ -1272,51 +1294,100 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     function gelatoChecker() public view returns (bool canExec, bytes memory execPayload) {
         uint256 milestoneId = getCurrentMilestoneId();
         canExec = canGelatoTerminateMilestoneStreamFinal(milestoneId);
-
-        execPayload = abi.encodeWithSelector(
-            this.gelatoTerminateMilestoneStreamFinal.selector,
-            milestoneId
-        );
+        execPayload = abi.encodeCall(this.gelatoTerminateMilestoneStreamFinal, (milestoneId));
     }
 
     /// @notice Register gelato task, to make termination automated
-    function startGelatoTask() public {
-        // Register task to run it automatically
-        bytes32 taskId = gelatoOps.createTaskNoPrepayment(
+    /// @dev Owner of the investment pool is investment pool factory, so only the factory will be able create gelato task
+    function startGelatoTask() public payable onlyOwner {
+        if (getGelatoTask() != bytes32("")) revert InvestmentPool__GelatoTaskAlreadyStarted();
+
+        ModuleData memory moduleData = ModuleData({
+            modules: new Module[](2),
+            args: new bytes[](2)
+        });
+        moduleData.modules[0] = Module.RESOLVER;
+        moduleData.modules[1] = Module.PROXY;
+        moduleData.args[0] = _resolverModuleArg(
             address(this),
-            this.gelatoTerminateMilestoneStreamFinal.selector,
+            abi.encodeCall(this.gelatoChecker, ())
+        );
+        moduleData.args[1] = _proxyModuleArg();
+
+        bytes32 id = _createTask(
             address(this),
-            abi.encodeWithSelector(this.gelatoChecker.selector),
-            getEthAddress()
+            abi.encode(this.gelatoTerminateMilestoneStreamFinal.selector),
+            moduleData,
+            ETH
         );
 
-        gelatoTask = taskId;
+        gelatoTask = id;
     }
 
     /// @notice Function is called by gelato automation, when conditions are met
     function gelatoTerminateMilestoneStreamFinal(uint256 _milestoneId)
         public
-        onlyGelatoOps
+        onlyGelatoDedicatedMsgSender
         canGelatoTerminateMilestoneFinal(_milestoneId)
     {
         cancelDuringMilestones();
 
-        (uint256 fee, address feeToken) = gelatoOps.getFeeDetails();
+        _cancelTask(getGelatoTask());
+        gelatoTask = bytes32("");
+
+        (uint256 fee, address feeToken) = _getGelatoFeeDetails();
         _gelatoTransfer(fee, feeToken);
 
-        gelatoOps.cancelTask(getGelatoTask());
-        gelatoTask = bytes32(0);
+        emit GelatoFeeTransfer(fee, feeToken);
     }
 
-    // TODO: Ensure that this wouldn't clash with our logic
-    // Introduce limits and checks to prevent gelato from taking too much
-    function _gelatoTransfer(uint256 _amount, address _paymentToken) internal {
-        if (_paymentToken == getEthAddress()) {
-            // If ETH address
-            (bool success, ) = getGelato().call{value: _amount}("");
-            if (!success) revert InvestmentPool__GelatoEthTransferFailed();
-        }
+    function _createTask(
+        address _execAddress,
+        bytes memory _execDataOrSelector,
+        ModuleData memory _moduleData,
+        address _feeToken
+    ) internal returns (bytes32) {
+        return gelatoOps.createTask(_execAddress, _execDataOrSelector, _moduleData, _feeToken);
+    }
 
-        emit GelatoFeeTransfer(_amount, _paymentToken);
+    function _cancelTask(bytes32 _taskId) internal {
+        gelatoOps.cancelTask(_taskId);
+    }
+
+    function _gelatoTransfer(uint256 _fee, address _feeToken) internal {
+        if (_feeToken == ETH) {
+            (bool success, ) = gelato.call{value: _fee}("");
+            if (!success) revert InvestmentPool__EthTransferFailed();
+        } else {
+            revert InvestmentPool__EthTransferFailed();
+        }
+    }
+
+    function _getGelatoFeeDetails() internal view returns (uint256 fee, address feeToken) {
+        (fee, feeToken) = gelatoOps.getFeeDetails();
+    }
+
+    function _resolverModuleArg(address _resolverAddress, bytes memory _resolverData)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return abi.encode(_resolverAddress, _resolverData);
+    }
+
+    function _timeModuleArg(uint256 _startTime, uint256 _interval)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return abi.encode(uint128(_startTime), uint128(_interval));
+    }
+
+    function _proxyModuleArg() internal pure returns (bytes memory) {
+        return bytes("");
+    }
+
+    function _singleExecModuleArg() internal pure returns (bytes memory) {
+        return bytes("");
     }
 }

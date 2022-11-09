@@ -6,7 +6,6 @@ pragma solidity ^0.8.9;
 import "@openzeppelin/contracts/proxy/Clones.sol";
 import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {IInitializableInvestmentPool} from "../interfaces/IInvestmentPool.sol";
-import {IGelatoOps} from "../interfaces/IGelatoOps.sol";
 
 import {InvestmentPoolFactory} from "../InvestmentPoolFactory.sol";
 import {InvestmentPoolMock} from "./InvestmentPoolMock.sol";
@@ -20,7 +19,7 @@ contract InvestmentPoolFactoryMock is InvestmentPoolFactory {
     // solhint-disable-next-line no-empty-blocks
     constructor(
         ISuperfluid _host,
-        IGelatoOps _gelatoOps,
+        address payable _gelatoOps,
         address _implementationContract
     ) InvestmentPoolFactory(_host, _gelatoOps, _implementationContract) {}
 

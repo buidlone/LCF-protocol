@@ -12,7 +12,6 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {IInvestmentPool, IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
 import {IInvestmentPoolFactory} from "./interfaces/IInvestmentPoolFactory.sol";
-import {IGelatoOps} from "./interfaces/IGelatoOps.sol";
 import {IGovernancePool} from "./interfaces/IGovernancePool.sol";
 import {InvestmentPool} from "./InvestmentPool.sol";
 
@@ -84,18 +83,17 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
        permanently BREAK the deployed proxy contract. */
 
     ISuperfluid internal immutable HOST;
-    IGelatoOps internal immutable GELATO_OPS;
+    address payable internal immutable GELATO_OPS;
     address internal investmentPoolImplementation;
 
     constructor(
         ISuperfluid _host,
-        IGelatoOps _gelatoOps,
+        address payable _gelatoOps,
         address _implementationContract
     ) {
         if (address(_host) == address(0)) revert InvestmentPoolFactory__HostAddressIsZero();
 
-        if (address(_gelatoOps) == address(0))
-            revert InvestmentPoolFactory__GelatoOpsAddressIsZero();
+        if (_gelatoOps == address(0)) revert InvestmentPoolFactory__GelatoOpsAddressIsZero();
 
         if (_implementationContract == address(0))
             revert InvestmentPoolFactory__ImplementationContractAddressIsZero();
@@ -166,7 +164,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
 
         invPool.initialize{value: msg.value}(
             HOST,
-            GELATO_OPS,
+            getGelatoOps(),
             projectDetails,
             multipliers,
             getInvestmentWithdrawPercentageFee(),
@@ -267,8 +265,8 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         return address(HOST);
     }
 
-    function getGelatoOps() public view returns (address) {
-        return address(GELATO_OPS);
+    function getGelatoOps() public view returns (address payable) {
+        return GELATO_OPS;
     }
 
     function getInvestmentPoolImplementation() public view returns (address) {

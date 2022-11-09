@@ -3,10 +3,10 @@
 
 pragma solidity ^0.8.9;
 
-import {IGelatoOps} from "../interfaces/IGelatoOps.sol";
+import "../interfaces/GelatoTypes.sol";
 import {IInvestmentPool} from "../interfaces/IInvestmentPool.sol";
 
-contract GelatoOpsMock is IGelatoOps {
+contract GelatoOpsMock is IOps, IOpsProxyFactory {
     IInvestmentPool public executor;
     string public gelatoTaskInText;
 
@@ -15,20 +15,20 @@ contract GelatoOpsMock is IGelatoOps {
 
     receive() external payable {}
 
-    function createTaskNoPrepayment(
+    function createTask(
         address _execAddress,
-        bytes4, /*_execSelector*/
-        address, /*_resolverAddress*/
-        bytes calldata, /*_resolverData*/
-        address /*_feeToken*/
+        bytes calldata, /*execDataOrSelector*/
+        ModuleData calldata, /*moduleData*/
+        address /*feeToken*/
     ) public returns (bytes32 task) {
         executor = IInvestmentPool(_execAddress);
-        emit RegisterGelatoTask();
         gelatoTaskInText = "abc";
         task = bytes32("abc");
+
+        emit RegisterGelatoTask();
     }
 
-    function getFeeDetails() public pure returns (uint256 fee, address feeToken) {
+    function getFeeDetails() public pure returns (uint256, address) {
         return (0.01 ether, 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
     }
 
@@ -44,5 +44,12 @@ contract GelatoOpsMock is IGelatoOps {
         bytes32 /*_taskId*/
     ) external {
         emit CancelGelatoTask();
+    }
+
+    // For simplicity this contract is returned because we won't deploy any proxy
+    function getProxyOf(
+        address /*account*/
+    ) public view returns (address, bool) {
+        return (address(this), false);
     }
 }
