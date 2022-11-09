@@ -21,10 +21,6 @@ error InvestmentPoolFactory__HostAddressIsZero();
 error InvestmentPoolFactory__GelatoOpsAddressIsZero();
 error InvestmentPoolFactory__AcceptedTokenAddressIsZero();
 error InvestmentPoolFactory__CreatorAddressIsZero();
-error InvestmentPoolFactory__SeedFundingLimitIsGreaterThanSoftCap(
-    uint96 seedFundingLimit,
-    uint96 softCap
-);
 error InvestmentPoolFactory__SoftCapIsGreaterThanHardCap(uint96 softCap, uint96 hardCap);
 error InvestmentPoolFactory__FundraiserStartIsInPast();
 error InvestmentPoolFactory__FundraiserStartTimeIsGreaterThanEndTime();
@@ -63,11 +59,10 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     uint256 internal FUNDRAISER_MAX_DURATION = 90 days;
     uint256 internal INVESTMENT_WITHDRAW_FEE = 1; // 1% out of 100%
 
-    /// * @notice Multiplier for seed funding is 2,5; private - 1,9; public - 1.
+    /// * @notice Multiplier for soft cap - 1,9 | hard cap - 1.
     /// * @dev Multiplier is firstly multiplied by 10 to avoid decimal places rounding in solidity
-    uint256 internal SEED_FUNDING_MULTIPLIER = 25;
-    uint256 internal PRIVATE_FUNDING_MULTIPLIER = 19;
-    uint256 internal PUBLIC_FUNDING_MULTIPLIER = 10;
+    uint256 internal SOFT_CAP_MULTIPLIER = 19;
+    uint256 internal HARD_CAP_MULTIPLIER = 10;
 
     /**
      * @notice Amount that will be used to cover transaction fee for gelato automation
@@ -113,7 +108,6 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
 
     function createInvestmentPool(
         ISuperToken _acceptedToken,
-        uint96 _seedFundingLimit,
         uint96 _softCap,
         uint96 _hardCap,
         uint48 _fundraiserStartAt,
@@ -130,7 +124,6 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
             HOST,
             _acceptedToken,
             _msgSender(),
-            _seedFundingLimit,
             _softCap,
             _hardCap,
             _fundraiserStartAt,
@@ -148,7 +141,6 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         IInvestmentPool.ProjectInfo memory projectDetails = IInvestmentPool.ProjectInfo(
             _acceptedToken,
             _msgSender(),
-            _seedFundingLimit,
             _softCap,
             _hardCap,
             _fundraiserStartAt,
@@ -158,11 +150,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         );
 
         IInvestmentPool.VotingTokensMultipliers memory multipliers = IInvestmentPool
-            .VotingTokensMultipliers(
-                getSeedFundingMultiplier(),
-                getPrivateFundingMultiplier(),
-                getPublicFundingMultiplier()
-            );
+            .VotingTokensMultipliers(getSoftCapMultiplier(), getHardCapMultiplier());
 
         invPool.initialize{value: msg.value}(
             HOST,
@@ -243,16 +231,12 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         return INVESTMENT_WITHDRAW_FEE;
     }
 
-    function getSeedFundingMultiplier() public view returns (uint256) {
-        return SEED_FUNDING_MULTIPLIER;
+    function getSoftCapMultiplier() public view returns (uint256) {
+        return SOFT_CAP_MULTIPLIER;
     }
 
-    function getPrivateFundingMultiplier() public view returns (uint256) {
-        return PRIVATE_FUNDING_MULTIPLIER;
-    }
-
-    function getPublicFundingMultiplier() public view returns (uint256) {
-        return PUBLIC_FUNDING_MULTIPLIER;
+    function getHardCapMultiplier() public view returns (uint256) {
+        return HARD_CAP_MULTIPLIER;
     }
 
     function getGelatoFeeAllocationForProject() public view returns (uint256) {
@@ -286,7 +270,6 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         ISuperfluid, /*_host*/
         ISuperToken _superToken,
         address _creator,
-        uint96 _seedFundingLimit,
         uint96 _softCap,
         uint96 _hardCap,
         uint96 _fundraiserStartAt,
@@ -300,12 +283,6 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
             revert InvestmentPoolFactory__AcceptedTokenAddressIsZero();
 
         if (address(_creator) == address(0)) revert InvestmentPoolFactory__CreatorAddressIsZero();
-
-        if (_seedFundingLimit >= _softCap)
-            revert InvestmentPoolFactory__SeedFundingLimitIsGreaterThanSoftCap(
-                _seedFundingLimit,
-                _softCap
-            );
 
         if (_softCap > _hardCap)
             revert InvestmentPoolFactory__SoftCapIsGreaterThanHardCap(_softCap, _hardCap);

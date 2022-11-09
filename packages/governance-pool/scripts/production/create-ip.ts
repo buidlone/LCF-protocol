@@ -21,7 +21,6 @@ async function main() {
     const deployer = accounts[0];
 
     const wrappedEther = "0x5943f705abb6834cad767e6e4bb258bc48d9c947";
-    const seedFundingLimit: BigNumber = ethers.utils.parseEther("500");
     const softCap: BigNumber = ethers.utils.parseEther("1500");
     const hardCap: BigNumber = ethers.utils.parseEther("5000");
     const gelatoFeeAllocation: BigNumber = ethers.utils.parseEther("0.1");
@@ -36,7 +35,6 @@ async function main() {
 
     const creationTx = await investmentPoolFactory.connect(deployer).createInvestmentPool(
         wrappedEther,
-        seedFundingLimit,
         softCap,
         hardCap,
         campaignStartDate,

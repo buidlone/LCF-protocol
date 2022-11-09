@@ -46,7 +46,6 @@ let governancePoolMock: GovernancePoolMockForIntegration;
 
 let snapshotId: string;
 
-let seedFundingLimit: BigNumber;
 let softCap: BigNumber;
 let hardCap: BigNumber;
 let milestoneStartDate: BigNumber;
@@ -85,9 +84,8 @@ let successfullyEndedStateValue: BigNumber;
 let unknownStateValue: BigNumber;
 
 // Multipliers
-let seedFundingMultiplier: BigNumber;
-let privateFundingMultiplier: BigNumber;
-let publicFundingMultiplier: BigNumber;
+let softCapMultiplier: BigNumber;
+let hardCapMultiplier: BigNumber;
 
 const percentToIpBigNumber = (percent: number): BigNumber => {
     return percentageDivider.mul(percent).div(100);
@@ -158,9 +156,8 @@ const defineEthAddress = async (investmentPool: InvestmentPoolMock) => {
 };
 
 const defineMultipliers = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
-    seedFundingMultiplier = await investmentPoolFactory.getSeedFundingMultiplier();
-    privateFundingMultiplier = await investmentPoolFactory.getPrivateFundingMultiplier();
-    publicFundingMultiplier = await investmentPoolFactory.getPublicFundingMultiplier();
+    softCapMultiplier = await investmentPoolFactory.getSoftCapMultiplier();
+    hardCapMultiplier = await investmentPoolFactory.getHardCapMultiplier();
 };
 
 const deployGovernancePoolMock = async () => {
@@ -175,7 +172,6 @@ const deployGovernancePoolMock = async () => {
 const createInvestmentWithTwoMilestones = async (feeAmount: BigNumber = gelatoFeeAllocation) => {
     hardCap = ethers.utils.parseEther("15000");
     softCap = ethers.utils.parseEther("1500");
-    seedFundingLimit = ethers.utils.parseEther("500");
     milestoneStartDate = dateToSeconds("2100/09/01") as BigNumber;
     milestoneEndDate = dateToSeconds("2100/10/01") as BigNumber;
     milestoneStartDate2 = dateToSeconds("2100/10/01") as BigNumber;
@@ -185,7 +181,6 @@ const createInvestmentWithTwoMilestones = async (feeAmount: BigNumber = gelatoFe
 
     creationRes = await investmentPoolFactory.connect(creator).createInvestmentPool(
         fUSDTx.address,
-        seedFundingLimit,
         softCap,
         hardCap,
         campaignStartDate,
@@ -1222,58 +1217,6 @@ describe("Investment Pool", async () => {
             });
 
             describe("function -> _getVotingTokensAmountToMint()", () => {
-                it("[IP][3.2.14] Should correctly calculate amount to mint during seed funding with amount < seed fund limit", async () => {
-                    const investedAmount: BigNumber = ethers.utils.parseEther("120");
-                    const tokensToMint: BigNumber = await investment.getVotingTokensAmountToMint(
-                        investedAmount
-                    );
-
-                    assert.equal(
-                        tokensToMint.toString(),
-                        investedAmount.mul(seedFundingMultiplier).toString()
-                    );
-                });
-
-                it("[IP][3.2.15] Should correctly calculate amount to mint during seed funding with amount < soft cap AND amount > seed fund limit", async () => {
-                    const investedAmount: BigNumber = ethers.utils.parseEther("1200");
-                    const tokensToMint: BigNumber = await investment.getVotingTokensAmountToMint(
-                        investedAmount
-                    );
-
-                    const tokensInSeedFunding = seedFundingLimit.mul(seedFundingMultiplier);
-                    const tokensInPrivateFunding = investedAmount
-                        .sub(seedFundingLimit)
-                        .mul(privateFundingMultiplier);
-
-                    assert.equal(
-                        tokensToMint.toString(),
-                        tokensInSeedFunding.add(tokensInPrivateFunding).toString()
-                    );
-                });
-
-                it("[IP][3.2.16] Should correctly calculate amount to mint during seed funding with amount < hard cap AND amount > soft cap", async () => {
-                    const investedAmount: BigNumber = ethers.utils.parseEther("12000");
-                    const tokensToMint: BigNumber = await investment.getVotingTokensAmountToMint(
-                        investedAmount
-                    );
-
-                    const tokensInSeedFunding = seedFundingLimit.mul(seedFundingMultiplier);
-                    const tokensInPrivateFunding = softCap
-                        .sub(seedFundingLimit)
-                        .mul(privateFundingMultiplier);
-                    const tokensInPublicFunding = investedAmount
-                        .sub(softCap)
-                        .mul(publicFundingMultiplier);
-
-                    assert.equal(
-                        tokensToMint.toString(),
-                        tokensInSeedFunding
-                            .add(tokensInPrivateFunding)
-                            .add(tokensInPublicFunding)
-                            .toString()
-                    );
-                });
-
                 it("[IP][3.2.17] Should correctly calculate amount to mint during private funding with amount < soft cap", async () => {
                     const investedAmountA: BigNumber = ethers.utils.parseEther("800");
                     const investedAmountB: BigNumber = ethers.utils.parseEther("400");
@@ -1291,7 +1234,7 @@ describe("Investment Pool", async () => {
 
                     assert.equal(
                         tokensToMint.toString(),
-                        investedAmountB.mul(privateFundingMultiplier).toString()
+                        investedAmountB.mul(softCapMultiplier).toString()
                     );
                 });
 
@@ -1312,10 +1255,10 @@ describe("Investment Pool", async () => {
 
                     const tokensInPrivateFunding = softCap
                         .sub(investedAmountA)
-                        .mul(privateFundingMultiplier);
+                        .mul(softCapMultiplier);
                     const tokensInPublicFunding = investedAmountB
                         .sub(softCap.sub(investedAmountA))
-                        .mul(publicFundingMultiplier);
+                        .mul(hardCapMultiplier);
 
                     assert.equal(
                         tokensToMint.toString(),
@@ -1339,7 +1282,7 @@ describe("Investment Pool", async () => {
                         investedAmountB
                     );
 
-                    const tokensInPublicFunding = investedAmountB.mul(publicFundingMultiplier);
+                    const tokensInPublicFunding = investedAmountB.mul(hardCapMultiplier);
 
                     assert.equal(tokensToMint.toString(), tokensInPublicFunding.toString());
                 });
@@ -4937,6 +4880,18 @@ describe("Investment Pool", async () => {
 
                     assert.equal(investmentsList[0].toString(), investedAmount.toString());
                     assert.equal(investmentsList[1].toString(), "0");
+                });
+            });
+
+            describe("function -> getVotingTokensSupplyCap", () => {
+                it("[IP][15.1.3] Should return empty list if no investments were made", async () => {
+                    const onlyHardCapAmount = hardCap.sub(softCap);
+                    const softCapTokenAllocation = softCap.mul(softCapMultiplier);
+                    const hardCapTokenAllocation = onlyHardCapAmount.mul(hardCapMultiplier);
+                    const expectedSupplyCap = softCapTokenAllocation.add(hardCapTokenAllocation);
+
+                    const votingTokensSupplyCap = await investment.getVotingTokensSupplyCap();
+                    assert.equal(votingTokensSupplyCap.toString(), expectedSupplyCap.toString());
                 });
             });
         });
