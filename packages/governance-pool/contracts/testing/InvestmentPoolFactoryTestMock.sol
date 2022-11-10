@@ -5,12 +5,11 @@ pragma solidity ^0.8.9;
 
 import {ISuperfluid} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {InvestmentPoolFactory} from "@buidlone/investment-pool/contracts/InvestmentPoolFactory.sol";
-import {IGelatoOps} from "@buidlone/investment-pool/contracts/interfaces/IGelatoOps.sol";
 
 contract InvestmentPoolFactoryTestMock is InvestmentPoolFactory {
     constructor(
         ISuperfluid _host,
-        IGelatoOps _gelatoOps,
+        address payable _gelatoOps,
         address _implementationContract
     ) InvestmentPoolFactory(_host, _gelatoOps, _implementationContract) {
         TERMINATION_WINDOW = 30 minutes;
