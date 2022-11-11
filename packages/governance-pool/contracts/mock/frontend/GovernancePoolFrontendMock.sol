@@ -25,6 +25,7 @@ error GovernancePool__ThresholdNumberIsGreaterThan100();
 error GovernancePool__InvestmentPoolStateNotAllowed(uint256 stateValue);
 error GovernancePool__BurnAmountIsLargerThanBalance();
 error GovernancePool__CannotTransferMoreThanUnlockedTokens();
+error GovernancePool__NoVotingTokensMintedDuringCurrentMilestone();
 
 /// @title Governance Pool contract.
 contract GovernancePoolFrontendMock is ERC1155Holder, Context, IGovernancePool {
@@ -48,6 +49,8 @@ contract GovernancePoolFrontendMock is ERC1155Holder, Context, IGovernancePool {
     mapping(address => mapping(uint256 => uint256)) internal votesAmount;
     /// @notice mapping from investment pool id => total votes amount against the project
     mapping(uint256 => uint256) internal totalVotesAmount;
+    /// @notice mapping from investor address => investment pool id => milestone id => amount of voting tokens minted
+    mapping(address => mapping(uint256 => mapping(uint256 => uint256))) internal tokensMinted;
     /// @notice mapping from investment pool id => total voting tokens supply
     mapping(uint256 => uint256) internal tokensTotalSupply;
     /// @notice mapping from investment pool id => investor address => tokens balance
@@ -323,37 +326,27 @@ contract GovernancePoolFrontendMock is ERC1155Holder, Context, IGovernancePool {
      *  @dev Reverts if function is called not by investment pool, if burn amount is zero, if burn amount is larger than balance.
      *  @param _investor investors, who wants to unpledge and burn votes.
      *  @param _milestoneId milestone, in which investor invested previously.
-     *  @param _burnAmount amount to burn.
      */
-    function burnVotes(
-        uint256 _milestoneId,
-        address _investor,
-        uint256 _burnAmount
-    )
+    function burnVotes(uint256 _milestoneId, address _investor)
         external
-        notZeroAmount(_burnAmount)
         allowedInvestmentPoolStates(
             _msgSender(),
             getFundraiserOngoingStateValue() | getAnyMilestoneOngoingStateValue()
         )
     {
         uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
-        uint256 balance = memActiveTokens[_investor][investmentPoolId][_milestoneId];
+        uint256 burnAmount = getTokensMinted(_investor, investmentPoolId, _milestoneId);
 
-        if (_burnAmount > balance) revert GovernancePool__BurnAmountIsLargerThanBalance();
+        if (burnAmount == 0) revert GovernancePool__NoVotingTokensMintedDuringCurrentMilestone();
 
-        if (_burnAmount == balance) {
-            // We can pop the last milestone if investor wants to burn all of the milestone tokens
-            // Unpledge function can only be executed with current milestone that is why we know that current milestone is the last item
-            milestonesIdsInWhichInvestorInvested[_investor][investmentPoolId].pop();
-        }
-
-        memActiveTokens[_investor][investmentPoolId][_milestoneId] -= _burnAmount;
-        tokensTotalSupply[investmentPoolId] -= _burnAmount;
-        tokensBalance[investmentPoolId][_investor] -= _burnAmount;
+        // We can pop the last milestone if investor wants to burn all of the milestone tokens
+        // Unpledge function can only be executed with current milestone that is why we know that current milestone is the last item
+        milestonesIdsInWhichInvestorInvested[_investor][investmentPoolId].pop();
+        memActiveTokens[_investor][investmentPoolId][_milestoneId] = 0;
+        tokensMinted[_investor][investmentPoolId][_milestoneId] = 0;
+        tokensTotalSupply[investmentPoolId] -= burnAmount;
+        tokensBalance[investmentPoolId][_investor] -= burnAmount;
     }
-
-
 
     /** @notice transfer voting tokens (tokens can be locked too) with the ownership to it
      *  @param _investmentPool investment pool of token
@@ -613,6 +606,14 @@ contract GovernancePoolFrontendMock is ERC1155Holder, Context, IGovernancePool {
         returns (uint256[] memory)
     {
         return milestonesIdsInWhichInvestorInvested[_investor][_investmentPoolId];
+    }
+
+    function getTokensMinted(
+        address _investor,
+        uint256 _investmentPoolId,
+        uint256 _milestoneId
+    ) public view returns (uint256) {
+        return tokensMinted[_investor][_investmentPoolId][_milestoneId];
     }
 
     function _getNow() internal view virtual returns (uint256) {

@@ -16,11 +16,7 @@ interface IGovernancePool {
 
     function retractVotes(address _investmentPool, uint256 _retractAmount) external;
 
-    function burnVotes(
-        uint256 _milestoneId,
-        address _investor,
-        uint256 _burnAmount
-    ) external;
+    function burnVotes(uint256 _milestoneId, address _investor) external;
 
     function doesInvestmentPoolExist(uint256 _investmentPoolId) external view returns (bool);
 
@@ -76,4 +72,10 @@ interface IGovernancePool {
         external
         view
         returns (uint256[] memory);
+
+    function getTokensMinted(
+        address _investor,
+        uint256 _investmentPoolId,
+        uint256 _milestoneId
+    ) external view returns (uint256);
 }
