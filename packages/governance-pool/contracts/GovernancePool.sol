@@ -325,7 +325,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         address _investmentPool,
         address _recipient,
         uint256 _amount
-    ) external notZeroAmount(_amount) {
+    ) external allowedInvestmentPoolStates(_investmentPool, getAnyMilestoneOngoingStateValue()) {
+        if (_amount == 0) revert GovernancePool__AmountIsZero();
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         uint256 currentMilestoneId = IInvestmentPool(_investmentPool).getCurrentMilestoneId();
         uint256 votesLeft = getUnusedVotesAmount(_investmentPool);
@@ -363,6 +364,36 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
             _amount;
 
         VOTING_TOKEN.safeTransferFrom(_msgSender(), _recipient, investmentPoolId, _amount, "");
+    }
+
+    function permanentlyLockVotes(address _investmentPool, uint256 _votes)
+        external
+        notZeroAmount(_votes)
+        allowedInvestmentPoolStates(_investmentPool, getAnyMilestoneOngoingStateValue())
+    {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        uint256 currentMilestoneId = IInvestmentPool(_investmentPool).getCurrentMilestoneId();
+        uint256 votesLeft = getUnusedVotesAmount(_investmentPool);
+
+        if (_votes > votesLeft) revert GovernancePool__CannotTransferMoreThanUnlockedTokens();
+
+        uint256 senderActiveVotingTokensBalance = getActiveVotingTokensBalance(
+            _investmentPool,
+            currentMilestoneId,
+            _msgSender()
+        );
+
+        if (memActiveTokens[_msgSender()][investmentPoolId][currentMilestoneId] == 0) {
+            milestonesIdsInWhichInvestorInvested[_msgSender()][investmentPoolId].push(
+                currentMilestoneId
+            );
+        }
+
+        memActiveTokens[_msgSender()][investmentPoolId][currentMilestoneId] =
+            senderActiveVotingTokensBalance -
+            _votes;
+
+        VOTING_TOKEN.safeTransferFrom(_msgSender(), address(this), investmentPoolId, _votes, "");
     }
 
     /** PUBLIC FUNCTIONS */

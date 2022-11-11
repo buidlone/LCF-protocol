@@ -51,6 +51,8 @@ interface IGovernancePool {
         uint256 _amount
     ) external;
 
+    function permanentlyLockVotes(address _investmentPool, uint256 _votes) external;
+
     function getActiveVotingTokensBalance(
         address _investmentPool,
         uint256 _milestoneId,

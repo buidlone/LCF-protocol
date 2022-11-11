@@ -1216,7 +1216,7 @@ describe("Investment Pool", async () => {
                 assert.isTrue(softCapRaised);
             });
 
-            describe("function -> _getVotingTokensAmountToMint()", () => {
+            describe("function -> getVotingTokensAmountToMint()", () => {
                 it("[IP][3.2.17] Should correctly calculate amount to mint during private funding with amount < soft cap", async () => {
                     const investedAmountA: BigNumber = ethers.utils.parseEther("800");
                     const investedAmountB: BigNumber = ethers.utils.parseEther("400");

@@ -353,8 +353,6 @@ contract GovernancePoolFrontendMock is ERC1155Holder, Context, IGovernancePool {
         tokensBalance[investmentPoolId][_investor] -= _burnAmount;
     }
 
-
-
     /** @notice transfer voting tokens (tokens can be locked too) with the ownership to it
      *  @param _investmentPool investment pool of token
      *  @param _recipient transfer recipients
@@ -364,7 +362,11 @@ contract GovernancePoolFrontendMock is ERC1155Holder, Context, IGovernancePool {
         address _investmentPool,
         address _recipient,
         uint256 _amount
-    ) external notZeroAmount(_amount) {
+    )
+        external
+        notZeroAmount(_amount)
+        allowedInvestmentPoolStates(_investmentPool, getAnyMilestoneOngoingStateValue())
+    {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         uint256 currentMilestoneId = IInvestmentPool(_investmentPool).getCurrentMilestoneId();
         uint256 votesLeft = getUnusedVotesAmount(_investmentPool);
@@ -403,6 +405,37 @@ contract GovernancePoolFrontendMock is ERC1155Holder, Context, IGovernancePool {
 
         tokensBalance[investmentPoolId][_msgSender()] -= _amount;
         tokensBalance[investmentPoolId][_recipient] += _amount;
+    }
+
+    function permanentlyLockVotes(address _investmentPool, uint256 _votes)
+        external
+        notZeroAmount(_votes)
+        allowedInvestmentPoolStates(_investmentPool, getAnyMilestoneOngoingStateValue())
+    {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        uint256 currentMilestoneId = IInvestmentPool(_investmentPool).getCurrentMilestoneId();
+        uint256 votesLeft = getUnusedVotesAmount(_investmentPool);
+
+        if (_votes > votesLeft) revert GovernancePool__CannotTransferMoreThanUnlockedTokens();
+
+        uint256 senderActiveVotingTokensBalance = getActiveVotingTokensBalance(
+            _investmentPool,
+            currentMilestoneId,
+            _msgSender()
+        );
+
+        if (memActiveTokens[_msgSender()][investmentPoolId][currentMilestoneId] == 0) {
+            milestonesIdsInWhichInvestorInvested[_msgSender()][investmentPoolId].push(
+                currentMilestoneId
+            );
+        }
+
+        memActiveTokens[_msgSender()][investmentPoolId][currentMilestoneId] =
+            senderActiveVotingTokensBalance -
+            _votes;
+
+        tokensBalance[investmentPoolId][_msgSender()] -= _votes;
+        tokensBalance[investmentPoolId][address(this)] += _votes;
     }
 
     /** @notice function returns the amount, which is the max voting tokens he can still use for voting against the project.

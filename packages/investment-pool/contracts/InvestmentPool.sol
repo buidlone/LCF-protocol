@@ -327,7 +327,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, OwnableUp
         )
     {
         uint256 untilHardcap = getHardCap() - getTotalInvestedAmount();
-        uint256 votingTokensToMint = _getVotingTokensAmountToMint(_amount);
+        uint256 votingTokensToMint = getVotingTokensAmountToMint(_amount);
 
         if (untilHardcap < _amount) {
             // Edge case, trying to invest, when hard cap is reached or almost reached
@@ -1080,7 +1080,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, OwnableUp
     /**
      * @notice Get the amount of voting tokens to mint. It is determined by the period (until soft cap or hard cap)
      */
-    function _getVotingTokensAmountToMint(uint256 _amount) internal view returns (uint256) {
+    function getVotingTokensAmountToMint(uint256 _amount) public view returns (uint256) {
         if (getTotalInvestedAmount() <= getSoftCap()) {
             // Private funding
             if (getTotalInvestedAmount() + _amount <= getSoftCap()) {
