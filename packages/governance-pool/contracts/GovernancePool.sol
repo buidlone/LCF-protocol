@@ -23,8 +23,8 @@ error GovernancePool__TotalSupplyIsZero();
 error GovernancePool__TotalSupplyIsSmallerThanVotesAgainst(uint256 totalSupply, uint256 votes);
 error GovernancePool__ThresholdNumberIsGreaterThan100();
 error GovernancePool__InvestmentPoolStateNotAllowed(uint256 stateValue);
-error GovernancePool__BurnAmountIsLargerThanBalance();
 error GovernancePool__CannotTransferMoreThanUnlockedTokens();
+error GovernancePool__NoVotingTokensMintedDuringCurrentMilestone();
 
 /// @title Governance Pool contract.
 contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
@@ -48,6 +48,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     mapping(address => mapping(uint256 => uint256)) internal votesAmount;
     /// @notice mapping from investment pool id => total votes amount against the project
     mapping(uint256 => uint256) internal totalVotesAmount;
+    /// @notice mapping from investor address => investment pool id => milestone id => amount of voting tokens minted
+    mapping(address => mapping(uint256 => mapping(uint256 => uint256))) internal tokensMinted;
 
     /**
      * @notice It's a memoization mapping from investor address => investment pool id => milestone id => amount of voting tokens
@@ -197,6 +199,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
                 _amount;
         }
 
+        tokensMinted[_investor][investmentPoolId][_milestoneId] += _amount;
+
         // Tokens will never be minted for the milestones that already passed because this is called only by IP in invest function
         VOTING_TOKEN.mint(_investor, investmentPoolId, _amount, "");
     }
@@ -287,33 +291,26 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @dev Reverts if function is called not by investment pool, if burn amount is zero, if burn amount is larger than balance.
      *  @param _investor investors, who wants to unpledge and burn votes.
      *  @param _milestoneId milestone, in which investor invested previously.
-     *  @param _burnAmount amount to burn.
      */
-    function burnVotes(
-        uint256 _milestoneId,
-        address _investor,
-        uint256 _burnAmount
-    )
+    function burnVotes(uint256 _milestoneId, address _investor)
         external
-        notZeroAmount(_burnAmount)
         allowedInvestmentPoolStates(
             _msgSender(),
             getFundraiserOngoingStateValue() | getAnyMilestoneOngoingStateValue()
         )
     {
         uint256 investmentPoolId = getInvestmentPoolId(_msgSender());
-        uint256 tokensBalance = memActiveTokens[_investor][investmentPoolId][_milestoneId];
+        uint256 burnAmount = getTokensMinted(_investor, investmentPoolId, _milestoneId);
 
-        if (_burnAmount > tokensBalance) revert GovernancePool__BurnAmountIsLargerThanBalance();
+        if (burnAmount == 0) revert GovernancePool__NoVotingTokensMintedDuringCurrentMilestone();
 
-        if (_burnAmount == tokensBalance) {
-            // We can pop the last milestone if investor wants to burn all of the milestone tokens
-            // Unpledge function can only be executed with current milestone that is why we know that current milestone is the last item
-            milestonesIdsInWhichInvestorInvested[_investor][investmentPoolId].pop();
-        }
+        // We can pop the last milestone if investor wants to burn all of the milestone tokens
+        // Unpledge function can only be executed with current milestone that is why we know that current milestone is the last item
+        milestonesIdsInWhichInvestorInvested[_investor][investmentPoolId].pop();
+        memActiveTokens[_investor][investmentPoolId][_milestoneId] = 0;
+        tokensMinted[_investor][investmentPoolId][_milestoneId] = 0;
 
-        memActiveTokens[_investor][investmentPoolId][_milestoneId] -= _burnAmount;
-        VOTING_TOKEN.burn(_investor, investmentPoolId, _burnAmount);
+        VOTING_TOKEN.burn(_investor, investmentPoolId, burnAmount);
     }
 
     /** @notice transfer voting tokens (tokens can be locked too) with the ownership to it
@@ -606,6 +603,14 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         returns (uint256[] memory)
     {
         return milestonesIdsInWhichInvestorInvested[_investor][_investmentPoolId];
+    }
+
+    function getTokensMinted(
+        address _investor,
+        uint256 _investmentPoolId,
+        uint256 _milestoneId
+    ) public view returns (uint256) {
+        return tokensMinted[_investor][_investmentPoolId][_milestoneId];
     }
 
     /** INTERNAL FUNCTIONS */

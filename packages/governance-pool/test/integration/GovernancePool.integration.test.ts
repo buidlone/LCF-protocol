@@ -562,14 +562,12 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
 
             let timeStamp = dateToSeconds("2100/07/15");
             await investment.setTimestamp(timeStamp);
-            await governancePool.setTimestamp(timeStamp);
 
             // Approve and invest money
             await investMoney(fUSDTx, investment, investorA, investedAmount);
 
             timeStamp = dateToSeconds("2100/09/15");
             await investment.setTimestamp(timeStamp);
-            await governancePool.setTimestamp(timeStamp);
 
             const softCapMultiplier = await investment.getSoftCapMultiplier();
             const votesAgainst = softCapMultiplier.mul(investedAmount).mul(2).div(3);
@@ -580,6 +578,86 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             await expect(
                 governancePool.connect(investorA).voteAgainst(investment.address, votesAgainst)
             ).to.emit(investment, "Cancel");
+        });
+    });
+
+    describe("5. IP request to burn voting tokens (in GP on unpledge)", () => {
+        it("[IP-GP][5.1] Should call governance pool and burn voting tokens from total supply", async () => {
+            // Create investment pool implementation contract
+            const investmentPoolDep = await ethers.getContractFactory(
+                "InvestmentPoolMock",
+                deployer
+            );
+            investment = await investmentPoolDep.deploy();
+            await investment.deployed();
+
+            // Create investment pool factory contract
+            const investmentPoolDepFactory = await ethers.getContractFactory(
+                "InvestmentPoolFactoryMock",
+                deployer
+            );
+            investmentPoolFactory = await investmentPoolDepFactory.deploy(
+                sf.settings.config.hostAddress,
+                gelatoOpsMock.address,
+                investment.address
+            );
+            await investmentPoolFactory.deployed();
+
+            // Deploy voting token
+            const votingTokensFactory = await ethers.getContractFactory("VotingToken", deployer);
+            votingToken = await votingTokensFactory.deploy();
+            await votingToken.deployed();
+
+            // Governance Pool deployment
+            const governancePoolFactory = await ethers.getContractFactory(
+                "GovernancePoolMock",
+                deployer
+            );
+            governancePool = await governancePoolFactory.deploy(
+                votingToken.address,
+                investmentPoolFactory.address,
+                51, // Votes threshold
+                1 // 1% Votes withdraw fee
+            );
+            await governancePool.deployed();
+
+            // Transfer ownership to governance pool
+            await votingToken.transferOwnership(governancePool.address);
+
+            // Assign governance pool to the IPF
+            await investmentPoolFactory
+                .connect(deployer)
+                .setGovernancePool(governancePool.address);
+
+            // Enforce a starting timestamp to avoid time based bugs
+            const time = dateToSeconds("2100/06/01");
+            await investmentPoolFactory.connect(deployer).setTimestamp(time);
+
+            await createInvestmentWithTwoMilestones();
+
+            const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+            let timeStamp = dateToSeconds("2100/07/15");
+            await investment.setTimestamp(timeStamp);
+            await investMoney(fUSDTx, investment, investorB, investedAmount.mul(2));
+
+            timeStamp = dateToSeconds("2100/09/15");
+            await investment.setTimestamp(timeStamp);
+            await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+            // Unpledge functionality
+            await votingToken.connect(investorA).setApprovalForAll(governancePool.address, true);
+            await investment.connect(investorA).unpledge();
+
+            const investmentPoolId = await governancePool.getInvestmentPoolId(investment.address);
+            const totalSupply = await governancePool.getVotingTokensSupply(investment.address);
+            const amountLeft = await governancePool.getTokensMinted(
+                investorB.address,
+                investmentPoolId,
+                0
+            );
+
+            assert.equal(totalSupply.toString(), amountLeft.toString());
         });
     });
 });
