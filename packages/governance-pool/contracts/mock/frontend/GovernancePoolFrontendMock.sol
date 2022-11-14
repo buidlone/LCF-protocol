@@ -52,6 +52,10 @@ contract GovernancePoolFrontendMock is ERC1155Holder, Context, IGovernancePool {
     mapping(uint256 => uint256) internal tokensTotalSupply;
     /// @notice mapping from investment pool id => investor address => tokens balance
     mapping(uint256 => mapping(address => uint256)) internal tokensBalance;
+    /// @notice mapping from investor address => investment pool id => locked amount
+    mapping(address => mapping(uint256 => uint256)) internal lockedAmount;
+    /// @notice mapping from investment pool id => total locked amount
+    mapping(uint256 => uint256) internal totalLockedAmount;
 
     /**
      * @notice It's a memoization mapping from investor address => investment pool id => milestone id => amount of voting tokens
@@ -634,6 +638,18 @@ contract GovernancePoolFrontendMock is ERC1155Holder, Context, IGovernancePool {
         returns (uint256)
     {
         return votesAmount[_investor][_investmentPoolId];
+    }
+
+    function getLockedAmount(address _investor, uint256 _investmentPoolId)
+        public
+        view
+        returns (uint256)
+    {
+        return lockedAmount[_investor][_investmentPoolId];
+    }
+
+    function getTotalLockedAmount(uint256 _investmentPoolId) public view returns (uint256) {
+        return totalLockedAmount[_investmentPoolId];
     }
 
     function getTotalVotesAmount(uint256 _investmentPoolId) public view returns (uint256) {

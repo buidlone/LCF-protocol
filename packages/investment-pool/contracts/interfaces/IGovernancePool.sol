@@ -74,6 +74,13 @@ interface IGovernancePool {
 
     function getTotalVotesAmount(uint256 _investmentPoolId) external view returns (uint256);
 
+    function getLockedAmount(address _investor, uint256 _investmentPoolId)
+        external
+        view
+        returns (uint256);
+
+    function getTotalLockedAmount(uint256 _investmentPoolId) external view returns (uint256);
+
     function getMilestonesIdsInWhichInvestorInvested(address _investor, uint256 _investmentPoolId)
         external
         view

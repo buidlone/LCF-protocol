@@ -2521,6 +2521,76 @@ describe("Governance Pool", async () => {
                     priorSenderActiveBalance.sub(lockAmount).toString()
                 );
             });
+
+            it("[GP][12.1.4] Should update lockedAmount value", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+                const lockAmount = ethers.utils.parseEther("0.4");
+                const investmentPoolId = await governancePool.getInvestmentPoolId(
+                    investmentPoolMock.address
+                );
+
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolMock.address);
+
+                await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
+                await investmentPoolMock.setMilestoneId(1);
+
+                await votingToken
+                    .connect(investorA)
+                    .setApprovalForAll(governancePool.address, true);
+
+                await investmentPoolMock.setProjectState(milestonesOngoingBeforeLastStateValue);
+                await governancePool
+                    .connect(investorA)
+                    .permanentlyLockVotes(investmentPoolMock.address, lockAmount);
+
+                const lockedAmountInContract = await governancePool.getLockedAmount(
+                    investorA.address,
+                    investmentPoolId
+                );
+
+                assert.equal(lockedAmountInContract.toString(), lockAmount.toString());
+            });
+
+            it("[GP][12.1.5] Should update totalLockedAmount value", async () => {
+                const tokensToMint = ethers.utils.parseEther("1");
+                const lockAmount = ethers.utils.parseEther("0.4");
+                const investmentPoolId = await governancePool.getInvestmentPoolId(
+                    investmentPoolMock.address
+                );
+
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolMock.address);
+
+                await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
+                await investmentPoolMock.mintVotingTokens(0, investorB.address, tokensToMint);
+                await investmentPoolMock.setMilestoneId(1);
+
+                await votingToken
+                    .connect(investorA)
+                    .setApprovalForAll(governancePool.address, true);
+                await votingToken
+                    .connect(investorB)
+                    .setApprovalForAll(governancePool.address, true);
+
+                await investmentPoolMock.setProjectState(milestonesOngoingBeforeLastStateValue);
+                await governancePool
+                    .connect(investorA)
+                    .permanentlyLockVotes(investmentPoolMock.address, lockAmount);
+                await governancePool
+                    .connect(investorB)
+                    .permanentlyLockVotes(investmentPoolMock.address, lockAmount);
+
+                const lockedAmountInContract = await governancePool.getTotalLockedAmount(
+                    investmentPoolId
+                );
+
+                assert.equal(lockedAmountInContract.toString(), lockAmount.mul(2).toString());
+            });
         });
 
         describe("12.2 Interactions", () => {
