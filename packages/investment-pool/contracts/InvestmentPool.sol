@@ -37,7 +37,6 @@ error InvestmentPool__AlreadyStreamingForMilestone(uint256 milestone);
 error InvestmentPool__AlreadyPaidForMilestone(uint256 milestone);
 error InvestmentPool__CannotInvestAboveHardCap();
 error InvestmentPool__ZeroAmountProvided();
-error InvestmentPool__AmountIsGreaterThanInvested(uint256 givenAmount, uint256 investedAmount);
 error InvestmentPool__CurrentStateIsNotAllowed(uint256 currentStateByteValue);
 error InvestmentPool__NoSeedAmountDedicated();
 error InvestmentPool__NotInFirstMilestonePeriod();
@@ -353,11 +352,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, OwnableUp
     /**
      * @notice Allows investors to change their mind during the ongoing fundraiser or ongoing milestone.
      * @notice Funds are transfered back if milestone hasn't started yet. Unpledge all at once, or just a specified amount
-     * @param _amount Amount of funds to withdraw.
      */
-    function unpledge(uint256 _amount)
+    function unpledge()
         external
-        notZeroAmount(_amount)
         allowedProjectStates(
             getFundraiserOngoingStateValue() | getMilestonesOngoingBeforeLastStateValue()
         )
@@ -365,28 +362,26 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, OwnableUp
         uint256 unpledgeFromMilestoneId = isFundraiserOngoingNow()
             ? 0
             : getCurrentMilestoneId() + 1;
-
-        uint256 currentInvestedAmount = getInvestedAmount(_msgSender(), unpledgeFromMilestoneId);
-
-        // We only check amount and don't do any checks to see if milestone hasn't started because we are always getting milestone in future
-        if (_amount > currentInvestedAmount)
-            revert InvestmentPool__AmountIsGreaterThanInvested(_amount, currentInvestedAmount);
-
         uint256 investmentCoefficient = memMilestonePortions[unpledgeFromMilestoneId];
+        uint256 amount = getInvestedAmount(_msgSender(), unpledgeFromMilestoneId);
+
+        if (amount == 0) revert InvestmentPool__NoMoneyInvested();
 
         memMilestoneInvestments[unpledgeFromMilestoneId] -=
-            (_amount * getPercentageDivider()) /
+            (amount * getPercentageDivider()) /
             investmentCoefficient;
-        investedAmount[_msgSender()][unpledgeFromMilestoneId] -= _amount;
-        totalInvestedAmount -= _amount;
+        investedAmount[_msgSender()][unpledgeFromMilestoneId] -= amount;
+        totalInvestedAmount -= amount;
 
         // Apply fee for withdrawal during the same period as invested (milestone or fundraiser)
-        uint256 amountToTransfer = (_amount * (100 - getInvestmentWithdrawPercentageFee())) / 100;
+        uint256 amountToTransfer = (amount * (100 - getInvestmentWithdrawPercentageFee())) / 100;
 
         bool successfulTransfer = acceptedToken.transfer(_msgSender(), amountToTransfer);
         if (!successfulTransfer) revert InvestmentPool__SuperTokenTransferFailed();
 
-        emit Unpledge(_msgSender(), _amount);
+        governancePool.burnVotes(unpledgeFromMilestoneId, _msgSender());
+
+        emit Unpledge(_msgSender(), amount);
     }
 
     /**

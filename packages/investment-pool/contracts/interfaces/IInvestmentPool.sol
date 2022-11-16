@@ -59,7 +59,7 @@ interface IInvestmentPool is ISuperApp {
 
     function invest(uint256 _amount, bool _strict) external;
 
-    function unpledge(uint256 _amount) external;
+    function unpledge() external;
 
     function refund() external;
 

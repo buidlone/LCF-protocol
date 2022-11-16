@@ -19,4 +19,6 @@ contract GovernancePoolMockForIntegration {
         address, /*_investor*/
         uint256 /*_amount*/
     ) external pure {}
+
+    function burnVotes(uint256 _milestoneId, address _investor) external {}
 }

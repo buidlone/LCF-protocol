@@ -791,12 +791,8 @@ describe("Governance Pool", async () => {
 
         describe("7.1 Interactions", () => {
             it("[GP][7.1.1] Foreign actor shouldn't be able to burn voting tokens", async () => {
-                const burnAmount: BigNumber = ethers.utils.parseEther("10");
-
                 await expect(
-                    governancePool
-                        .connect(foreignActor)
-                        .burnVotes(0, investorB.address, burnAmount)
+                    governancePool.connect(foreignActor).burnVotes(0, investorB.address)
                 ).to.be.revertedWithCustomError(
                     governancePool,
                     "GovernancePool__InvestmentPoolDoesNotExist"
@@ -805,7 +801,7 @@ describe("Governance Pool", async () => {
 
             it("[GP][7.1.2] Investment pool should be able to burn voting tokens", async () => {
                 const tokensToMint: BigNumber = ethers.utils.parseEther("10");
-                const burnAmount: BigNumber = ethers.utils.parseEther("5");
+
                 await governancePool
                     .connect(investmentPoolFactoryAsUser)
                     .activateInvestmentPool(investmentPoolMock.address);
@@ -816,8 +812,8 @@ describe("Governance Pool", async () => {
                 await votingToken
                     .connect(investorA)
                     .setApprovalForAll(governancePool.address, true);
-                await expect(investmentPoolMock.burnVotes(0, investorA.address, burnAmount)).not.to
-                    .be.reverted;
+                await expect(investmentPoolMock.burnVotes(0, investorA.address)).not.to.be
+                    .reverted;
             });
 
             it("[GP][7.1.3] Shouldn't be able to burn 0 amount", async () => {
@@ -827,38 +823,51 @@ describe("Governance Pool", async () => {
 
                 await investmentPoolMock.setProjectState(anyMilestoneOngoingStateValue);
                 await expect(
-                    investmentPoolMock.burnVotes(0, investorA.address, 0)
-                ).to.be.revertedWithCustomError(governancePool, "GovernancePool__AmountIsZero");
-            });
-
-            it("[GP][7.1.4] Shouldn't be able to burn more than investor's balance", async () => {
-                const tokensToMint: BigNumber = ethers.utils.parseEther("10");
-                const burnAmount: BigNumber = ethers.utils.parseEther("11");
-                const investmentPoolId = await governancePool.getInvestmentPoolId(
-                    investmentPoolMock.address
-                );
-                await governancePool
-                    .connect(investmentPoolFactoryAsUser)
-                    .activateInvestmentPool(investmentPoolMock.address);
-
-                await investmentPoolMock.setProjectState(anyMilestoneOngoingStateValue);
-                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
-
-                await votingToken
-                    .connect(investorA)
-                    .setApprovalForAll(governancePool.address, true);
-
-                await expect(
-                    investmentPoolMock.burnVotes(0, investorA.address, burnAmount)
+                    investmentPoolMock.burnVotes(0, investorA.address)
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__BurnAmountIsLargerThanBalance"
+                    "GovernancePool__NoVotingTokensMintedDuringCurrentMilestone"
                 );
             });
 
-            it("[GP][7.1.5] Shouldn't update milestonesIdsInWhichInvestorInvested mapping if burn amount is less than investor's balance", async () => {
+            it("[GP][7.1.5] Should update tokensMinted mapping", async () => {
                 const tokensToMint: BigNumber = ethers.utils.parseEther("10");
-                const burnAmount: BigNumber = ethers.utils.parseEther("9");
+                const investmentPoolId = await governancePool.getInvestmentPoolId(
+                    investmentPoolMock.address
+                );
+                await governancePool
+                    .connect(investmentPoolFactoryAsUser)
+                    .activateInvestmentPool(investmentPoolMock.address);
+
+                await investmentPoolMock.setProjectState(anyMilestoneOngoingStateValue);
+                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
+
+                const priorTokensMintedAmount = await governancePool.getTokensMinted(
+                    investorA.address,
+                    investmentPoolId,
+                    0
+                );
+
+                await votingToken
+                    .connect(investorA)
+                    .setApprovalForAll(governancePool.address, true);
+                await investmentPoolMock.burnVotes(0, investorA.address);
+
+                const tokensMintedAmount = await governancePool.getTokensMinted(
+                    investorA.address,
+                    investmentPoolId,
+                    0
+                );
+
+                assert.equal(
+                    tokensMintedAmount.toString(),
+                    priorTokensMintedAmount.sub(tokensToMint).toString()
+                );
+                assert.equal(tokensMintedAmount.toString(), "0");
+            });
+
+            it("[GP][7.1.6] Should update milestonesIdsInWhichInvestorInvested mapping", async () => {
+                const tokensToMint: BigNumber = ethers.utils.parseEther("10");
                 const investmentPoolId = await governancePool.getInvestmentPoolId(
                     investmentPoolMock.address
                 );
@@ -878,39 +887,7 @@ describe("Governance Pool", async () => {
                 await votingToken
                     .connect(investorA)
                     .setApprovalForAll(governancePool.address, true);
-                await investmentPoolMock.burnVotes(0, investorA.address, burnAmount);
-
-                const milestonesIdsAfterBurn =
-                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
-                        investorA.address,
-                        investmentPoolId
-                    );
-
-                assert.deepEqual(initialMilestonesIds, milestonesIdsAfterBurn);
-            });
-
-            it("[GP][7.1.6] Should update milestonesIdsInWhichInvestorInvested mapping if burn amount is equal to investor's balance", async () => {
-                const tokensToMint: BigNumber = ethers.utils.parseEther("10");
-                const investmentPoolId = await governancePool.getInvestmentPoolId(
-                    investmentPoolMock.address
-                );
-                await governancePool
-                    .connect(investmentPoolFactoryAsUser)
-                    .activateInvestmentPool(investmentPoolMock.address);
-
-                await investmentPoolMock.setProjectState(anyMilestoneOngoingStateValue);
-                await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
-
-                const initialMilestonesIds =
-                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
-                        investorA.address,
-                        investmentPoolId
-                    );
-
-                await votingToken
-                    .connect(investorA)
-                    .setApprovalForAll(governancePool.address, true);
-                await investmentPoolMock.burnVotes(0, investorA.address, tokensToMint);
+                await investmentPoolMock.burnVotes(0, investorA.address);
 
                 const milestonesIdsAfterBurn =
                     await governancePool.getMilestonesIdsInWhichInvestorInvested(
@@ -924,7 +901,6 @@ describe("Governance Pool", async () => {
 
             it("[GP][7.1.7] Should update memActiveTokens mapping", async () => {
                 const tokensToMint: BigNumber = ethers.utils.parseEther("10");
-                const burnAmount: BigNumber = ethers.utils.parseEther("9");
                 const investmentPoolId = await governancePool.getInvestmentPoolId(
                     investmentPoolMock.address
                 );
@@ -935,29 +911,32 @@ describe("Governance Pool", async () => {
                 await investmentPoolMock.setProjectState(anyMilestoneOngoingStateValue);
                 await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
 
-                const initialMilestonesIds =
-                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
-                        investorA.address,
-                        investmentPoolId
-                    );
-
                 await votingToken
                     .connect(investorA)
                     .setApprovalForAll(governancePool.address, true);
-                await investmentPoolMock.burnVotes(0, investorA.address, burnAmount);
 
-                const memActiveTokens = await governancePool.getMemActiveTokens(
+                const priorActiveTokensBalance = await governancePool.getMemActiveTokens(
+                    investorA.address,
+                    investmentPoolId,
+                    0
+                );
+                await investmentPoolMock.burnVotes(0, investorA.address);
+
+                const activeTokensBalance = await governancePool.getMemActiveTokens(
                     investorA.address,
                     investmentPoolId,
                     0
                 );
 
-                assert.equal(memActiveTokens.toString(), tokensToMint.sub(burnAmount).toString());
+                assert.equal(
+                    activeTokensBalance.toString(),
+                    priorActiveTokensBalance.sub(tokensToMint).toString()
+                );
+                assert.equal(activeTokensBalance.toString(), "0");
             });
 
             it("[GP][7.1.8] Should update tokens balance for investor", async () => {
                 const tokensToMint: BigNumber = ethers.utils.parseEther("10");
-                const burnAmount: BigNumber = ethers.utils.parseEther("9");
                 await governancePool
                     .connect(investmentPoolFactoryAsUser)
                     .activateInvestmentPool(investmentPoolMock.address);
@@ -968,19 +947,18 @@ describe("Governance Pool", async () => {
                 await votingToken
                     .connect(investorA)
                     .setApprovalForAll(governancePool.address, true);
-                await investmentPoolMock.burnVotes(0, investorA.address, burnAmount);
+                await investmentPoolMock.burnVotes(0, investorA.address);
 
                 const tokensBalance = await governancePool.getVotingTokenBalance(
                     investmentPoolMock.address,
                     investorA.address
                 );
 
-                assert.equal(tokensToMint.sub(burnAmount).toString(), tokensBalance.toString());
+                assert.equal(tokensBalance.toString(), "0");
             });
 
             it("[GP][7.1.9] Should update voting token total supply", async () => {
                 const tokensToMint: BigNumber = ethers.utils.parseEther("10");
-                const burnAmount: BigNumber = ethers.utils.parseEther("9");
                 await governancePool
                     .connect(investmentPoolFactoryAsUser)
                     .activateInvestmentPool(investmentPoolMock.address);
@@ -992,21 +970,18 @@ describe("Governance Pool", async () => {
                 await votingToken
                     .connect(investorA)
                     .setApprovalForAll(governancePool.address, true);
-                await investmentPoolMock.burnVotes(0, investorA.address, burnAmount);
+                await investmentPoolMock.burnVotes(0, investorA.address);
 
                 const totalSupply = await governancePool.getVotingTokensSupply(
                     investmentPoolMock.address
                 );
-
-                assert.equal(
-                    totalSupply.toString(),
-                    tokensToMint.mul(2).sub(burnAmount).toString()
-                );
+                
+                assert.equal(totalSupply.toString(), tokensToMint.toString());
             });
 
             it("[GP][7.1.10] Shouldn't be able to burn voting tokens if not approved", async () => {
                 const tokensToMint: BigNumber = ethers.utils.parseEther("10");
-                const burnAmount: BigNumber = ethers.utils.parseEther("9");
+
                 await governancePool
                     .connect(investmentPoolFactoryAsUser)
                     .activateInvestmentPool(investmentPoolMock.address);
@@ -1014,13 +989,13 @@ describe("Governance Pool", async () => {
                 await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
 
                 await expect(
-                    investmentPoolMock.burnVotes(0, investorA.address, burnAmount)
+                    investmentPoolMock.burnVotes(0, investorA.address)
                 ).to.be.revertedWith("ERC1155: caller is not token owner nor approved");
             });
 
             it("[GP][7.1.11] Should be able to burn tokens if milestone is ongoing", async () => {
                 const tokensToMint: BigNumber = ethers.utils.parseEther("10");
-                const burnAmount: BigNumber = ethers.utils.parseEther("9");
+
                 await governancePool
                     .connect(investmentPoolFactoryAsUser)
                     .activateInvestmentPool(investmentPoolMock.address);
@@ -1031,13 +1006,13 @@ describe("Governance Pool", async () => {
                 await votingToken
                     .connect(investorA)
                     .setApprovalForAll(governancePool.address, true);
-                await expect(investmentPoolMock.burnVotes(0, investorA.address, burnAmount)).not.to
-                    .be.reverted;
+                await expect(investmentPoolMock.burnVotes(0, investorA.address)).not.to.be
+                    .reverted;
             });
 
             it("[GP][7.1.12] Should be able to burn tokens if fundraiser is ongoing", async () => {
                 const tokensToMint: BigNumber = ethers.utils.parseEther("10");
-                const burnAmount: BigNumber = ethers.utils.parseEther("9");
+
                 await governancePool
                     .connect(investmentPoolFactoryAsUser)
                     .activateInvestmentPool(investmentPoolMock.address);
@@ -1048,13 +1023,12 @@ describe("Governance Pool", async () => {
                 await votingToken
                     .connect(investorA)
                     .setApprovalForAll(governancePool.address, true);
-                await expect(investmentPoolMock.burnVotes(0, investorA.address, burnAmount)).not.to
-                    .be.reverted;
+                await expect(investmentPoolMock.burnVotes(0, investorA.address)).not.to.be
+                    .reverted;
             });
 
             it("[GP][7.1.13] Shouldn't be able to burn tokens if fundraiser and milestones isn't ongoing", async () => {
                 const tokensToMint: BigNumber = ethers.utils.parseEther("10");
-                const burnAmount: BigNumber = ethers.utils.parseEther("9");
                 await governancePool
                     .connect(investmentPoolFactoryAsUser)
                     .activateInvestmentPool(investmentPoolMock.address);
@@ -1066,7 +1040,7 @@ describe("Governance Pool", async () => {
                 await votingToken
                     .connect(investorA)
                     .setApprovalForAll(governancePool.address, true);
-                await expect(investmentPoolMock.burnVotes(0, investorA.address, burnAmount))
+                await expect(investmentPoolMock.burnVotes(0, investorA.address))
                     .to.be.revertedWithCustomError(
                         governancePool,
                         "GovernancePool__InvestmentPoolStateNotAllowed"

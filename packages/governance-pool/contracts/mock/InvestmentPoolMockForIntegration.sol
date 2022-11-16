@@ -22,12 +22,8 @@ contract InvestmentPoolMockForIntegration {
         governancePool.mintVotingTokens(_milestoneId, _investor, _amount);
     }
 
-    function burnVotes(
-        uint256 _milestoneId,
-        address _investor,
-        uint256 _burnAmount
-    ) public {
-        governancePool.burnVotes(_milestoneId, _investor, _burnAmount);
+    function burnVotes(uint256 _milestoneId, address _investor) public {
+        governancePool.burnVotes(_milestoneId, _investor);
     }
 
     function cancelDuringMilestones() external pure {}

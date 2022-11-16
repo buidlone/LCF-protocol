@@ -1308,11 +1308,12 @@ describe("Investment Pool", async () => {
                 let timeStamp = dateToSeconds("2100/07/15");
                 await investment.setTimestamp(timeStamp);
                 await investMoney(fUSDTx, investment, investorA, investedAmount);
+                await investMoney(fUSDTx, investment, investorB, investedAmount.mul(2));
 
-                await investment.connect(investorA).unpledge(investedAmount.div(2));
+                await investment.connect(investorA).unpledge();
 
                 const currentTotalInvestedAmount = await investment.getTotalInvestedAmount();
-                assert.deepEqual(currentTotalInvestedAmount, investedAmount.div(2));
+                assert.deepEqual(currentTotalInvestedAmount, investedAmount.mul(2));
             });
 
             it("[IP][4.1.2] In fundraising period unpledge should update investedAmount", async () => {
@@ -1323,14 +1324,14 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await investMoney(fUSDTx, investment, investorA, investedAmount);
 
-                await investment.connect(investorA).unpledge(investedAmount.div(2));
+                await investment.connect(investorA).unpledge();
 
                 const currentInvestedAmount = await investment.getInvestedAmount(
                     investorA.address,
                     0
                 );
 
-                assert.deepEqual(currentInvestedAmount, investedAmount.div(2));
+                assert.equal(currentInvestedAmount.toString(), "0");
             });
 
             it("[IP][4.1.3] In fundraising period unpledge should update memMilestoneInvestments", async () => {
@@ -1340,17 +1341,17 @@ describe("Investment Pool", async () => {
                 let timeStamp = dateToSeconds("2100/07/15");
                 await investment.setTimestamp(timeStamp);
                 await investMoney(fUSDTx, investment, investorA, investedAmount);
+                await investMoney(fUSDTx, investment, investorB, investedAmount);
 
-                await investment.connect(investorA).unpledge(investedAmount.div(2));
+                await investment.connect(investorA).unpledge();
 
                 const memMilestoneInvestments = await investment.getMemMilestoneInvestments(0);
 
-                assert.deepEqual(memMilestoneInvestments, investedAmount.div(2));
+                assert.deepEqual(memMilestoneInvestments, investedAmount);
             });
 
             it("[IP][4.1.4] In fundraising period unpledge should update investors and contract balance", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("10");
-                const unpledgeAmount: BigNumber = ethers.utils.parseEther("1");
 
                 const investorPriorBalance = BigNumber.from(
                     await fUSDTx.balanceOf({
@@ -1370,7 +1371,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await investMoney(fUSDTx, investment, investorA, investedAmount);
 
-                await investment.connect(investorA).unpledge(unpledgeAmount);
+                await investment.connect(investorA).unpledge();
 
                 const investorsBalance = BigNumber.from(
                     await fUSDTx.balanceOf({
@@ -1385,18 +1386,12 @@ describe("Investment Pool", async () => {
                     })
                 );
 
-                const feeAmount: BigNumber = unpledgeAmount
+                const feeAmount: BigNumber = investedAmount
                     .mul(investmentWithdrawFee)
                     .div(BigNumber.from(100));
 
-                assert.deepEqual(
-                    investorsBalance,
-                    investorPriorBalance.sub(investedAmount).add(unpledgeAmount).sub(feeAmount)
-                );
-                assert.deepEqual(
-                    contractBalance,
-                    contractPriorBalance.add(investedAmount).sub(unpledgeAmount).add(feeAmount)
-                );
+                assert.deepEqual(investorsBalance, investorPriorBalance.sub(feeAmount));
+                assert.deepEqual(contractBalance, contractPriorBalance.add(feeAmount));
             });
 
             it("[IP][4.1.5] In fundraising period unpledge should emit event with investor and amount args", async () => {
@@ -1407,9 +1402,9 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await investMoney(fUSDTx, investment, investorA, investedAmount);
 
-                await expect(investment.connect(investorA).unpledge(investedAmount.sub(100)))
+                await expect(investment.connect(investorA).unpledge())
                     .to.emit(investment, "Unpledge")
-                    .withArgs(investorA.address, investedAmount.sub(100));
+                    .withArgs(investorA.address, investedAmount);
             });
 
             it("[IP][4.1.6] In milestone 0 period unpledge should update memMilestoneInvestments", async () => {
@@ -1421,19 +1416,23 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await investMoney(fUSDTx, investment, investorA, investedAmount);
 
+                const priorMemMilestoneInvestments = await investment.getMemMilestoneInvestments(
+                    0
+                );
+
                 // NOTE: Time traveling to 2100/09/15, when 1st milestone already started
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
                 await investMoney(fUSDTx, investment, investorB, investedAmount2);
 
-                await investment.connect(investorB).unpledge(investedAmount2.div(2));
+                await investment.connect(investorB).unpledge();
 
                 const memMilestoneInvestments = await investment.getMemMilestoneInvestments(1);
-                const memMilestonePortions = await investment.getMemMilestonePortions(1);
-                const expectedMemInvestment = investedAmount
-                    .add(investedAmount2.mul(percentageDivider).div(memMilestonePortions))
-                    .sub(investedAmount2.div(2).mul(percentageDivider).div(memMilestonePortions));
-                assert.deepEqual(memMilestoneInvestments, expectedMemInvestment);
+
+                assert.equal(
+                    memMilestoneInvestments.toString(),
+                    priorMemMilestoneInvestments.toString()
+                );
             });
 
             it("[IP][4.1.7] In milestone 0 period unpledge should update investedAmount", async () => {
@@ -1450,10 +1449,10 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await investMoney(fUSDTx, investment, investorB, investedAmount2);
 
-                await investment.connect(investorB).unpledge(investedAmount2.div(2));
+                await investment.connect(investorB).unpledge();
 
                 const amount = await investment.getInvestedAmount(investorB.address, 1);
-                assert.deepEqual(amount, investedAmount2.div(2));
+                assert.equal(amount.toString(), "0");
             });
 
             it("[IP][4.1.8] In milestone 0 period unpledge should update totalInvestedAmount", async () => {
@@ -1470,16 +1469,15 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await investMoney(fUSDTx, investment, investorB, investedAmount2);
 
-                await investment.connect(investorB).unpledge(investedAmount2.div(2));
+                await investment.connect(investorB).unpledge();
 
                 const amount = await investment.getTotalInvestedAmount();
-                assert.deepEqual(amount, investedAmount.add(investedAmount2.div(2)));
+                assert.deepEqual(amount, investedAmount);
             });
 
             it("[IP][4.1.9] In milestone 0 period unpledge should update investors and contract balance", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("2000");
                 const investedAmount2: BigNumber = ethers.utils.parseEther("100");
-                const unpledgeAmount: BigNumber = ethers.utils.parseEther("1");
 
                 // NOTE: Time traveling to 2100/07/15, when fundraiser already started
                 let timeStamp = dateToSeconds("2100/07/15");
@@ -1504,7 +1502,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await investMoney(fUSDTx, investment, investorB, investedAmount2);
 
-                await investment.connect(investorB).unpledge(unpledgeAmount);
+                await investment.connect(investorB).unpledge();
 
                 const investorsBalance = BigNumber.from(
                     await fUSDTx.balanceOf({
@@ -1519,18 +1517,12 @@ describe("Investment Pool", async () => {
                     })
                 );
 
-                const feeAmount: BigNumber = unpledgeAmount
+                const feeAmount: BigNumber = investedAmount2
                     .mul(investmentWithdrawFee)
                     .div(BigNumber.from(100));
 
-                assert.deepEqual(
-                    investorsBalance,
-                    investorPriorBalance.sub(investedAmount2).add(unpledgeAmount).sub(feeAmount)
-                );
-                assert.deepEqual(
-                    contractBalance,
-                    contractPriorBalance.add(investedAmount2).sub(unpledgeAmount).add(feeAmount)
-                );
+                assert.deepEqual(investorsBalance, investorPriorBalance.sub(feeAmount));
+                assert.deepEqual(contractBalance, contractPriorBalance.add(feeAmount));
             });
 
             it("[IP][4.1.10] In milestone 0 period unpledge should emit event with investor and amount args", async () => {
@@ -1547,35 +1539,30 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await investMoney(fUSDTx, investment, investorB, investedAmount2);
 
-                await expect(investment.connect(investorB).unpledge(investedAmount2.sub(100)))
+                await expect(investment.connect(investorB).unpledge())
                     .to.emit(investment, "Unpledge")
-                    .withArgs(investorB.address, investedAmount2.sub(100));
+                    .withArgs(investorB.address, investedAmount2);
             });
         });
 
         describe("4.2 Interactions", () => {
-            it("[IP][4.2.1] Investor shouldn't be able to unpledge zero amount", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("10");
-
+            it("[IP][4.2.1] Investor shouldn't be able to unpledge if no investments were made", async () => {
                 // NOTE: Time traveling to 2100/07/15
                 const timeStamp = dateToSeconds("2100/07/15");
                 await investment.setTimestamp(timeStamp);
-                await investMoney(fUSDTx, investment, investorA, investedAmount);
 
                 await expect(
-                    investment.connect(investorA).unpledge(0)
-                ).to.be.revertedWithCustomError(investment, "InvestmentPool__ZeroAmountProvided");
+                    investment.connect(investorA).unpledge()
+                ).to.be.revertedWithCustomError(investment, "InvestmentPool__NoMoneyInvested");
             });
 
             it("[IP][4.2.2] Shouldn't be able to unpledge if project was canceled", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
-
                 // NOTE: Time traveling to 2100/06/15
                 let timeStamp = dateToSeconds("2100/06/15");
                 await investment.setTimestamp(timeStamp);
                 await investment.connect(creator).cancelBeforeFundraiserStart();
 
-                await expect(investment.connect(investorA).unpledge(investedAmount))
+                await expect(investment.connect(investorA).unpledge())
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
@@ -1584,13 +1571,11 @@ describe("Investment Pool", async () => {
             });
 
             it("[IP][4.2.3] Shouldn't be able to unpledge if fundraiser hasn't started", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
-
                 // NOTE: Time traveling to 2100/06/15
                 let timeStamp = dateToSeconds("2100/06/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.connect(investorA).unpledge(investedAmount))
+                await expect(investment.connect(investorA).unpledge())
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
@@ -1599,13 +1584,11 @@ describe("Investment Pool", async () => {
             });
 
             it("[IP][4.2.4] Shouldn't be able to unpledge from failed fundraiser", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("2000");
-
                 // NOTE: Time traveling to 2100/08/15
                 let timeStamp = dateToSeconds("2100/08/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.connect(investorA).unpledge(investedAmount))
+                await expect(investment.connect(investorA).unpledge())
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
@@ -1625,7 +1608,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/08/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.connect(investorA).unpledge(investedAmount))
+                await expect(investment.connect(investorA).unpledge())
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
@@ -1645,7 +1628,7 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/10/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.connect(investorA).unpledge(investedAmount))
+                await expect(investment.connect(investorA).unpledge())
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
@@ -1666,7 +1649,7 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await governancePoolMock.cancelDuringMilestones(investment.address);
 
-                await expect(investment.connect(investorA).unpledge(investedAmount))
+                await expect(investment.connect(investorA).unpledge())
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
@@ -1704,30 +1687,12 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/12/15");
                 await timeTravelToDate(timeStamp);
 
-                await expect(investment.connect(investorA).unpledge(investedAmount))
+                await expect(investment.connect(investorA).unpledge())
                     .to.be.revertedWithCustomError(
                         investment,
                         "InvestmentPool__CurrentStateIsNotAllowed"
                     )
                     .withArgs(successfullyEndedStateValue);
-            });
-
-            it("[IP][4.2.9] Investor shouldn't be able to unpledge more than invested", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("10");
-
-                // NOTE: Time traveling to 2100/07/15
-                const timeStamp = dateToSeconds("2100/07/15");
-                await investment.setTimestamp(timeStamp);
-
-                await investMoney(fUSDTx, investment, investorA, investedAmount);
-
-                // Request them back, but 1 wei more, should revert
-                await expect(investment.connect(investorA).unpledge(investedAmount.add(1)))
-                    .to.be.revertedWithCustomError(
-                        investment,
-                        "InvestmentPool__AmountIsGreaterThanInvested"
-                    )
-                    .withArgs(investedAmount.add(1), investedAmount);
             });
 
             it("[IP][4.2.10] Investor should be able to do a full unpledge", async () => {
@@ -1751,7 +1716,7 @@ describe("Investment Pool", async () => {
                 await investMoney(fUSDTx, investment, investorA, investedAmount);
 
                 // Request all of tokens back
-                await expect(investment.connect(investorA).unpledge(investedAmount))
+                await expect(investment.connect(investorA).unpledge())
                     .to.emit(investment, "Unpledge")
                     .withArgs(investorA.address, investedAmount);
 
@@ -1776,59 +1741,6 @@ describe("Investment Pool", async () => {
                 assert.deepEqual(contractBalance, contractPriorBalance.add(feeAmount));
             });
 
-            it("[IP][4.2.11] Investor should be able to do a partial unpledge", async () => {
-                const investedAmount: BigNumber = ethers.utils.parseEther("10");
-                const investorPriorBalance = BigNumber.from(
-                    await fUSDTx.balanceOf({
-                        account: investorA.address,
-                        providerOrSigner: investorA,
-                    })
-                );
-                const contractPriorBalance = BigNumber.from(
-                    await fUSDTx.balanceOf({
-                        account: investment.address,
-                        providerOrSigner: buidl1Admin,
-                    })
-                );
-
-                // NOTE: Time traveling to 2100/07/15
-                const timeStamp = dateToSeconds("2100/07/15");
-                await investment.setTimestamp(timeStamp);
-                await investMoney(fUSDTx, investment, investorA, investedAmount);
-
-                // Request half of the funds back
-                await expect(investment.connect(investorA).unpledge(investedAmount.div(2)))
-                    .to.emit(investment, "Unpledge")
-                    .withArgs(investorA.address, investedAmount.div(2));
-
-                const investorsBalance = BigNumber.from(
-                    await fUSDTx.balanceOf({
-                        account: investorA.address,
-                        providerOrSigner: investorA,
-                    })
-                );
-                const contractBalance = BigNumber.from(
-                    await fUSDTx.balanceOf({
-                        account: investment.address,
-                        providerOrSigner: buidl1Admin,
-                    })
-                );
-
-                const feeAmount: BigNumber = investedAmount
-                    .div(2)
-                    .mul(investmentWithdrawFee)
-                    .div(BigNumber.from(100));
-
-                assert.deepEqual(
-                    investorsBalance,
-                    investorPriorBalance.sub(investedAmount.div(2)).sub(feeAmount)
-                );
-                assert.deepEqual(
-                    contractBalance,
-                    contractPriorBalance.add(investedAmount.div(2)).add(feeAmount)
-                );
-            });
-
             it("[IP][4.2.12] Non-investor shouldn't be able to unpledge", async () => {
                 const investedAmount: BigNumber = ethers.utils.parseEther("10");
 
@@ -1837,12 +1749,9 @@ describe("Investment Pool", async () => {
                 await investment.setTimestamp(timeStamp);
                 await investMoney(fUSDTx, investment, investorA, investedAmount);
 
-                await expect(investment.connect(foreignActor).unpledge(1))
-                    .to.be.revertedWithCustomError(
-                        investment,
-                        "InvestmentPool__AmountIsGreaterThanInvested"
-                    )
-                    .withArgs(1, 0);
+                await expect(
+                    investment.connect(foreignActor).unpledge()
+                ).to.be.revertedWithCustomError(investment, "InvestmentPool__NoMoneyInvested");
             });
 
             it("[IP][4.2.13] Shouldn't be able to unpledge if next milestone has started", async () => {
@@ -1857,12 +1766,9 @@ describe("Investment Pool", async () => {
                 timeStamp = dateToSeconds("2100/09/15");
                 await investment.setTimestamp(timeStamp);
 
-                await expect(investment.connect(investorA).unpledge(investedAmount))
-                    .to.be.revertedWithCustomError(
-                        investment,
-                        "InvestmentPool__AmountIsGreaterThanInvested"
-                    )
-                    .withArgs(investedAmount, 0);
+                await expect(
+                    investment.connect(investorA).unpledge()
+                ).to.be.revertedWithCustomError(investment, "InvestmentPool__NoMoneyInvested");
             });
         });
     });
