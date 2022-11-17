@@ -10,6 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+  
+    - name: Create .env
+      run: |
+        cp packages/governance-pool/.env.example packages/governance-pool/.env
 
     - uses: cschleiden/replace-tokens@v1
       with:
