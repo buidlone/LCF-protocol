@@ -14,14 +14,6 @@ jobs:
     - name: yarn install monorepo
       run: yarn install
 
-    - name: yarn test [governance-pool]
-      working-directory: ./packages/governance-pool
-      run: yarn test
-
-    - name: yarn test [investment-pool]
-      working-directory: ./packages/investment-pool
-      run: yarn test
-
     - name: yarn build [governance-pool]
       working-directory: ./packages/governance-pool
       run: yarn build
@@ -29,4 +21,12 @@ jobs:
     - name: yarn build [investment-pool]
       working-directory: ./packages/investment-pool
       run: yarn build
+
+    - name: yarn test [governance-pool]
+      working-directory: ./packages/governance-pool
+      run: yarn test
+
+    - name: yarn test [investment-pool]
+      working-directory: ./packages/investment-pool
+      run: yarn test
 
