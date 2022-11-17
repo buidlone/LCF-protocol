@@ -55,6 +55,10 @@ contract GovernancePoolFrontendMock is ERC1155Holder, Context, IGovernancePool {
     mapping(uint256 => uint256) internal tokensTotalSupply;
     /// @notice mapping from investment pool id => investor address => tokens balance
     mapping(uint256 => mapping(address => uint256)) internal tokensBalance;
+    /// @notice mapping from investor address => investment pool id => locked amount
+    mapping(address => mapping(uint256 => uint256)) internal lockedAmount;
+    /// @notice mapping from investment pool id => total locked amount
+    mapping(uint256 => uint256) internal totalLockedAmount;
 
     /**
      * @notice It's a memoization mapping from investor address => investment pool id => milestone id => amount of voting tokens
@@ -357,7 +361,11 @@ contract GovernancePoolFrontendMock is ERC1155Holder, Context, IGovernancePool {
         address _investmentPool,
         address _recipient,
         uint256 _amount
-    ) external notZeroAmount(_amount) {
+    )
+        external
+        notZeroAmount(_amount)
+        allowedInvestmentPoolStates(_investmentPool, getAnyMilestoneOngoingStateValue())
+    {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         uint256 currentMilestoneId = IInvestmentPool(_investmentPool).getCurrentMilestoneId();
         uint256 votesLeft = getUnusedVotesAmount(_investmentPool);
@@ -396,6 +404,37 @@ contract GovernancePoolFrontendMock is ERC1155Holder, Context, IGovernancePool {
 
         tokensBalance[investmentPoolId][_msgSender()] -= _amount;
         tokensBalance[investmentPoolId][_recipient] += _amount;
+    }
+
+    function permanentlyLockVotes(address _investmentPool, uint256 _votes)
+        external
+        notZeroAmount(_votes)
+        allowedInvestmentPoolStates(_investmentPool, getAnyMilestoneOngoingStateValue())
+    {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        uint256 currentMilestoneId = IInvestmentPool(_investmentPool).getCurrentMilestoneId();
+        uint256 votesLeft = getUnusedVotesAmount(_investmentPool);
+
+        if (_votes > votesLeft) revert GovernancePool__CannotTransferMoreThanUnlockedTokens();
+
+        uint256 senderActiveVotingTokensBalance = getActiveVotingTokensBalance(
+            _investmentPool,
+            currentMilestoneId,
+            _msgSender()
+        );
+
+        if (memActiveTokens[_msgSender()][investmentPoolId][currentMilestoneId] == 0) {
+            milestonesIdsInWhichInvestorInvested[_msgSender()][investmentPoolId].push(
+                currentMilestoneId
+            );
+        }
+
+        memActiveTokens[_msgSender()][investmentPoolId][currentMilestoneId] =
+            senderActiveVotingTokensBalance -
+            _votes;
+
+        tokensBalance[investmentPoolId][_msgSender()] -= _votes;
+        tokensBalance[investmentPoolId][address(this)] += _votes;
     }
 
     /** @notice function returns the amount, which is the max voting tokens he can still use for voting against the project.
@@ -594,6 +633,18 @@ contract GovernancePoolFrontendMock is ERC1155Holder, Context, IGovernancePool {
         returns (uint256)
     {
         return votesAmount[_investor][_investmentPoolId];
+    }
+
+    function getLockedAmount(address _investor, uint256 _investmentPoolId)
+        public
+        view
+        returns (uint256)
+    {
+        return lockedAmount[_investor][_investmentPoolId];
+    }
+
+    function getTotalLockedAmount(uint256 _investmentPoolId) public view returns (uint256) {
+        return totalLockedAmount[_investmentPoolId];
     }
 
     function getTotalVotesAmount(uint256 _investmentPoolId) public view returns (uint256) {

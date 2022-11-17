@@ -48,6 +48,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     mapping(address => mapping(uint256 => uint256)) internal votesAmount;
     /// @notice mapping from investment pool id => total votes amount against the project
     mapping(uint256 => uint256) internal totalVotesAmount;
+    /// @notice mapping from investor address => investment pool id => locked amount
+    mapping(address => mapping(uint256 => uint256)) internal lockedAmount;
+    /// @notice mapping from investment pool id => total locked amount
+    mapping(uint256 => uint256) internal totalLockedAmount;
     /// @notice mapping from investor address => investment pool id => milestone id => amount of voting tokens minted
     mapping(address => mapping(uint256 => mapping(uint256 => uint256))) internal tokensMinted;
 
@@ -67,13 +71,31 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         internal milestonesIdsInWhichInvestorInvested;
 
     event ActivateInvestmentPool(address indexed investmentPool);
+    event MintVotingTokens(
+        address indexed investmentPool,
+        address indexed investor,
+        uint256 indexed milestoneId,
+        uint256 amount
+    );
     event VoteAgainstProject(
         address indexed investmentPool,
         address indexed investor,
         uint256 amount
     );
-    event RetractVotes(address indexed investmentPool, address indexed investor, uint256 amount);
     event FinishVoting(address indexed investmentPool);
+    event RetractVotes(address indexed investmentPool, address indexed investor, uint256 amount);
+    event BurnVotes(address indexed investmentPool, address indexed investor, uint256 amount);
+    event TransferVotes(
+        address indexed investmentPool,
+        address indexed sender,
+        address indexed recipient,
+        uint256 amount
+    );
+    event LockVotingTokens(
+        address indexed investmentPool,
+        address indexed investor,
+        uint256 amount
+    );
 
     /** @notice Create new governance pool contract.
      *  @dev Is called by DEPLOYER.
@@ -203,6 +225,9 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
 
         // Tokens will never be minted for the milestones that already passed because this is called only by IP in invest function
         VOTING_TOKEN.mint(_investor, investmentPoolId, _amount, "");
+
+        // msg.sender is investment pool
+        emit MintVotingTokens(_msgSender(), _investor, _milestoneId, _amount);
     }
 
     /** @notice Vote against the project by transfering investor vote tokens to the governance pool contract.
@@ -311,6 +336,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         tokensMinted[_investor][investmentPoolId][_milestoneId] = 0;
 
         VOTING_TOKEN.burn(_investor, investmentPoolId, burnAmount);
+
+        emit BurnVotes(_msgSender(), _investor, burnAmount);
     }
 
     /** @notice transfer voting tokens (tokens can be locked too) with the ownership to it
@@ -322,7 +349,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         address _investmentPool,
         address _recipient,
         uint256 _amount
-    ) external notZeroAmount(_amount) {
+    ) external allowedInvestmentPoolStates(_investmentPool, getAnyMilestoneOngoingStateValue()) {
+        if (_amount == 0) revert GovernancePool__AmountIsZero();
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         uint256 currentMilestoneId = IInvestmentPool(_investmentPool).getCurrentMilestoneId();
         uint256 votesLeft = getUnusedVotesAmount(_investmentPool);
@@ -360,6 +388,42 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
             _amount;
 
         VOTING_TOKEN.safeTransferFrom(_msgSender(), _recipient, investmentPoolId, _amount, "");
+
+        emit TransferVotes(_investmentPool, _msgSender(), _recipient, _amount);
+    }
+
+    function permanentlyLockVotes(address _investmentPool, uint256 _votes)
+        external
+        notZeroAmount(_votes)
+        allowedInvestmentPoolStates(_investmentPool, getAnyMilestoneOngoingStateValue())
+    {
+        uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
+        uint256 currentMilestoneId = IInvestmentPool(_investmentPool).getCurrentMilestoneId();
+        uint256 votesLeft = getUnusedVotesAmount(_investmentPool);
+
+        if (_votes > votesLeft) revert GovernancePool__CannotTransferMoreThanUnlockedTokens();
+
+        uint256 senderActiveVotingTokensBalance = getActiveVotingTokensBalance(
+            _investmentPool,
+            currentMilestoneId,
+            _msgSender()
+        );
+
+        if (memActiveTokens[_msgSender()][investmentPoolId][currentMilestoneId] == 0) {
+            milestonesIdsInWhichInvestorInvested[_msgSender()][investmentPoolId].push(
+                currentMilestoneId
+            );
+        }
+
+        memActiveTokens[_msgSender()][investmentPoolId][currentMilestoneId] =
+            senderActiveVotingTokensBalance -
+            _votes;
+        lockedAmount[_msgSender()][investmentPoolId] += _votes;
+        totalLockedAmount[investmentPoolId] += _votes;
+
+        VOTING_TOKEN.safeTransferFrom(_msgSender(), address(this), investmentPoolId, _votes, "");
+
+        emit LockVotingTokens(_investmentPool, _msgSender(), _votes);
     }
 
     /** PUBLIC FUNCTIONS */
@@ -595,6 +659,18 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
 
     function getTotalVotesAmount(uint256 _investmentPoolId) public view returns (uint256) {
         return totalVotesAmount[_investmentPoolId];
+    }
+
+    function getLockedAmount(address _investor, uint256 _investmentPoolId)
+        public
+        view
+        returns (uint256)
+    {
+        return lockedAmount[_investor][_investmentPoolId];
+    }
+
+    function getTotalLockedAmount(uint256 _investmentPoolId) public view returns (uint256) {
+        return totalLockedAmount[_investmentPoolId];
     }
 
     function getMilestonesIdsInWhichInvestorInvested(address _investor, uint256 _investmentPoolId)
