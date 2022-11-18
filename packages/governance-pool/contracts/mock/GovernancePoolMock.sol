@@ -4,6 +4,7 @@
 pragma solidity ^0.8.9;
 
 import {IGovernancePool} from "@buidlone/investment-pool/contracts/interfaces/IGovernancePool.sol";
+import {IInvestmentPool} from "@buidlone/investment-pool/contracts/interfaces/IInvestmentPool.sol";
 import {GovernancePool} from "../GovernancePool.sol";
 import {VotingToken} from "../VotingToken.sol";
 
@@ -26,15 +27,15 @@ contract GovernancePoolMock is GovernancePool {
         return timestamp == 0 ? block.timestamp : timestamp;
     }
 
-    function setInvestmentPoolExists(uint256 _investmentPool, bool _exists) public {
-        investmentPoolExists[_investmentPool] = _exists;
+    function setInvestmentPool(address _investmentPool) public {
+        investmentPool = IInvestmentPool(_investmentPool);
     }
 
-    function getMemActiveTokens(
-        address _investor,
-        uint256 _ipId,
-        uint256 _milestoneId
-    ) public view returns (uint256) {
-        return memActiveTokens[_investor][_ipId][_milestoneId];
+    function getMemActiveTokens(address _investor, uint256 _milestoneId)
+        public
+        view
+        returns (uint256)
+    {
+        return memActiveTokens[_investor][_milestoneId];
     }
 }

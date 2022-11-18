@@ -173,7 +173,7 @@ describe("Governance Pool", async () => {
                         .activateInvestmentPool(investmentPoolMock.address)
                 ).to.be.revertedWithCustomError(
                     governancePool,
-                    "GovernancePool__NotInvestmentPoolFactory"
+                    "GovernancePool__NotInvestmentPool"
                 );
             });
 
@@ -446,7 +446,7 @@ describe("Governance Pool", async () => {
                 assert.equal(activeTokens.toString(), tokensToMint.toString());
             });
 
-            it("[GP][4.1.5] Should update milestonesIdsInWhichInvestorInvested on first mint", async () => {
+            it("[GP][4.1.5] Should update milestonesIdsInWhichBalanceChanged on first mint", async () => {
                 const tokensToMint: BigNumber = ethers.utils.parseEther("1");
                 const investmentPoolId = await governancePool.getInvestmentPoolId(
                     investmentPoolMock.address
@@ -459,7 +459,7 @@ describe("Governance Pool", async () => {
                 await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
 
                 const firstMilestoneId =
-                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                    await governancePool.getMilestonesIdsInWhichBalanceChanged(
                         investorA.address,
                         investmentPoolId
                     );
@@ -490,7 +490,7 @@ describe("Governance Pool", async () => {
                 assert.equal(activeTokens.toString(), tokensToMintA.add(tokensToMintB).toString());
             });
 
-            it("[GP][4.1.7] Should update milestonesIdsInWhichInvestorInvested on second and other mints", async () => {
+            it("[GP][4.1.7] Should update milestonesIdsInWhichBalanceChanged on second and other mints", async () => {
                 const tokensToMintA: BigNumber = ethers.utils.parseEther("1");
                 const tokensToMintB: BigNumber = ethers.utils.parseEther("2");
                 const investmentPoolId = await governancePool.getInvestmentPoolId(
@@ -506,7 +506,7 @@ describe("Governance Pool", async () => {
                 await investmentPoolMock.mintVotingTokens(2, investorA.address, tokensToMintB);
 
                 const secondMilestoneId =
-                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                    await governancePool.getMilestonesIdsInWhichBalanceChanged(
                         investorA.address,
                         investmentPoolId
                     );
@@ -514,7 +514,7 @@ describe("Governance Pool", async () => {
                 assert.equal(secondMilestoneId[1].toString(), "2");
             });
 
-            it("[GP][4.1.8] Should not update milestonesIdsInWhichInvestorInvested if milestone has already been pushed", async () => {
+            it("[GP][4.1.8] Should not update milestonesIdsInWhichBalanceChanged if milestone has already been pushed", async () => {
                 const tokensToMintA: BigNumber = ethers.utils.parseEther("1");
                 const tokensToMintB: BigNumber = ethers.utils.parseEther("2");
                 const investmentPoolId = await governancePool.getInvestmentPoolId(
@@ -530,7 +530,7 @@ describe("Governance Pool", async () => {
                 await investmentPoolMock.mintVotingTokens(2, investorA.address, tokensToMintB);
                 await investmentPoolMock.mintVotingTokens(2, investorA.address, tokensToMintB);
 
-                const list = await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                const list = await governancePool.getMilestonesIdsInWhichBalanceChanged(
                     investorA.address,
                     investmentPoolId
                 );
@@ -866,7 +866,7 @@ describe("Governance Pool", async () => {
                 assert.equal(tokensMintedAmount.toString(), "0");
             });
 
-            it("[GP][7.1.6] Should update milestonesIdsInWhichInvestorInvested mapping", async () => {
+            it("[GP][7.1.6] Should update milestonesIdsInWhichBalanceChanged mapping", async () => {
                 const tokensToMint: BigNumber = ethers.utils.parseEther("10");
                 const investmentPoolId = await governancePool.getInvestmentPoolId(
                     investmentPoolMock.address
@@ -879,7 +879,7 @@ describe("Governance Pool", async () => {
                 await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
 
                 const initialMilestonesIds =
-                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                    await governancePool.getMilestonesIdsInWhichBalanceChanged(
                         investorA.address,
                         investmentPoolId
                     );
@@ -890,7 +890,7 @@ describe("Governance Pool", async () => {
                 await investmentPoolMock.burnVotes(0, investorA.address);
 
                 const milestonesIdsAfterBurn =
-                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                    await governancePool.getMilestonesIdsInWhichBalanceChanged(
                         investorA.address,
                         investmentPoolId
                     );
@@ -975,7 +975,7 @@ describe("Governance Pool", async () => {
                 const totalSupply = await governancePool.getVotingTokensSupply(
                     investmentPoolMock.address
                 );
-                
+
                 assert.equal(totalSupply.toString(), tokensToMint.toString());
             });
 
@@ -1816,7 +1816,7 @@ describe("Governance Pool", async () => {
         });
 
         describe("10.1 Public state", () => {
-            it("[GP][10.1.1] Should update milestonesIdsInWhichInvestorInvested for sender", async () => {
+            it("[GP][10.1.1] Should update milestonesIdsInWhichBalanceChanged for sender", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
                 const transferAmount = ethers.utils.parseEther("0.4");
 
@@ -1836,7 +1836,7 @@ describe("Governance Pool", async () => {
                     .setApprovalForAll(governancePool.address, true);
 
                 const priorSenderMilestonesIds =
-                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                    await governancePool.getMilestonesIdsInWhichBalanceChanged(
                         investorA.address,
                         investmentPoolId
                     );
@@ -1847,7 +1847,7 @@ describe("Governance Pool", async () => {
                     .transferVotes(investmentPoolMock.address, investorB.address, transferAmount);
 
                 const endingSenderMilestonesIds =
-                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                    await governancePool.getMilestonesIdsInWhichBalanceChanged(
                         investorA.address,
                         investmentPoolId
                     );
@@ -1859,7 +1859,7 @@ describe("Governance Pool", async () => {
                 assert.deepEqual(endingSenderMilestonesIds, expectedIds);
             });
 
-            it("[GP][10.1.2] Should update milestonesIdsInWhichInvestorInvested for recipient", async () => {
+            it("[GP][10.1.2] Should update milestonesIdsInWhichBalanceChanged for recipient", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
                 const transferAmount = ethers.utils.parseEther("0.4");
 
@@ -1879,7 +1879,7 @@ describe("Governance Pool", async () => {
                     .setApprovalForAll(governancePool.address, true);
 
                 const priorRecipientMilestonesIds =
-                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                    await governancePool.getMilestonesIdsInWhichBalanceChanged(
                         investorB.address,
                         investmentPoolId
                     );
@@ -1890,7 +1890,7 @@ describe("Governance Pool", async () => {
                     .transferVotes(investmentPoolMock.address, investorB.address, transferAmount);
 
                 const endingRecipientMilestonesIds =
-                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                    await governancePool.getMilestonesIdsInWhichBalanceChanged(
                         investorB.address,
                         investmentPoolId
                     );
@@ -1902,7 +1902,7 @@ describe("Governance Pool", async () => {
                 assert.deepEqual(endingRecipientMilestonesIds, expectedIds);
             });
 
-            it("[GP][10.1.3] Shouldn't update milestonesIdsInWhichInvestorInvested for sender if it current milestone already exists", async () => {
+            it("[GP][10.1.3] Shouldn't update milestonesIdsInWhichBalanceChanged for sender if it current milestone already exists", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
                 const transferAmount = ethers.utils.parseEther("0.4");
 
@@ -1920,7 +1920,7 @@ describe("Governance Pool", async () => {
                     .setApprovalForAll(governancePool.address, true);
 
                 const priorSenderMilestonesIds =
-                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                    await governancePool.getMilestonesIdsInWhichBalanceChanged(
                         investorA.address,
                         investmentPoolId
                     );
@@ -1931,7 +1931,7 @@ describe("Governance Pool", async () => {
                     .transferVotes(investmentPoolMock.address, investorB.address, transferAmount);
 
                 const endingSenderMilestonesIds =
-                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                    await governancePool.getMilestonesIdsInWhichBalanceChanged(
                         investorA.address,
                         investmentPoolId
                     );
@@ -1939,7 +1939,7 @@ describe("Governance Pool", async () => {
                 assert.deepEqual(endingSenderMilestonesIds, priorSenderMilestonesIds);
             });
 
-            it("[GP][10.1.4] Shouldn't update milestonesIdsInWhichInvestorInvested for recipient if it current milestone already exists", async () => {
+            it("[GP][10.1.4] Shouldn't update milestonesIdsInWhichBalanceChanged for recipient if it current milestone already exists", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
                 const transferAmount = ethers.utils.parseEther("0.4");
 
@@ -1963,7 +1963,7 @@ describe("Governance Pool", async () => {
                     .transferVotes(investmentPoolMock.address, investorB.address, transferAmount);
 
                 const priorRecipientMilestonesIds =
-                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                    await governancePool.getMilestonesIdsInWhichBalanceChanged(
                         investorB.address,
                         investmentPoolId
                     );
@@ -1972,7 +1972,7 @@ describe("Governance Pool", async () => {
                     .connect(investorA)
                     .transferVotes(investmentPoolMock.address, investorB.address, transferAmount);
                 const endingRecipientMilestonesIds =
-                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                    await governancePool.getMilestonesIdsInWhichBalanceChanged(
                         investorB.address,
                         investmentPoolId
                     );
@@ -2369,7 +2369,7 @@ describe("Governance Pool", async () => {
         });
 
         describe("12.1 Public state", () => {
-            it("[GP][12.1.1] Should update milestonesIdsInWhichInvestorInvested for sender", async () => {
+            it("[GP][12.1.1] Should update milestonesIdsInWhichBalanceChanged for sender", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
                 const lockAmount = ethers.utils.parseEther("0.4");
 
@@ -2389,7 +2389,7 @@ describe("Governance Pool", async () => {
                     .setApprovalForAll(governancePool.address, true);
 
                 const priorSenderMilestonesIds =
-                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                    await governancePool.getMilestonesIdsInWhichBalanceChanged(
                         investorA.address,
                         investmentPoolId
                     );
@@ -2400,7 +2400,7 @@ describe("Governance Pool", async () => {
                     .permanentlyLockVotes(investmentPoolMock.address, lockAmount);
 
                 const endingSenderMilestonesIds =
-                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                    await governancePool.getMilestonesIdsInWhichBalanceChanged(
                         investorA.address,
                         investmentPoolId
                     );
@@ -2412,7 +2412,7 @@ describe("Governance Pool", async () => {
                 assert.deepEqual(endingSenderMilestonesIds, expectedIds);
             });
 
-            it("[GP][12.1.2] Shouldn't update milestonesIdsInWhichInvestorInvested for sender if current milestone already exists", async () => {
+            it("[GP][12.1.2] Shouldn't update milestonesIdsInWhichBalanceChanged for sender if current milestone already exists", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
                 const lockAmount = ethers.utils.parseEther("0.4");
 
@@ -2430,7 +2430,7 @@ describe("Governance Pool", async () => {
                     .setApprovalForAll(governancePool.address, true);
 
                 const priorSenderMilestonesIds =
-                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                    await governancePool.getMilestonesIdsInWhichBalanceChanged(
                         investorA.address,
                         investmentPoolId
                     );
@@ -2441,7 +2441,7 @@ describe("Governance Pool", async () => {
                     .permanentlyLockVotes(investmentPoolMock.address, lockAmount);
 
                 const endingSenderMilestonesIds =
-                    await governancePool.getMilestonesIdsInWhichInvestorInvested(
+                    await governancePool.getMilestonesIdsInWhichBalanceChanged(
                         investorA.address,
                         investmentPoolId
                     );
