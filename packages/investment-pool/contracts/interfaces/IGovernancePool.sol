@@ -1,7 +1,7 @@
 // @ buidl.one 2022
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.14;
 
 interface IGovernancePool {
     function activateInvestmentPool(address _investmentPool) external;

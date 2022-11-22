@@ -10,6 +10,7 @@ import {
 
 let gelatoOpsAddress: string;
 let superfluidHostAddress: string;
+let blockConfirmations: number;
 let investmentPoolFactory: InvestmentPoolFactoryTestMock;
 let investmentPool: InvestmentPool;
 let governancePool: GovernancePool;
@@ -27,6 +28,7 @@ async function main() {
     const chainId = network.config.chainId as number;
     gelatoOpsAddress = networkConfig[chainId].gelatoOps;
     superfluidHostAddress = networkConfig[chainId].superfluidHost;
+    blockConfirmations = networkConfig[chainId].blockConfirmations;
 
     // Deploy investment pool logic contract
     console.log("Deploying investment pool logic...");
@@ -34,7 +36,7 @@ async function main() {
     investmentPool = await investmentPoolDep.deploy();
     await investmentPool.deployed();
     console.log("Investment pool logic address: ", investmentPool.address);
-    await investmentPool.deployTransaction.wait(6);
+    await investmentPool.deployTransaction.wait(blockConfirmations);
     await verify(investmentPool.address, []);
 
     // Deploy investment pool factory contract
@@ -50,7 +52,7 @@ async function main() {
     );
     await investmentPoolFactory.deployed();
     console.log("Investment pool factory address: ", investmentPoolFactory.address);
-    await investmentPoolFactory.deployTransaction.wait(6);
+    await investmentPoolFactory.deployTransaction.wait(blockConfirmations);
     await verify(investmentPoolFactory.address, [
         superfluidHostAddress,
         gelatoOpsAddress,
@@ -63,6 +65,8 @@ async function main() {
     votingToken = await votingTokensDep.deploy();
     await votingToken.deployed();
     console.log("Voting token address: ", votingToken.address);
+    await votingToken.deployTransaction.wait(blockConfirmations);
+    await verify(votingToken.address, []);
 
     // Deploy governance pool
     console.log("Deploying governance pool...");
@@ -75,7 +79,7 @@ async function main() {
     );
     await governancePool.deployed();
     console.log("Governance pool address: ", governancePool.address);
-    await governancePool.deployTransaction.wait(6);
+    await governancePool.deployTransaction.wait(blockConfirmations);
     await verify(governancePool.address, [
         votingToken.address,
         investmentPoolFactory.address,

@@ -1,7 +1,7 @@
 // @ buidl.one 2022
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.14;
 
 import {IGovernancePool} from "@buidlone/investment-pool/contracts/interfaces/IGovernancePool.sol";
 import {GovernancePool} from "../GovernancePool.sol";
