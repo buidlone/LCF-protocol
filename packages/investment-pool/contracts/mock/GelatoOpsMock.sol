@@ -10,7 +10,7 @@ contract GelatoOpsMock is IOps, IOpsProxyFactory {
     IInvestmentPool public executor;
     string public gelatoTaskInText;
 
-    event RegisterGelatoTask();
+    event RegisterGelatoTask(ModuleData moduleData);
     event CancelGelatoTask();
 
     receive() external payable {}
@@ -18,14 +18,14 @@ contract GelatoOpsMock is IOps, IOpsProxyFactory {
     function createTask(
         address _execAddress,
         bytes calldata, /*execDataOrSelector*/
-        ModuleData calldata, /*moduleData*/
+        ModuleData calldata moduleData,
         address /*feeToken*/
     ) public returns (bytes32 task) {
         executor = IInvestmentPool(_execAddress);
         gelatoTaskInText = "abc";
         task = bytes32("abc");
 
-        emit RegisterGelatoTask();
+        emit RegisterGelatoTask(moduleData);
     }
 
     function getFeeDetails() public pure returns (uint256, address) {

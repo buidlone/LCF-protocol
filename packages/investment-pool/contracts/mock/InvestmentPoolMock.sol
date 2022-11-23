@@ -51,6 +51,10 @@ contract InvestmentPoolMock is InvestmentPool {
         delete gelatoTask;
     }
 
+    function setGelatoTaskCreated(bool _isCreated) public {
+        gelatoTaskCreated = _isCreated;
+    }
+
     function encodeGelatoTerminationWithSelector(uint256 _milestoneId)
         public
         pure
@@ -65,9 +69,5 @@ contract InvestmentPoolMock is InvestmentPool {
 
     function ifNeededUpdateMemInvestmentValue(uint256 _milestoneId) public {
         _ifNeededUpdateMemInvestmentValue(_milestoneId);
-    }
-
-    function getGelatoOpsProxyFactory() public view override returns (address) {
-        return address(gelatoOps);
     }
 }

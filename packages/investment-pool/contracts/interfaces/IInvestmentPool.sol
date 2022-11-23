@@ -150,17 +150,15 @@ interface IInvestmentPool is ISuperApp {
 
     function getEthAddress() external pure returns (address);
 
-    function getGelatoOpsProxyFactory() external view returns (address);
-
     function getAcceptedToken() external view returns (address);
 
     function getCreator() external view returns (address);
 
+    function getGelatoTaskCreated() external view returns (bool);
+
     function getGelatoOps() external view returns (address);
 
     function getGelato() external view returns (address payable);
-
-    function getGelatoDedicatedMsgSender() external view returns (address);
 
     function getGelatoTask() external view returns (bytes32);
 
