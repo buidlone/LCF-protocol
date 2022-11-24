@@ -14,6 +14,7 @@ import {VotingToken} from "./VotingToken.sol";
 error GovernancePool__InvestmentPoolAlreadyExists();
 error GovernancePool__InvestmentPoolDoesNotExist();
 error GovernancePool__NotInvestmentPool();
+error GovernancePool__NotInvestmentPoolFactory();
 error GovernancePool__AmountIsZero();
 error GovernancePool__NoActiveVotingTokensOwned();
 error GovernancePool__AmountIsGreaterThanVotingTokensBalance(uint256 amount, uint256 balance);
@@ -124,6 +125,12 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         _;
     }
 
+    modifier onlyInvestmentPoolFactory() {
+        if (_msgSender() != getInvestmentPoolFactoryAddress())
+            revert GovernancePool__NotInvestmentPoolFactory();
+        _;
+    }
+
     /// @notice Ensures that given amount is not zero
     modifier notZeroAmount(uint256 _amount) {
         if (_amount == 0) revert GovernancePool__AmountIsZero();
@@ -140,7 +147,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      */
     function activateInvestmentPool(address _investmentPool)
         external
-        onlyInvestmentPool
+        onlyInvestmentPoolFactory
         investmentPoolDoesNotExist
     {
         investmentPool = IInvestmentPool(_investmentPool);
@@ -178,14 +185,17 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
             // If array is not zero, it means investor has made investments before.
             // Now we should add the voting tokens amount from previous investments and add the current amount.
             // This allows us to know the specific amount that investor started owning from the provided milestone start.
+            uint256 activeTokensBeforeUpdate = getActiveVotingTokensBalance(
+                _milestoneId,
+                _investor
+            );
+
             if (memActiveTokens[_investor][_milestoneId] == 0) {
                 // If it's first investment for this milestone, add milestone id to the array.
                 milestonesIdsInWhichBalanceChanged[_investor].push(_milestoneId);
             }
 
-            memActiveTokens[_investor][_milestoneId] =
-                getActiveVotingTokensBalance(_milestoneId, _investor) +
-                _amount;
+            memActiveTokens[_investor][_milestoneId] = activeTokensBeforeUpdate + _amount;
         }
 
         // Store how many voting tokens where minted to know how much to burn on unpledge function in IP
@@ -516,9 +526,9 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
                 // It means that investor has transfered all of the voting tokens or has locked all of them.
                 // The balance was updated, but it decreased to zero. That's why new balance for investor is zero.
 
-                // This ALWAYS returns 0 (zero)
-                return memActiveTokens[_account][_milestoneId];
-            } else if (milestonesIds.length > 1 && nearestMilestoneIdFromTop != 0) {
+                // memActiveTokens[_account][_milestoneId] ALWAYS returns 0 (zero)
+                return 0;
+            } else if (milestonesIds.length > 1 && nearestMilestoneIdFromTop > 0) {
                 // If more than 1 investment was made, nearestMilestoneIdFromTop will return
                 // the index that is higher by 1 array element. That is we need to subtract 1, to get the right index
                 // When we have the right index, we can return the active tokens amount
@@ -559,6 +569,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
 
     function getVotingTokenAddress() public view returns (address) {
         return address(VOTING_TOKEN);
+    }
+
+    function getInvestmentPoolFactoryAddress() public view returns (address) {
+        return INVESTMENT_POOL_FACTORY_ADDRESS;
     }
 
     function getVotesPercentageThreshold() public view returns (uint8) {
