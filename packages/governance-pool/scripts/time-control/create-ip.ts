@@ -47,7 +47,7 @@ async function main() {
         "0xC87A724d82ED5b7D6530c5Ed8392C74Dc49D234b"
     );
 
-    const creationTx = await investmentPoolFactory.connect(deployer).createInvestmentPool(
+    const creationTx = await investmentPoolFactory.connect(deployer).createProjectPools(
         wrappedEther,
         softCap,
         hardCap,
@@ -59,7 +59,7 @@ async function main() {
     );
 
     const receipt = await creationTx.wait(1);
-    const poolAddress = receipt.events?.find((e) => e.event === "Created")?.args?.pool;
+    const poolAddress = receipt.events?.find((e) => e.event === "Created")?.args?.ipContract;
 
     console.log("Created Investment Pool at address: ", poolAddress);
     console.log("---Timeline---");

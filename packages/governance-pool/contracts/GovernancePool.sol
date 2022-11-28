@@ -3,12 +3,14 @@
 
 pragma solidity ^0.8.9;
 
-import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
-import "@openzeppelin/contracts/utils/Context.sol";
-import "@openzeppelin/contracts/utils/Arrays.sol";
+import {ERC1155Holder} from "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
+import {Context} from "@openzeppelin/contracts/utils/Context.sol";
+import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+
+import {Arrays} from "@openzeppelin/contracts/utils/Arrays.sol";
 
 import {IInvestmentPool} from "@buidlone/investment-pool/contracts/interfaces/IInvestmentPool.sol";
-import {IGovernancePool} from "@buidlone/investment-pool/contracts/interfaces/IGovernancePool.sol";
+import {IInitializableGovernancePool} from "@buidlone/investment-pool/contracts/interfaces/IGovernancePool.sol";
 import {VotingToken} from "./VotingToken.sol";
 
 error GovernancePool__InvestmentPoolAlreadyExists();
@@ -22,26 +24,25 @@ error GovernancePool__NoVotesAgainstProject();
 error GovernancePool__AmountIsGreaterThanDelegatedVotes(uint256 amount, uint256 votes);
 error GovernancePool__TotalSupplyIsZero();
 error GovernancePool__TotalSupplyIsSmallerThanVotesAgainst(uint256 totalSupply, uint256 votes);
-error GovernancePool__ThresholdNumberIsGreaterThan100();
 error GovernancePool__InvestmentPoolStateNotAllowed(uint256 stateValue);
 error GovernancePool__CannotTransferMoreThanUnlockedTokens();
 error GovernancePool__NoVotingTokensMintedDuringCurrentMilestone();
 
 /// @title Governance Pool contract.
-contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
+contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context, Initializable {
     using Arrays for uint256[];
 
     // ERC1155 contract where all voting tokens are stored
-    VotingToken internal immutable VOTING_TOKEN;
-    address internal immutable INVESTMENT_POOL_FACTORY_ADDRESS;
-    uint8 internal immutable VOTES_PERCENTAGE_THRESHOLD;
-    uint256 internal immutable VOTES_WITHDRAW_FEE; // number out of 100%; E.g. 1 or 13
+    VotingToken internal votingToken;
+    uint8 internal votesPercentageThreshold;
+    uint256 internal votesWithdrawFee; // out of 100%
     // TODO: investment pool also hold the values of state. Only in one contract value should be hardcode and others should get from it.
     // This will prevent for later bugs when changing state values
     uint256 internal constant FUNDRAISER_ONGOING_STATE_VALUE = 4;
     uint256 internal constant MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE = 32;
     uint256 internal constant LAST_MILESTONE_ONGOING_STATE_VALUE = 64;
-    uint256 internal ANY_MILESTONE_ONGOING_STATE_VALUE;
+    uint256 internal constant ANY_MILESTONE_ONGOING_STATE_VALUE =
+        MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE | LAST_MILESTONE_ONGOING_STATE_VALUE;
 
     IInvestmentPool investmentPool;
 
@@ -70,7 +71,8 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      */
     mapping(address => uint256[]) internal milestonesIdsInWhichBalanceChanged;
 
-    event ActivateInvestmentPool(address indexed investmentPool);
+    /** EVENTS */
+
     event MintVotingTokens(address indexed investor, uint256 indexed milestoneId, uint256 amount);
     event VoteAgainstProject(address indexed investor, uint256 amount);
     event FinishVoting();
@@ -79,29 +81,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     event TransferVotes(address indexed sender, address indexed recipient, uint256 amount);
     event LockVotingTokens(address indexed investor, uint256 amount);
 
-    /** @notice Create new governance pool contract.
-     *  @dev Is called by DEPLOYER.
-     *  @param _votingToken address of ERC1155 token, which will be used for voting.
-     *  @param _investmentPoolFactory address of investment pool factory, which will deploy all investment pools.
-     *  @param _threshold number as percentage for votes threshold. Max value is 100.
-     *  @dev Reverts if _threshold is greater than 100 (%).
-     */
-    constructor(
-        VotingToken _votingToken,
-        address _investmentPoolFactory,
-        uint8 _threshold,
-        uint256 _votestWithdrawFee
-    ) {
-        if (_threshold > 100) revert GovernancePool__ThresholdNumberIsGreaterThan100();
-        VOTING_TOKEN = _votingToken;
-        INVESTMENT_POOL_FACTORY_ADDRESS = _investmentPoolFactory;
-        VOTES_PERCENTAGE_THRESHOLD = _threshold;
-        VOTES_WITHDRAW_FEE = _votestWithdrawFee;
-
-        ANY_MILESTONE_ONGOING_STATE_VALUE =
-            getMilestonesOngoingBeforeLastStateValue() |
-            getLastMilestoneOngoingStateValue();
-    }
+    /** MODIFIERS */
 
     /// @notice Ensures that provided current project state is one of the provided. It uses bitwise operations in condition
     modifier allowedInvestmentPoolStates(uint256 _states) {
@@ -125,12 +105,6 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         _;
     }
 
-    modifier onlyInvestmentPoolFactory() {
-        if (_msgSender() != getInvestmentPoolFactoryAddress())
-            revert GovernancePool__NotInvestmentPoolFactory();
-        _;
-    }
-
     /// @notice Ensures that given amount is not zero
     modifier notZeroAmount(uint256 _amount) {
         if (_amount == 0) revert GovernancePool__AmountIsZero();
@@ -139,19 +113,25 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
 
     /** EXTERNAL FUNCTIONS */
 
-    /** @notice Activate voting process for given investment pool. It will only be called once for every investment pool at the creation stage.
-     *  @dev Is called by INVESTMENT POOL.
-     *  @dev Emits ActiveVoting event with investment pool address.
-     *  @param _investmentPool investment pool address, which will become active IP for this GP
-     *  @dev Reverts if sender ir not investment pool factory, if status is not unavailable.
+    /**
+     *  @param _votingToken address of ERC1155 token, which will be used for voting.
+     *  @param _investmentPool address of investment pool, which will be responsible for managing GP
+     *  @param _threshold number as percentage for votes threshold. Max value is 100.
+     *  @param _votestWithdrawFee percentage of fee. Max value is 100.
      */
-    function activateInvestmentPool(address _investmentPool)
-        external
-        onlyInvestmentPoolFactory
-        investmentPoolDoesNotExist
-    {
-        investmentPool = IInvestmentPool(_investmentPool);
-        emit ActivateInvestmentPool(_investmentPool);
+    function initialize(
+        address _votingToken,
+        IInvestmentPool _investmentPool,
+        uint8 _threshold,
+        uint256 _votestWithdrawFee
+    ) external payable initializer {
+        /// @dev we can skip checking if threshold is valid number, because that check was already done in IPF
+
+        votingToken = VotingToken(_votingToken);
+        votesPercentageThreshold = _threshold;
+        votesWithdrawFee = _votestWithdrawFee;
+
+        investmentPool = _investmentPool;
     }
 
     /** @notice Mint new tokens for investment pool. Tokens are minted for investor, but they are not active from the beginning
@@ -202,7 +182,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         tokensMinted[_investor][_milestoneId] += _amount;
 
         // Tokens will never be minted for the milestones that already passed because this is called only by IP in invest function
-        VOTING_TOKEN.mint(_investor, getInvestmentPoolId(), _amount, "");
+        votingToken.mint(_investor, getInvestmentPoolId(), _amount, "");
 
         // msg.sender is investment pool
         emit MintVotingTokens(_investor, _milestoneId, _amount);
@@ -215,7 +195,9 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @dev Emits VoteAgainstProject with investment pool address, sender, amount. If threshold reached emit FinishVoting with investment pool address.Voting Token contract emits TransferSingle event.
      *  @param _amount tokens amount investor wants to vote with.
      */
-    function voteAgainst(uint256 _amount)
+    function voteAgainst(
+        uint256 _amount
+    )
         external
         notZeroAmount(_amount)
         allowedInvestmentPoolStates(getAnyMilestoneOngoingStateValue())
@@ -235,7 +217,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         totalVotesAmount += _amount;
 
         // Transfer the voting tokens from investor to the governance pool
-        VOTING_TOKEN.safeTransferFrom(
+        votingToken.safeTransferFrom(
             _msgSender(),
             address(this),
             getInvestmentPoolId(),
@@ -257,7 +239,9 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @dev Emits RetractVotes event with investment pool address, sender, amount. Voting Token contract emits TransferSingle event.
      *  @param _retractAmount tokens amount investor wants retract from delegated votes.
      */
-    function retractVotes(uint256 _retractAmount)
+    function retractVotes(
+        uint256 _retractAmount
+    )
         external
         notZeroAmount(_retractAmount)
         allowedInvestmentPoolStates(getAnyMilestoneOngoingStateValue())
@@ -279,7 +263,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         uint256 amountToTransfer = (_retractAmount * (100 - getVotesWithdrawPercentageFee())) /
             100;
 
-        VOTING_TOKEN.safeTransferFrom(
+        votingToken.safeTransferFrom(
             address(this),
             _msgSender(),
             getInvestmentPoolId(),
@@ -296,7 +280,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @param _investor investors, who wants to unpledge and burn votes.
      *  @param _milestoneId milestone, in which investor invested previously.
      */
-    function burnVotes(uint256 _milestoneId, address _investor)
+    function burnVotes(
+        uint256 _milestoneId,
+        address _investor
+    )
         external
         onlyInvestmentPool
         allowedInvestmentPoolStates(
@@ -313,7 +300,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         memActiveTokens[_investor][_milestoneId] = 0;
         tokensMinted[_investor][_milestoneId] = 0;
 
-        VOTING_TOKEN.burn(_investor, getInvestmentPoolId(), burnAmount);
+        votingToken.burn(_investor, getInvestmentPoolId(), burnAmount);
 
         emit BurnVotes(_investor, burnAmount);
     }
@@ -322,10 +309,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @param _recipient transfer recipients
      *  @param _amount to transfer from sender to recipient
      */
-    function transferVotes(address _recipient, uint256 _amount)
-        external
-        allowedInvestmentPoolStates(getAnyMilestoneOngoingStateValue())
-    {
+    function transferVotes(
+        address _recipient,
+        uint256 _amount
+    ) external allowedInvestmentPoolStates(getAnyMilestoneOngoingStateValue()) {
         if (_amount == 0) revert GovernancePool__AmountIsZero();
         uint256 currentMilestoneId = investmentPool.getCurrentMilestoneId();
         uint256 votesLeft = getUnusedVotesAmount();
@@ -356,18 +343,14 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
             recipientActiveVotingTokensBalance +
             _amount;
 
-        VOTING_TOKEN.safeTransferFrom(
-            _msgSender(),
-            _recipient,
-            getInvestmentPoolId(),
-            _amount,
-            ""
-        );
+        votingToken.safeTransferFrom(_msgSender(), _recipient, getInvestmentPoolId(), _amount, "");
 
         emit TransferVotes(_msgSender(), _recipient, _amount);
     }
 
-    function permanentlyLockVotes(uint256 _votes)
+    function permanentlyLockVotes(
+        uint256 _votes
+    )
         external
         notZeroAmount(_votes)
         allowedInvestmentPoolStates(getAnyMilestoneOngoingStateValue())
@@ -393,7 +376,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         lockedAmount[_msgSender()] += _votes;
         totalLockedAmount += _votes;
 
-        VOTING_TOKEN.safeTransferFrom(
+        votingToken.safeTransferFrom(
             _msgSender(),
             address(this),
             getInvestmentPoolId(),
@@ -471,11 +454,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @param _account address of the account to check
      *  @return uint256 -> balance of tokens owned in milestone
      */
-    function getActiveVotingTokensBalance(uint256 _milestoneId, address _account)
-        public
-        view
-        returns (uint256)
-    {
+    function getActiveVotingTokensBalance(
+        uint256 _milestoneId,
+        address _account
+    ) public view returns (uint256) {
         uint256[] memory milestonesIds = getMilestonesIdsInWhichBalanceChanged(_account);
 
         if (milestonesIds.length == 0) {
@@ -547,7 +529,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @return uint256 -> total supply of tokens minted
      */
     function getVotingTokensSupply() public view returns (uint256) {
-        return VOTING_TOKEN.totalSupply(getInvestmentPoolId());
+        return votingToken.totalSupply(getInvestmentPoolId());
     }
 
     /** @notice Get balance of voting tokens for specified investor
@@ -555,7 +537,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @return uint256 -> balance of tokens owned
      */
     function getVotingTokenBalance(address _account) public view returns (uint256) {
-        return VOTING_TOKEN.balanceOf(_account, getInvestmentPoolId());
+        return votingToken.balanceOf(_account, getInvestmentPoolId());
     }
 
     /** @notice Get id value for ERC1155 voting token from it's address
@@ -568,19 +550,15 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
     /** GETTERS */
 
     function getVotingTokenAddress() public view returns (address) {
-        return address(VOTING_TOKEN);
-    }
-
-    function getInvestmentPoolFactoryAddress() public view returns (address) {
-        return INVESTMENT_POOL_FACTORY_ADDRESS;
+        return address(votingToken);
     }
 
     function getVotesPercentageThreshold() public view returns (uint8) {
-        return VOTES_PERCENTAGE_THRESHOLD;
+        return votesPercentageThreshold;
     }
 
     function getVotesWithdrawPercentageFee() public view returns (uint256) {
-        return VOTES_WITHDRAW_FEE;
+        return votesWithdrawFee;
     }
 
     function getFundraiserOngoingStateValue() public pure returns (uint256) {
@@ -595,7 +573,7 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         return LAST_MILESTONE_ONGOING_STATE_VALUE;
     }
 
-    function getAnyMilestoneOngoingStateValue() public view returns (uint256) {
+    function getAnyMilestoneOngoingStateValue() public pure returns (uint256) {
         return ANY_MILESTONE_ONGOING_STATE_VALUE;
     }
 
@@ -619,19 +597,16 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         return totalLockedAmount;
     }
 
-    function getMilestonesIdsInWhichBalanceChanged(address _investor)
-        public
-        view
-        returns (uint256[] memory)
-    {
+    function getMilestonesIdsInWhichBalanceChanged(
+        address _investor
+    ) public view returns (uint256[] memory) {
         return milestonesIdsInWhichBalanceChanged[_investor];
     }
 
-    function getTokensMinted(address _investor, uint256 _milestoneId)
-        public
-        view
-        returns (uint256)
-    {
+    function getTokensMinted(
+        address _investor,
+        uint256 _milestoneId
+    ) public view returns (uint256) {
         return tokensMinted[_investor][_milestoneId];
     }
 
@@ -644,10 +619,5 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         // Call investment pool function to end the project as voters decided to terminate the stream
         investmentPool.cancelDuringMilestones();
         emit FinishVoting();
-    }
-
-    function _getNow() internal view virtual returns (uint256) {
-        // solhint-disable-next-line not-rely-on-time
-        return block.timestamp;
     }
 }

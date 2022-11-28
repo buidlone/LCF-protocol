@@ -53,7 +53,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, OwnableUp
 
     bytes32 internal constant CFA_ID =
         keccak256("org.superfluid-finance.agreements.ConstantFlowAgreement.v1");
-    uint256 internal constant PERCENTAGE_DIVIDER = 10**6;
+    uint256 internal constant PERCENTAGE_DIVIDER = 10 ** 6;
 
     /**
      * @dev Values are used for bitwise operations to determine current project state.
@@ -70,7 +70,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, OwnableUp
     uint256 internal constant TERMINATED_BY_GELATO_STATE_VALUE = 256;
     uint256 internal constant SUCCESSFULLY_ENDED_STATE_VALUE = 512;
     uint256 internal constant UNKNOWN_STATE_VALUE = 1024;
-    uint256 internal ANY_MILESTONE_ONGOING_STATE_VALUE;
+    uint256 internal constant ANY_MILESTONE_ONGOING_STATE_VALUE =
+        MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE | LAST_MILESTONE_ONGOING_STATE_VALUE;
 
     /* WARNING: NEVER RE-ORDER VARIABLES! Always double-check that new
        variables are added APPEND-ONLY. Re-ordering variables can
@@ -110,11 +111,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, OwnableUp
     mapping(address => mapping(uint256 => uint256)) internal investedAmount;
 
     /// @dev Milestone data
-    // Total amount of milestones in this investment pool
     uint256 internal milestoneCount;
+    uint256 internal currentMilestone;
     // TODO: Look into, maybe an array would be better, since we have a fixed amount?
     mapping(uint256 => Milestone) internal milestones;
-    uint256 internal currentMilestone;
 
     uint256 internal investmentWithdrawFee;
     uint256 internal softCapMultiplier;
@@ -252,9 +252,6 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, OwnableUp
             _host,
             IConstantFlowAgreementV1(address(_host.getAgreementClass(getCfaId())))
         );
-        ANY_MILESTONE_ONGOING_STATE_VALUE =
-            getMilestonesOngoingBeforeLastStateValue() |
-            getLastMilestoneOngoingStateValue();
 
         acceptedToken = _projectInfo.acceptedToken;
         creator = _projectInfo.creator;
@@ -318,7 +315,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, OwnableUp
      * @param _amount Amount of tokens to invest, must be <= approved amount
      * @param _strict true -> if too large amount should revert; false -> if smaller amount should be accepted
      */
-    function invest(uint256 _amount, bool _strict)
+    function invest(
+        uint256 _amount,
+        bool _strict
+    )
         external
         notZeroAmount(_amount)
         allowedProjectStates(
@@ -683,11 +683,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, OwnableUp
     }
 
     /// @notice Check if milestone can be terminated by Gelato automation
-    function canGelatoTerminateMilestoneStreamFinal(uint256 _milestoneId)
-        public
-        view
-        returns (bool)
-    {
+    function canGelatoTerminateMilestoneStreamFinal(
+        uint256 _milestoneId
+    ) public view returns (bool) {
         Milestone memory milestone = getMilestone(_milestoneId);
         return
             milestone.streamOngoing &&
@@ -771,7 +769,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, OwnableUp
         return UNKNOWN_STATE_VALUE;
     }
 
-    function getAnyMilestoneOngoingStateValue() public view returns (uint256) {
+    function getAnyMilestoneOngoingStateValue() public pure returns (uint256) {
         return ANY_MILESTONE_ONGOING_STATE_VALUE;
     }
 
@@ -847,11 +845,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, OwnableUp
         return totalInvestedAmount;
     }
 
-    function getInvestedAmount(address _investor, uint256 _milestoneId)
-        public
-        view
-        returns (uint256)
-    {
+    function getInvestedAmount(
+        address _investor,
+        uint256 _milestoneId
+    ) public view returns (uint256) {
         return investedAmount[_investor][_milestoneId];
     }
 
@@ -913,7 +910,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, OwnableUp
      * @notice Allows the pool creator to start streaming/receive funds for a certain milestone
      * @param _milestoneId Milestone index to claim funds for
      */
-    function _claim(uint256 _milestoneId)
+    function _claim(
+        uint256 _milestoneId
+    )
         internal
         onlyCreator
         allowedProjectStates(
@@ -997,10 +996,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, OwnableUp
         @dev Can only be called during the termination window for a particular milestone.
         @param _milestoneId Milestone index to terminate the stream for
      */
-    function _terminateMilestoneStreamFinal(uint256 _milestoneId)
-        internal
-        canTerminateMilestoneFinal(_milestoneId)
-    {
+    function _terminateMilestoneStreamFinal(
+        uint256 _milestoneId
+    ) internal canTerminateMilestoneFinal(_milestoneId) {
         (uint256 timestamp, int96 flowRate, , ) = cfaV1Lib.cfa.getFlow(
             acceptedToken,
             address(this),
@@ -1107,11 +1105,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, OwnableUp
     }
 
     /// @notice Get the total project PORTION percentage. It shouldn't be confused with total investment percentage that is left.
-    function _getEarlyTerminationProjectLeftPortion(uint256 _terminationMilestoneId)
-        internal
-        view
-        returns (uint256)
-    {
+    function _getEarlyTerminationProjectLeftPortion(
+        uint256 _terminationMilestoneId
+    ) internal view returns (uint256) {
         /**
          * @dev Creator always has rights to get the seed amount for the termination milestone,
          * @dev even after termination this is to prevent project kills by whale investors.
@@ -1265,11 +1261,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, OwnableUp
     }
 
     /// @notice Function is called by gelato automation, when conditions are met
-    function gelatoTerminateMilestoneStreamFinal(uint256 _milestoneId)
-        public
-        onlyGelatoDedicatedMsgSender
-        canGelatoTerminateMilestoneFinal(_milestoneId)
-    {
+    function gelatoTerminateMilestoneStreamFinal(
+        uint256 _milestoneId
+    ) public onlyGelatoDedicatedMsgSender canGelatoTerminateMilestoneFinal(_milestoneId) {
         cancelDuringMilestones();
 
         _cancelTask(getGelatoTask());
@@ -1307,19 +1301,17 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, OwnableUp
         (fee, feeToken) = gelatoOps.getFeeDetails();
     }
 
-    function _resolverModuleArg(address _resolverAddress, bytes memory _resolverData)
-        internal
-        pure
-        returns (bytes memory)
-    {
+    function _resolverModuleArg(
+        address _resolverAddress,
+        bytes memory _resolverData
+    ) internal pure returns (bytes memory) {
         return abi.encode(_resolverAddress, _resolverData);
     }
 
-    function _timeModuleArg(uint256 _startTime, uint256 _interval)
-        internal
-        pure
-        returns (bytes memory)
-    {
+    function _timeModuleArg(
+        uint256 _startTime,
+        uint256 _interval
+    ) internal pure returns (bytes memory) {
         return abi.encode(uint128(_startTime), uint128(_interval));
     }
 

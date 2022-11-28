@@ -3,14 +3,10 @@
 
 pragma solidity ^0.8.9;
 
-interface IGovernancePool {
-    function activateInvestmentPool(address _investmentPool) external;
+import {IInvestmentPool} from "./IInvestmentPool.sol";
 
-    function mintVotingTokens(
-        uint256 _milestoneId,
-        address _investor,
-        uint256 _amount
-    ) external;
+interface IGovernancePool {
+    function mintVotingTokens(uint256 _milestoneId, address _investor, uint256 _amount) external;
 
     function voteAgainst(uint256 _amount) external;
 
@@ -28,10 +24,10 @@ interface IGovernancePool {
 
     function willInvestorReachThreshold(uint256 _investorVotesCount) external view returns (bool);
 
-    function getActiveVotingTokensBalance(uint256 _milestoneId, address _account)
-        external
-        view
-        returns (uint256);
+    function getActiveVotingTokensBalance(
+        uint256 _milestoneId,
+        address _account
+    ) external view returns (uint256);
 
     function getVotingTokensSupply() external view returns (uint256);
 
@@ -40,8 +36,6 @@ interface IGovernancePool {
     function getInvestmentPoolId() external view returns (uint256);
 
     function getVotingTokenAddress() external view returns (address);
-
-    function getInvestmentPoolFactoryAddress() external view returns (address);
 
     function getVotesPercentageThreshold() external view returns (uint8);
 
@@ -53,7 +47,7 @@ interface IGovernancePool {
 
     function getLastMilestoneOngoingStateValue() external pure returns (uint256);
 
-    function getAnyMilestoneOngoingStateValue() external view returns (uint256);
+    function getAnyMilestoneOngoingStateValue() external pure returns (uint256);
 
     function getInvestmentPool() external view returns (address);
 
@@ -65,13 +59,21 @@ interface IGovernancePool {
 
     function getTotalLockedAmount() external view returns (uint256);
 
-    function getMilestonesIdsInWhichBalanceChanged(address _investor)
-        external
-        view
-        returns (uint256[] memory);
+    function getMilestonesIdsInWhichBalanceChanged(
+        address _investor
+    ) external view returns (uint256[] memory);
 
-    function getTokensMinted(address _investor, uint256 _milestoneId)
-        external
-        view
-        returns (uint256);
+    function getTokensMinted(
+        address _investor,
+        uint256 _milestoneId
+    ) external view returns (uint256);
+}
+
+interface IInitializableGovernancePool is IGovernancePool {
+    function initialize(
+        address _votingToken,
+        IInvestmentPool _investmentPool,
+        uint8 _threshold,
+        uint256 _votestWithdrawFee
+    ) external payable;
 }

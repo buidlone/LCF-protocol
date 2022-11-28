@@ -105,10 +105,9 @@ interface IInvestmentPool is ISuperApp {
 
     function canTerminateMilestoneStreamFinal(uint256 _milestoneId) external view returns (bool);
 
-    function canGelatoTerminateMilestoneStreamFinal(uint256 _milestoneId)
-        external
-        view
-        returns (bool);
+    function canGelatoTerminateMilestoneStreamFinal(
+        uint256 _milestoneId
+    ) external view returns (bool);
 
     function getMilestoneSeedAmount(uint256 _milestoneId) external view returns (uint256);
 
@@ -146,7 +145,7 @@ interface IInvestmentPool is ISuperApp {
 
     function getUnknownStateValue() external pure returns (uint256);
 
-    function getAnyMilestoneOngoingStateValue() external view returns (uint256);
+    function getAnyMilestoneOngoingStateValue() external pure returns (uint256);
 
     function getEthAddress() external pure returns (address);
 
@@ -184,10 +183,10 @@ interface IInvestmentPool is ISuperApp {
 
     function getTotalInvestedAmount() external view returns (uint256);
 
-    function getInvestedAmount(address _investor, uint256 _milestoneId)
-        external
-        view
-        returns (uint256);
+    function getInvestedAmount(
+        address _investor,
+        uint256 _milestoneId
+    ) external view returns (uint256);
 
     function getMilestonesCount() external view returns (uint256);
 

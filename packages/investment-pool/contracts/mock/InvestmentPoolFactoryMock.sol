@@ -20,8 +20,18 @@ contract InvestmentPoolFactoryMock is InvestmentPoolFactory {
     constructor(
         ISuperfluid _host,
         address payable _gelatoOps,
-        address _implementationContract
-    ) InvestmentPoolFactory(_host, _gelatoOps, _implementationContract) {}
+        address _ipImplementation,
+        address _gpImplementation,
+        address _votingToken
+    )
+        InvestmentPoolFactory(
+            _host,
+            _gelatoOps,
+            _ipImplementation,
+            _gpImplementation,
+            _votingToken
+        )
+    {}
 
     function setTimestamp(uint256 _timestamp) public {
         timestamp = _timestamp;
@@ -33,7 +43,12 @@ contract InvestmentPoolFactoryMock is InvestmentPoolFactory {
         return timestamp == 0 ? block.timestamp : timestamp;
     }
 
-    function _deployClone() internal virtual override returns (IInitializableInvestmentPool pool) {
+    function _deployInvestmentPoolClone()
+        internal
+        virtual
+        override
+        returns (IInitializableInvestmentPool pool)
+    {
         InvestmentPoolMock p = InvestmentPoolMock(
             payable(getInvestmentPoolImplementation().clone())
         );
@@ -41,7 +56,7 @@ contract InvestmentPoolFactoryMock is InvestmentPoolFactory {
         return p;
     }
 
-    function deployClone() public returns (IInitializableInvestmentPool pool) {
-        pool = _deployClone();
+    function deployInvestmentPoolClone() public returns (IInitializableInvestmentPool pool) {
+        pool = _deployInvestmentPoolClone();
     }
 }
