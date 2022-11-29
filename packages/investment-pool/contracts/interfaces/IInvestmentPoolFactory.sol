@@ -1,7 +1,7 @@
 // @ buidl.one 2022
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.14;
 
 import {ISuperToken, ISuperfluid} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {IInvestmentPool} from "./IInvestmentPool.sol";

@@ -1,8 +1,9 @@
 import {ethers, network} from "hardhat";
-import {availableTestnetChains} from "../../hardhat-helper-config";
+import {availableTestnetChains, networkConfig} from "../../hardhat-helper-config";
 import {BigNumber} from "ethers";
 import {InvestmentPoolFactory} from "../../typechain-types";
 
+let nativeSuperToken: string;
 let investmentPoolFactory: InvestmentPoolFactory;
 const percentageDivider: number = 10 ** 6;
 
@@ -19,8 +20,9 @@ async function main() {
 
     const accounts = await ethers.getSigners();
     const deployer = accounts[0];
+    const chainId = network.config.chainId as number;
+    nativeSuperToken = networkConfig[chainId].nativeSuperToken;
 
-    const wrappedEther = "0x5943f705abb6834cad767e6e4bb258bc48d9c947";
     const softCap: BigNumber = ethers.utils.parseEther("1500");
     const hardCap: BigNumber = ethers.utils.parseEther("5000");
     const gelatoFeeAllocation: BigNumber = ethers.utils.parseEther("0.1");
@@ -33,8 +35,8 @@ async function main() {
 
     investmentPoolFactory = await ethers.getContractAt("InvestmentPoolFactory", "<address>");
 
-    const creationTx = await investmentPoolFactory.connect(deployer).createProjectPools(
-        wrappedEther,
+    const creationTx = await investmentPoolFactory.connect(deployer).createInvestmentPool(
+        nativeSuperToken,
         softCap,
         hardCap,
         campaignStartDate,

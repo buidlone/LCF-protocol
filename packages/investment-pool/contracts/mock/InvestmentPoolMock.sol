@@ -1,7 +1,7 @@
 // @ buidl.one 2022
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.14;
 
 import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {InvestmentPool} from "../InvestmentPool.sol";
@@ -51,6 +51,10 @@ contract InvestmentPoolMock is InvestmentPool {
         delete gelatoTask;
     }
 
+    function setGelatoTaskCreated(bool _isCreated) public {
+        gelatoTaskCreated = _isCreated;
+    }
+
     function encodeGelatoTerminationWithSelector(uint256 _milestoneId)
         public
         pure
@@ -65,9 +69,5 @@ contract InvestmentPoolMock is InvestmentPool {
 
     function ifNeededUpdateMemInvestmentValue(uint256 _milestoneId) public {
         _ifNeededUpdateMemInvestmentValue(_milestoneId);
-    }
-
-    function getGelatoOpsProxyFactory() public view override returns (address) {
-        return address(gelatoOps);
     }
 }

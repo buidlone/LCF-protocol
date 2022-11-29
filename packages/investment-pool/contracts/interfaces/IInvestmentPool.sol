@@ -1,7 +1,7 @@
 // @ buidl.one 2022
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.14;
 
 import {CFAv1Library} from "@superfluid-finance/ethereum-contracts/contracts/apps/CFAv1Library.sol";
 import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
@@ -149,17 +149,15 @@ interface IInvestmentPool is ISuperApp {
 
     function getEthAddress() external pure returns (address);
 
-    function getGelatoOpsProxyFactory() external view returns (address);
-
     function getAcceptedToken() external view returns (address);
 
     function getCreator() external view returns (address);
 
+    function getGelatoTaskCreated() external view returns (bool);
+
     function getGelatoOps() external view returns (address);
 
     function getGelato() external view returns (address payable);
-
-    function getGelatoDedicatedMsgSender() external view returns (address);
 
     function getGelatoTask() external view returns (bytes32);
 
