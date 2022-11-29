@@ -3482,10 +3482,35 @@ describe("Investment Pool", async () => {
                     const zeroInBytes32 = ethers.utils.formatBytes32String("");
                     assert.notEqual(gelatoTask, zeroInBytes32);
                 });
+
+                it("[IP][11.1.2] gelatoTaskCreated should be assigned to true", async () => {
+                    const gelatoTaskCreated = await investment.getGelatoTaskCreated();
+                    assert.isTrue(gelatoTaskCreated);
+                });
+
+                it("[IP][11.1.3] gelatoTaskCreated should be assigned to true", async () => {
+                    const gelatoTaskCreated = await investment.getGelatoTaskCreated();
+                    assert.isTrue(gelatoTaskCreated);
+                });
+
+                it("[IP][11.1.4] Shouldn't be able to start gelato task if it was already created", async () => {
+                    await expect(investment.startGelatoTask()).to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__GelatoTaskAlreadyStarted"
+                    );
+                });
+
+                it("[IP][11.1.5] Shouldn't be able to start gelato task if gelato task is already assigned", async () => {
+                    await investment.setGelatoTaskCreated(false);
+                    await expect(investment.startGelatoTask()).to.be.revertedWithCustomError(
+                        investment,
+                        "InvestmentPool__GelatoTaskAlreadyStarted"
+                    );
+                });
             });
 
             describe("function -> gelatoChecker", () => {
-                it("[IP][11.1.2] gelatoChecker should not pass if gelatoTask is not assigned", async () => {
+                it("[IP][11.1.6] gelatoChecker should not pass if gelatoTask is not assigned", async () => {
                     const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
                     // NOTE: Time traveling to 2100/07/15
@@ -3519,7 +3544,7 @@ describe("Investment Pool", async () => {
                     assert.equal(execPayload, encodedFunction);
                 });
 
-                it("[IP][11.1.3] gelatoChecker should not pass if not in auto termination window", async () => {
+                it("[IP][11.1.7] gelatoChecker should not pass if not in auto termination window", async () => {
                     const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
                     // NOTE: Time traveling to 2100/07/15
@@ -3539,7 +3564,7 @@ describe("Investment Pool", async () => {
                     assert.isFalse(canExec);
                 });
 
-                it("[IP][11.1.4] gelatoChecker should not pass if stream is not opened", async () => {
+                it("[IP][11.1.8] gelatoChecker should not pass if stream is not opened", async () => {
                     const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
                     // NOTE: Time traveling to 2100/07/15
@@ -3562,7 +3587,7 @@ describe("Investment Pool", async () => {
                     assert.isFalse(canExec);
                 });
 
-                it("[IP][11.1.5] gelatoChecker should pass if in auto termination window, stream is opened and gelatoTask variable is assigned", async () => {
+                it("[IP][11.1.9] gelatoChecker should pass if in auto termination window, stream is opened and gelatoTask variable is assigned", async () => {
                     const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
                     // NOTE: Time traveling to 2100/07/15
@@ -3591,15 +3616,33 @@ describe("Investment Pool", async () => {
             });
 
             describe("function -> gelatoTerminateMilestoneStreamFinal", () => {
-                it("[IP][11.1.6] Non gelato address should not be able to call gelato stream termination", async () => {
+                it("[IP][11.1.10] Non gelato address should be able to call gelato stream termination", async () => {
+                    const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                    // NOTE: Time traveling to 2100/07/15
+                    let timeStamp = dateToSeconds("2100/07/15");
+                    await investment.setTimestamp(timeStamp);
+                    await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                    // NOTE: Time traveling to 2100/09/15 when the milestone is active
+                    timeStamp = dateToSeconds("2100/09/15");
+                    // NOTE: Here we we want explicitly the chain reported time
+                    await investment.setTimestamp(0);
+                    await timeTravelToDate(timeStamp);
+
+                    await investment.connect(creator).startFirstFundsStream();
+
+                    const automatedTerminationWindow =
+                        await investment.getAutomatedTerminationWindow();
+                    timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
+                    // NOTE: Here we we want explicitly the chain reported time
+                    await timeTravelToDate(timeStamp);
+
                     await expect(
                         investment.connect(foreignActor).gelatoTerminateMilestoneStreamFinal(0)
-                    ).to.be.revertedWithCustomError(
-                        investment,
-                        "InvestmentPool__NotGelatoDedicatedSender"
-                    );
+                    ).not.to.be.reverted;
                 });
-                it("[IP][11.1.7] Gelato should not be able to terminate stream if gelatoTask is not assigned", async () => {
+                it("[IP][11.1.11] Gelato should not be able to terminate stream if gelatoTask is not assigned", async () => {
                     const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
                     // NOTE: Time traveling to 2100/07/15
@@ -3632,7 +3675,7 @@ describe("Investment Pool", async () => {
                     );
                 });
 
-                it("[IP][11.1.8] gelatoChecker should not pass if not in auto termination window", async () => {
+                it("[IP][11.1.12] Should not pass if not in auto termination window", async () => {
                     const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
                     // NOTE: Time traveling to 2100/07/15
@@ -3656,7 +3699,7 @@ describe("Investment Pool", async () => {
                     );
                 });
 
-                it("[IP][11.1.9] gelatoChecker should not pass if stream is not opened", async () => {
+                it("[IP][11.1.13] Should not pass if stream is not opened", async () => {
                     const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
                     // NOTE: Time traveling to 2100/07/15
@@ -3683,7 +3726,7 @@ describe("Investment Pool", async () => {
                     );
                 });
 
-                it("[IP][11.1.10] Investment pool should emit transfer event", async () => {
+                it("[IP][11.1.14] Investment pool should emit transfer event", async () => {
                     const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
                     // NOTE: Time traveling to 2100/07/15
@@ -3712,7 +3755,7 @@ describe("Investment Pool", async () => {
                         .withArgs(feeDetails[0], feeDetails[1]);
                 });
 
-                it("[IP][11.1.11] Investment pool should transfer fee to Gelato", async () => {
+                it("[IP][11.1.15] Investment pool should transfer fee to Gelato", async () => {
                     const investedAmount: BigNumber = ethers.utils.parseEther("2000");
                     // Send Ether to Investment Pool for gelato task
 
@@ -3757,7 +3800,7 @@ describe("Investment Pool", async () => {
                     assert.deepEqual(gelatoPriorBalance.add(feeDetails[0]), gelatoBalance);
                 });
 
-                it("[IP][11.1.12] Investment pool shouldn't be able to transfer fee to Gelato if not enough tokens", async () => {
+                it("[IP][11.1.16] Investment pool shouldn't be able to transfer fee to Gelato if not enough tokens", async () => {
                     const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
                     // NOTE: Time traveling to 2100/07/15
@@ -3790,7 +3833,7 @@ describe("Investment Pool", async () => {
                     );
                 });
 
-                it("[IP][11.1.13] Should emit cancel event", async () => {
+                it("[IP][11.1.17] Should emit cancel event", async () => {
                     const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
                     // NOTE: Time traveling to 2100/07/15
@@ -3818,7 +3861,7 @@ describe("Investment Pool", async () => {
                     );
                 });
 
-                it("[IP][11.1.14] Should cancel gelatoTask", async () => {
+                it("[IP][11.1.18] Should cancel gelatoTask", async () => {
                     const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
                     // NOTE: Time traveling to 2100/07/15
@@ -3846,7 +3889,7 @@ describe("Investment Pool", async () => {
                     );
                 });
 
-                it("[IP][11.1.15] If gelato terminates stream, project state should be updated", async () => {
+                it("[IP][11.1.19] If gelato terminates stream, project state should be updated", async () => {
                     const investedAmount: BigNumber = ethers.utils.parseEther("2000");
 
                     // NOTE: Time traveling to 2100/07/15
@@ -3872,6 +3915,34 @@ describe("Investment Pool", async () => {
 
                     const projectState = await investment.getProjectStateByteValue();
                     assert.equal(projectState.toString(), terminatedByGelatoStateValue.toString());
+                });
+
+                it("[IP][11.1.20] Should set the gelatoTask variable to empty bytes32 value", async () => {
+                    const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                    // NOTE: Time traveling to 2100/07/15
+                    let timeStamp = dateToSeconds("2100/07/15");
+                    await investment.setTimestamp(timeStamp);
+                    await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                    // NOTE: Time traveling to 2100/09/15 when the milestone is active
+                    timeStamp = dateToSeconds("2100/09/15");
+                    // NOTE: Here we we want explicitly the chain reported time
+                    await investment.setTimestamp(0);
+                    await timeTravelToDate(timeStamp);
+
+                    await investment.connect(creator).startFirstFundsStream();
+
+                    const automatedTerminationWindow =
+                        await investment.getAutomatedTerminationWindow();
+                    timeStamp = milestoneEndDate.toNumber() - automatedTerminationWindow / 2;
+                    // NOTE: Here we we want explicitly the chain reported time
+                    await timeTravelToDate(timeStamp);
+
+                    await gelatoOpsMock.gelatoTerminateMilestoneStream(0);
+
+                    const gelatoTask = await investment.getGelatoTask();
+                    assert.equal(gelatoTask, ethers.utils.formatBytes32String(""));
                 });
             });
         });
@@ -4157,10 +4228,7 @@ describe("Investment Pool", async () => {
 
                 await expect(
                     investment.connect(foreignActor).cancelDuringMilestones()
-                ).to.be.revertedWithCustomError(
-                    investment,
-                    "InvestmentPool__NotGovernancePoolOrGelato"
-                );
+                ).to.be.revertedWithCustomError(investment, "InvestmentPool__NotGovernancePool");
             });
         });
     });

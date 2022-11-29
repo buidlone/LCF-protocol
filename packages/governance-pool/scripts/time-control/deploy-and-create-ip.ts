@@ -1,4 +1,5 @@
 import {ethers, network} from "hardhat";
+import {BigNumber} from "ethers";
 import {availableTestnetChains, networkConfig} from "../../hardhat-helper-config";
 import {verify} from "../verify";
 import {
@@ -8,6 +9,7 @@ import {
     InvestmentPoolMock,
 } from "../../typechain-types";
 
+let nativeSuperToken: string;
 let gelatoOpsAddress: string;
 let superfluidHostAddress: string;
 let blockConfirmations: number;
@@ -15,6 +17,11 @@ let investmentPoolFactory: InvestmentPoolFactoryMock;
 let investmentPool: InvestmentPoolMock;
 let governancePool: GovernancePoolMock;
 let votingToken: VotingToken;
+const percentageDivider: number = 10 ** 6;
+
+const percentToIpBigNumber = (percent: number): number => {
+    return (percentageDivider * percent) / 100;
+};
 
 async function main() {
     if (!availableTestnetChains.includes(network.name)) {
@@ -28,6 +35,7 @@ async function main() {
     const chainId = network.config.chainId as number;
     gelatoOpsAddress = networkConfig[chainId].gelatoOps;
     superfluidHostAddress = networkConfig[chainId].superfluidHost;
+    nativeSuperToken = networkConfig[chainId].nativeSuperToken;
     blockConfirmations = networkConfig[chainId].blockConfirmations;
 
     // Deploy investment pool logic contract
@@ -98,6 +106,48 @@ async function main() {
         .connect(deployer)
         .setGovernancePool(governancePool.address);
     await ipFactoryTx.wait();
+
+    console.log("-----Creating Investment Pool contract-----");
+
+    const softCap: BigNumber = ethers.utils.parseEther("0.01");
+    const hardCap: BigNumber = ethers.utils.parseEther("0.02");
+    const gelatoFeeAllocation: BigNumber = ethers.utils.parseEther("0.1");
+
+    const twoMonthsInSeconds: number = 60 * 60 * 24 * 30 * 2;
+    const campaignStartDate: number = Math.round(new Date().getTime() / 1000) + 10 * 60; // current time + 5 minutes
+    const campaignEndDate: number = campaignStartDate + twoMonthsInSeconds; // campaignStartDate + 2 months
+    const percentagePart1: number = percentToIpBigNumber(0.5);
+    const percentagePart2: number = percentToIpBigNumber(9.5);
+
+    let milestones = [];
+
+    for (let i = 0; i < 10; i++) {
+        milestones.push({
+            startDate: campaignEndDate + i * twoMonthsInSeconds,
+            endDate: campaignEndDate + twoMonthsInSeconds + i * twoMonthsInSeconds,
+            intervalSeedPortion: percentagePart1,
+            intervalStreamingPortion: percentagePart2,
+        });
+    }
+
+    const creationTx = await investmentPoolFactory.connect(deployer).createInvestmentPool(
+        nativeSuperToken,
+        softCap,
+        hardCap,
+        campaignStartDate,
+        campaignEndDate,
+        0, // CLONE-PROXY
+        milestones,
+        {value: gelatoFeeAllocation}
+    );
+
+    const receipt = await creationTx.wait(1);
+    const poolAddress = receipt.events?.find((e) => e.event === "Created")?.args?.pool;
+
+    console.log("Created Investment Pool at address: ", poolAddress);
+    console.log("---Timeline---");
+    console.log("Fundraiser start date: ", new Date(campaignStartDate * 1000));
+    console.log("Fundraiser end date: ", new Date(campaignEndDate * 1000));
 }
 
 main().catch((error) => {

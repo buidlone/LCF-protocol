@@ -7,7 +7,6 @@ import {
     InvestmentPoolMockForIntegration,
 } from "../../typechain-types";
 import {BigNumber} from "ethers";
-import {investmentPool} from "../../typechain-types/factories/@buidlone";
 
 let accounts: SignerWithAddress[];
 let deployer: SignerWithAddress;
@@ -975,7 +974,7 @@ describe("Governance Pool", async () => {
                 const totalSupply = await governancePool.getVotingTokensSupply(
                     investmentPoolMock.address
                 );
-                
+
                 assert.equal(totalSupply.toString(), tokensToMint.toString());
             });
 

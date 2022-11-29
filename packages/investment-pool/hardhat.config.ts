@@ -33,13 +33,24 @@ const config: HardhatUserConfig = {
                     : [],
             chainId: 5,
         },
+        mumbai: {
+            url: process.env.MUMBAI_URL || "",
+            accounts:
+                process.env.DEPLOYER_PRIVATE_KEY !== undefined
+                    ? [process.env.DEPLOYER_PRIVATE_KEY]
+                    : [],
+            chainId: 80001,
+        },
     },
     gasReporter: {
         enabled: process.env.REPORT_GAS !== undefined,
         currency: "USD",
     },
     etherscan: {
-        apiKey: process.env.ETHERSCAN_API_KEY,
+        apiKey: {
+            goerli: process.env.ETHERSCAN_API_KEY || "",
+            polygonMumbai: process.env.POLYGONSCAN_API_KEY || "",
+        },
     },
     docgen: {
         path: "./docs",
