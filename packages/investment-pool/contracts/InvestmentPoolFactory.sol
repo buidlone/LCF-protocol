@@ -169,7 +169,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         );
 
         govPool.initialize(
-            votingToken,
+            getVotingToken(),
             invPool,
             getVotesPercentageThreshold(),
             getVotesWithdrawPercentageFee()

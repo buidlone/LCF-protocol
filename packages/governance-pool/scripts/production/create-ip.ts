@@ -1,10 +1,8 @@
 import {ethers, network} from "hardhat";
 import {availableTestnetChains, networkConfig} from "../../hardhat-helper-config";
 import {BigNumber} from "ethers";
-import {InvestmentPoolFactory} from "../../typechain-types";
+import {InvestmentPoolFactory, VotingToken} from "../../typechain-types";
 
-let nativeSuperToken: string;
-let investmentPoolFactory: InvestmentPoolFactory;
 const percentageDivider: number = 10 ** 6;
 
 const percentToIpBigNumber = (percent: number): number => {
@@ -21,7 +19,7 @@ async function main() {
     const accounts = await ethers.getSigners();
     const deployer = accounts[0];
     const chainId = network.config.chainId as number;
-    nativeSuperToken = networkConfig[chainId].nativeSuperToken;
+    const nativeSuperToken: string = networkConfig[chainId].nativeSuperToken;
 
     const softCap: BigNumber = ethers.utils.parseEther("1500");
     const hardCap: BigNumber = ethers.utils.parseEther("5000");
@@ -33,9 +31,15 @@ async function main() {
     const milestone2StartDate: number = milestone1EndDate; // = milestone1EndDate
     const milestone2EndDate: number = milestone2StartDate + 60 * 60 * 24 * 30 * 2; // milestone2StartDate + 2 months
 
-    investmentPoolFactory = await ethers.getContractAt("InvestmentPoolFactory", "<address>");
+    const investmentPoolFactory: InvestmentPoolFactory = await ethers.getContractAt(
+        "InvestmentPoolFactory",
+        "<address>"
+    );
 
-    const creationTx = await investmentPoolFactory.connect(deployer).createInvestmentPool(
+    /******************************************
+     * 1. Create project pools
+     *****************************************/
+    const creationTx = await investmentPoolFactory.connect(deployer).createProjectPools(
         nativeSuperToken,
         softCap,
         hardCap,
@@ -60,9 +64,20 @@ async function main() {
     );
 
     const receipt = await creationTx.wait(1);
-    const poolAddress = receipt.events?.find((e) => e.event === "Created")?.args?.ipContract;
+    const creationEvent = receipt.events?.find((e) => e.event === "Created");
+    const ipAddress = creationEvent?.args?.ipContract;
+    const gpAddress = creationEvent?.args?.gpContract;
 
-    console.log("Created Investment Pool at address: ", poolAddress);
+    /******************************************
+     * 2. Assign governance pool role to allow minting
+     *****************************************/
+    const votingTokenAddress = await investmentPoolFactory.getVotingToken();
+    const votingToken: VotingToken = await ethers.getContractAt("VotingToken", votingTokenAddress);
+    const governancePoolRole: string = await votingToken.GOVERNANCE_POOL_ROLE();
+    await votingToken.connect(deployer).grantRole(governancePoolRole, gpAddress);
+
+    console.log("Created Investment Pool at address: ", ipAddress);
+    console.log("Created Governance Pool at address: ", gpAddress);
     console.log("---Timeline---");
     console.log("Fundraiser start date: ", new Date(campaignStartDate * 1000));
     console.log("Fundraiser end date: ", new Date(campaignEndDate * 1000));
