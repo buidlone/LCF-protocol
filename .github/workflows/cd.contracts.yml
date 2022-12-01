@@ -7,6 +7,7 @@ on:
 
 jobs:
   build:
+    environment: dev
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -32,7 +33,7 @@ jobs:
         yarn install
         yarn build
 
-    - name: yarn install, build
+    - name: deploy to Goerli
       working-directory: ./packages/governance-pool
       run: |
         yarn deploy:goerli
