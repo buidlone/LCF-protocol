@@ -162,11 +162,9 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @param _investmentPool investment pool address, which will be added to the active IPs mapping.
      *  @dev Reverts if sender ir not investment pool factory, if status is not unavailable.
      */
-    function activateInvestmentPool(address _investmentPool)
-        external
-        onlyInvestmentPoolFactory
-        investmentPoolDoesNotExist(_investmentPool)
-    {
+    function activateInvestmentPool(
+        address _investmentPool
+    ) external onlyInvestmentPoolFactory investmentPoolDoesNotExist(_investmentPool) {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
         investmentPoolExists[investmentPoolId] = true;
 
@@ -238,7 +236,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @param _investmentPool investment pool address, to which investor transfers tokens by voting against it.
      *  @param _amount tokens amount investor wants to vote with.
      */
-    function voteAgainst(address _investmentPool, uint256 _amount)
+    function voteAgainst(
+        address _investmentPool,
+        uint256 _amount
+    )
         external
         notZeroAmount(_amount)
         allowedInvestmentPoolStates(_investmentPool, getAnyMilestoneOngoingStateValue())
@@ -277,7 +278,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @param _investmentPool investment pool address, from which to retract votes.
      *  @param _retractAmount tokens amount investor wants retract from delegated votes.
      */
-    function retractVotes(address _investmentPool, uint256 _retractAmount)
+    function retractVotes(
+        address _investmentPool,
+        uint256 _retractAmount
+    )
         external
         notZeroAmount(_retractAmount)
         allowedInvestmentPoolStates(_investmentPool, getAnyMilestoneOngoingStateValue())
@@ -317,7 +321,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @param _investor investors, who wants to unpledge and burn votes.
      *  @param _milestoneId milestone, in which investor invested previously.
      */
-    function burnVotes(uint256 _milestoneId, address _investor)
+    function burnVotes(
+        uint256 _milestoneId,
+        address _investor
+    )
         external
         allowedInvestmentPoolStates(
             _msgSender(),
@@ -392,7 +399,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         emit TransferVotes(_investmentPool, _msgSender(), _recipient, _amount);
     }
 
-    function permanentlyLockVotes(address _investmentPool, uint256 _votes)
+    function permanentlyLockVotes(
+        address _investmentPool,
+        uint256 _votes
+    )
         external
         notZeroAmount(_votes)
         allowedInvestmentPoolStates(_investmentPool, getAnyMilestoneOngoingStateValue())
@@ -454,11 +464,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @param _votesAgainst amount of tokens, which will be used to calculate its percentage.
      *  @return uint8 -> the percentage without any decimal places (e.g. 10; 62; 97)
      */
-    function votesAgainstPercentageCount(address _investmentPool, uint256 _votesAgainst)
-        public
-        view
-        returns (uint8)
-    {
+    function votesAgainstPercentageCount(
+        address _investmentPool,
+        uint256 _votesAgainst
+    ) public view returns (uint8) {
         uint256 totalSupply = getVotingTokensSupply(_investmentPool);
 
         if (totalSupply == 0) revert GovernancePool__TotalSupplyIsZero();
@@ -477,11 +486,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @param _investorVotesCount amount of tokens investor votes with.
      *  @return bool -> if threshold will be reached or not
      */
-    function willInvestorReachThreshold(address _investmentPool, uint256 _investorVotesCount)
-        public
-        view
-        returns (bool)
-    {
+    function willInvestorReachThreshold(
+        address _investmentPool,
+        uint256 _investorVotesCount
+    ) public view returns (bool) {
         uint256 investmentPoolId = getInvestmentPoolId(_investmentPool);
 
         uint256 votesCountAgainst = getTotalVotesAmount(investmentPoolId);
@@ -544,7 +552,6 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
             // If no such index exists (i.e. all values in the array are strictly less than element), the array length is returned.
             // Because in previous condition we checked if investments were made to the milestone id,
             // we can be sure that findUpperBound function will return the value greater than element of length of the array,
-            // but not the value that is equal.
             /// @dev not using milestonesIds variable because findUpperBound works only with storage variables.
             uint256 nearestMilestoneIdFromTop = milestonesIdsInWhichInvestorInvested[_account][
                 investmentPoolId
@@ -595,11 +602,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
      *  @param _account address of the account to check
      *  @return uint256 -> balance of tokens owned
      */
-    function getVotingTokenBalance(address _investmentPool, address _account)
-        public
-        view
-        returns (uint256)
-    {
+    function getVotingTokenBalance(
+        address _investmentPool,
+        address _account
+    ) public view returns (uint256) {
         return VOTING_TOKEN.balanceOf(_account, getInvestmentPoolId(_investmentPool));
     }
 
@@ -649,11 +655,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         return investmentPoolExists[_investmentPoolId];
     }
 
-    function getVotesAmount(address _investor, uint256 _investmentPoolId)
-        public
-        view
-        returns (uint256)
-    {
+    function getVotesAmount(
+        address _investor,
+        uint256 _investmentPoolId
+    ) public view returns (uint256) {
         return votesAmount[_investor][_investmentPoolId];
     }
 
@@ -661,11 +666,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         return totalVotesAmount[_investmentPoolId];
     }
 
-    function getLockedAmount(address _investor, uint256 _investmentPoolId)
-        public
-        view
-        returns (uint256)
-    {
+    function getLockedAmount(
+        address _investor,
+        uint256 _investmentPoolId
+    ) public view returns (uint256) {
         return lockedAmount[_investor][_investmentPoolId];
     }
 
@@ -673,11 +677,10 @@ contract GovernancePool is ERC1155Holder, Context, IGovernancePool {
         return totalLockedAmount[_investmentPoolId];
     }
 
-    function getMilestonesIdsInWhichInvestorInvested(address _investor, uint256 _investmentPoolId)
-        public
-        view
-        returns (uint256[] memory)
-    {
+    function getMilestonesIdsInWhichInvestorInvested(
+        address _investor,
+        uint256 _investmentPoolId
+    ) public view returns (uint256[] memory) {
         return milestonesIdsInWhichInvestorInvested[_investor][_investmentPoolId];
     }
 
