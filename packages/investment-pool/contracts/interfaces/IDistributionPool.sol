@@ -5,9 +5,9 @@ pragma solidity ^0.8.14;
 
 interface IDistributionPool {
     // Functions only for creator
-    function lockProjectTokens(address _token, uint256 _amount) external;
+    function lockTokens(address _token, uint256 _amount) external;
 
-    function withdrawAllTokens() external;
+    function withdrawTokens() external;
 
     // Functions only for investors
     function allocateTokens(
@@ -22,16 +22,11 @@ interface IDistributionPool {
 
     function terminateTokensStream(uint256 _milestoneId, address _investor) external;
 
-    function openNextMilestoneTokensStreamOrEndProject(
-        uint256 _milestoneId,
-        address _investor
-    ) external;
+    function milestoneJump(uint256 _milestoneId, address _investor) external;
 
-    function getProjectTokensSupplyCap() external view returns (uint256);
+    function getTokenProjectAllocation() external view returns (uint256);
 
-    function getExpectedProjectTokensAllocation(
-        uint256 _investedAmount
-    ) external view returns (uint256);
+    function getExpectedTokensAllocation(uint256 _investedAmount) external view returns (uint256);
 
     function getInvestmentWeightMaximum() external view returns (uint256);
 
@@ -42,16 +37,14 @@ interface IDistributionPool {
 
     function getTotalInvestmentWeight(uint256 _milestoneId) external view returns (uint256);
 
-    function getAllocatedProjectTokensAmount(
+    function getAllocatedTokens(
         uint256 _milestoneId,
         address _investor
     ) external view returns (uint256);
 
-    function getTotalAllocatedProjectTokensAmount(
-        address _investor
-    ) external view returns (uint256);
+    function getTotalAllocatedTokens(address _investor) external view returns (uint256);
 
-    function getProjectToken() external pure returns (address);
+    function getToken() external pure returns (address);
 
-    function getProjectTokensBalance() external view returns (uint256);
+    function getTokensBalance() external view returns (uint256);
 }
