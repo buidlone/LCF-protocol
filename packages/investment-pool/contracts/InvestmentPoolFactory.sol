@@ -43,6 +43,7 @@ error InvestmentPoolFactory__NotEnoughEthValue();
 error InvestmentPoolFactory__FailedToSendEthToInvestmentPool();
 error InvestmentPoolFactory__SeedFundsAllocationGreaterThanTotal();
 error InvestmentPoolFactory__SeedFundsAllocationExceedsMax();
+error InvestmentPoolFactory__HardCapIsLargerThanSoftCapMoreTimesThanAllowed();
 
 contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     // Assign all Clones library functions to addresses
@@ -51,7 +52,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     uint32 internal constant MAX_MILESTONE_COUNT = 10;
     uint48 internal TERMINATION_WINDOW = 3 days;
     uint48 internal AUTOMATED_TERMINATION_WINDOW = 1 hours;
-    uint256 internal constant PERCENTAGE_DIVIDER = 10**6;
+    uint256 internal constant PERCENTAGE_DIVIDER = 10 ** 6;
     uint256 internal MILESTONE_MIN_DURATION = 30 days;
     uint256 internal MILESTONE_MAX_DURATION = 90 days;
     uint256 internal FUNDRAISER_MIN_DURATION = 30 days;
@@ -62,6 +63,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     /// * @dev Multiplier is firstly multiplied by 10 to avoid decimal places rounding in solidity
     uint256 internal SOFT_CAP_MULTIPLIER = 19;
     uint256 internal HARD_CAP_MULTIPLIER = 10;
+    uint256 internal SOFT_CAP_MAX_MULTIPLIER = 10;
 
     /**
      * @notice Amount that will be used to cover transaction fee for gelato automation
@@ -81,11 +83,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     address payable internal immutable GELATO_OPS;
     address internal investmentPoolImplementation;
 
-    constructor(
-        ISuperfluid _host,
-        address payable _gelatoOps,
-        address _implementationContract
-    ) {
+    constructor(ISuperfluid _host, address payable _gelatoOps, address _implementationContract) {
         if (address(_host) == address(0)) revert InvestmentPoolFactory__HostAddressIsZero();
 
         if (_gelatoOps == address(0)) revert InvestmentPoolFactory__GelatoOpsAddressIsZero();
@@ -265,7 +263,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
 
     function _assertPoolInitArguments(
         // solhint-disable-next-line no-unused-vars
-        ISuperfluid, /*_host*/
+        ISuperfluid /*_host*/,
         ISuperToken _superToken,
         address _creator,
         uint96 _softCap,
@@ -284,6 +282,9 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
 
         if (_softCap > _hardCap)
             revert InvestmentPoolFactory__SoftCapIsGreaterThanHardCap(_softCap, _hardCap);
+
+        if (_softCap * SOFT_CAP_MAX_MULTIPLIER < _hardCap)
+            revert InvestmentPoolFactory__HardCapIsLargerThanSoftCapMoreTimesThanAllowed();
 
         if (_fundraiserStartAt < _getNow())
             revert InvestmentPoolFactory__FundraiserStartIsInPast();
@@ -359,11 +360,9 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         return block.timestamp;
     }
 
-    function _validateMilestoneInterval(IInvestmentPool.MilestoneInterval memory milestone)
-        internal
-        view
-        returns (bool)
-    {
+    function _validateMilestoneInterval(
+        IInvestmentPool.MilestoneInterval memory milestone
+    ) internal view returns (bool) {
         return (milestone.endDate > milestone.startDate &&
             (milestone.endDate - milestone.startDate >= getMilestoneMinDuration()) &&
             (milestone.endDate - milestone.startDate <= getMilestoneMaxDuration()));

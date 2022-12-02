@@ -3,9 +3,13 @@
 
 pragma solidity ^0.8.14;
 
+import {CFAv1Library} from "@superfluid-finance/ethereum-contracts/contracts/apps/CFAv1Library.sol";
+import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
+import {IInvestmentPool} from "./IInvestmentPool.sol";
+
 interface IDistributionPool {
     // Functions only for creator
-    function lockTokens(address _token, uint256 _amount) external;
+    function lockTokens() external;
 
     function withdrawTokens() external;
 
@@ -24,27 +28,28 @@ interface IDistributionPool {
 
     function milestoneJump(uint256 _milestoneId, address _investor) external;
 
-    function getTokenProjectAllocation() external view returns (uint256);
+    function getLockedTokens() external view returns (uint256);
 
-    function getExpectedTokensAllocation(uint256 _investedAmount) external view returns (uint256);
-
-    function getInvestmentWeightMaximum() external view returns (uint256);
-
-    function getInvestmentWeight(
-        uint256 _milestoneId,
-        address _investor
+    function calculateExpectedTokensAllocation(
+        uint256 _investedAmount
     ) external view returns (uint256);
 
-    function getTotalInvestmentWeight(uint256 _milestoneId) external view returns (uint256);
-
     function getAllocatedTokens(
-        uint256 _milestoneId,
-        address _investor
+        address _investor,
+        uint256 _milestoneId
     ) external view returns (uint256);
 
     function getTotalAllocatedTokens(address _investor) external view returns (uint256);
 
-    function getToken() external pure returns (address);
+    function getToken() external view returns (address);
 
     function getTokensBalance() external view returns (uint256);
+}
+
+interface IInitializableDistributionPool is IDistributionPool {
+    function initialize(
+        IInvestmentPool _investmentPool,
+        ISuperToken _projectToken,
+        uint256 _amountToLock
+    ) external;
 }

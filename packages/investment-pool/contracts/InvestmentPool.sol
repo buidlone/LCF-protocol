@@ -836,6 +836,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         return getMaximumWeightDivisor();
     }
 
+    /**
+     * @notice Calculates the theoretical maximum weight, which is reached if investors invest enough money to reach hardcap.
+     */
     function getMaximumWeightDivisor() public view returns (uint256) {
         uint256 onlyHardCapAmount = uint256(getHardCap()) - uint256(getSoftCap());
         uint256 softCapMaxWeight = uint256(getSoftCap()) * getSoftCapMultiplier();
@@ -1023,6 +1026,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     ) internal {
         uint256 investmentCoefficient = memMilestonePortions[_milestoneId];
 
+        // TODO: what if investment is not made in one of the milestones? memMilestoneInvestments will still be 0
         if (memMilestoneInvestments[_milestoneId] == 0 && _milestoneId > 0) {
             memMilestoneInvestments[_milestoneId] = memMilestoneInvestments[_milestoneId - 1];
         }
