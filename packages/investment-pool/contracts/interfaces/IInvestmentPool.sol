@@ -198,13 +198,11 @@ interface IInvestmentPool is ISuperApp {
 
     function getVotingTokensAmountToMint(uint256 _amount) external view returns (uint256);
 
-    function getInvestmentWeightFromInvestmentAmount(
-        uint256 _amount
-    ) external view returns (uint256);
+    function calculateInvestmentWeight(uint256 _amount) external view returns (uint256);
 
     function getVotingTokensSupplyCap() external view returns (uint256);
 
-    function getInvestmentWeightMaximum() external view returns (uint256);
+    function getMaximumWeightDivisor() external view returns (uint256);
 }
 
 interface IInitializableInvestmentPool is IInvestmentPool {

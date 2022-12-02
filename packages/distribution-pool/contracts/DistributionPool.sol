@@ -145,10 +145,8 @@ contract DistributionPool is Context, Initializable {
     function getExpectedProjectTokensAllocation(
         uint256 _investedAmount
     ) public view returns (uint256) {
-        uint256 expectedWeight = investmentPool.getInvestmentWeightFromInvestmentAmount(
-            _investedAmount
-        );
-        uint256 maxWeight = investmentPool.getInvestmentWeightMaximum();
+        uint256 expectedWeight = investmentPool.calculateInvestmentWeight(_investedAmount);
+        uint256 maxWeight = investmentPool.getMaximumWeightDivisor();
         return (expectedWeight / maxWeight) * getProjectTokensSupplyCap();
     }
 

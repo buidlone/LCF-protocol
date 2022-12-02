@@ -833,15 +833,15 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     }
 
     function getVotingTokensSupplyCap() public view returns (uint256) {
+        return getMaximumWeightDivisor();
+    }
+
+    function getMaximumWeightDivisor() public view returns (uint256) {
         uint256 onlyHardCapAmount = uint256(getHardCap()) - uint256(getSoftCap());
         uint256 softCapMaxWeight = uint256(getSoftCap()) * getSoftCapMultiplier();
         uint256 hardCapMaxWeight = onlyHardCapAmount * getHardCapMultiplier();
         uint256 maxWeight = softCapMaxWeight + hardCapMaxWeight;
         return maxWeight;
-    }
-
-    function getInvestmentWeightMaximum() public view returns (uint256) {
-        return getVotingTokensSupplyCap();
     }
 
     /**
@@ -1038,6 +1038,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      * @notice Get the amount of voting tokens to mint. It is determined by the period (until soft cap or hard cap)
      */
     function getVotingTokensAmountToMint(uint256 _amount) public view returns (uint256) {
+        return calculateInvestmentWeight(_amount);
+    }
+
+    function calculateInvestmentWeight(uint256 _amount) public view returns (uint256) {
         if (getTotalInvestedAmount() <= getSoftCap()) {
             // Private funding
             if (getTotalInvestedAmount() + _amount <= getSoftCap()) {
@@ -1048,11 +1052,11 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
                 // the amount which is going to be invested in private funding and which in public funding.
                 // Investor invested while in private funding. Remaining funds went to public funding.
                 uint256 amountInSoftCap = getSoftCap() - getTotalInvestedAmount();
-                uint256 ticketsForSoftCap = amountInSoftCap * getSoftCapMultiplier();
+                uint256 maxWeightForSoftCap = amountInSoftCap * getSoftCapMultiplier();
                 uint256 amountInHardCap = _amount - amountInSoftCap;
-                uint256 ticketsForHardCap = amountInHardCap * getHardCapMultiplier();
+                uint256 maxWeightForHardCap = amountInHardCap * getHardCapMultiplier();
 
-                return ticketsForSoftCap + ticketsForHardCap;
+                return maxWeightForSoftCap + maxWeightForHardCap;
             }
         } else if (
             getTotalInvestedAmount() > getSoftCap() && getTotalInvestedAmount() <= getHardCap()
@@ -1066,12 +1070,6 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
         // For unexpected cases
         return 0;
-    }
-
-    function getInvestmentWeightFromInvestmentAmount(
-        uint256 _amount
-    ) public view returns (uint256) {
-        return getVotingTokensAmountToMint(_amount);
     }
 
     /// @notice Get the total project PORTION percentage. It shouldn't be confused with total investment percentage that is left.
