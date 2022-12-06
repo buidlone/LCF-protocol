@@ -1,6 +1,6 @@
 import {network} from "hardhat";
-import {availableTestnetChains, networkConfig} from "../../hardhat-helper-config";
-import {deployFactory} from "./deploy-factory";
+import {availableTestnetChains} from "../../hardhat-helper-config";
+import {deployFactory} from "../deployment-outlines/deploy-factory";
 
 async function main() {
     if (!availableTestnetChains.includes(network.name)) {
@@ -8,7 +8,13 @@ async function main() {
         return;
     }
 
-    await deployFactory(true);
+    await deployFactory(
+        true,
+        "InvestmentPoolFactoryMock",
+        "InvestmentPoolMock",
+        "GovernancePoolMock",
+        "VotingToken"
+    );
 }
 
 main().catch((error) => {

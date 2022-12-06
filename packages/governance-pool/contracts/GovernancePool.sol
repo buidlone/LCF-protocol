@@ -14,7 +14,6 @@ import {IInitializableGovernancePool} from "@buidlone/investment-pool/contracts/
 import {VotingToken} from "./VotingToken.sol";
 
 error GovernancePool__InvestmentPoolAlreadyExists();
-error GovernancePool__InvestmentPoolDoesNotExist();
 error GovernancePool__NotInvestmentPool();
 error GovernancePool__NotInvestmentPoolFactory();
 error GovernancePool__AmountIsZero();
@@ -85,18 +84,9 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
 
     /// @notice Ensures that provided current project state is one of the provided. It uses bitwise operations in condition
     modifier allowedInvestmentPoolStates(uint256 _states) {
-        if (getInvestmentPool() == address(0)) revert GovernancePool__InvestmentPoolDoesNotExist();
-
         uint256 currentInvestmentPoolState = investmentPool.getProjectStateByteValue();
         if (_states & currentInvestmentPoolState == 0)
             revert GovernancePool__InvestmentPoolStateNotAllowed(currentInvestmentPoolState);
-        _;
-    }
-
-    modifier investmentPoolDoesNotExist() {
-        if (getInvestmentPool() != address(0)) {
-            revert GovernancePool__InvestmentPoolAlreadyExists();
-        }
         _;
     }
 
@@ -182,6 +172,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
         tokensMinted[_investor][_milestoneId] += _amount;
 
         // Tokens will never be minted for the milestones that already passed because this is called only by IP in invest function
+        // Investment pool address is converted to uint256 number and is used as a unique voting token identifier
         votingToken.mint(_investor, getInvestmentPoolId(), _amount, "");
 
         // msg.sender is investment pool
@@ -217,6 +208,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
         totalVotesAmount += _amount;
 
         // Transfer the voting tokens from investor to the governance pool
+        // Investment pool address is converted to uint256 number and is used as a unique voting token identifier
         votingToken.safeTransferFrom(
             _msgSender(),
             address(this),
@@ -263,6 +255,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
         uint256 amountToTransfer = (_retractAmount * (100 - getVotesWithdrawPercentageFee())) /
             100;
 
+        // Investment pool address is converted to uint256 number and is used as a unique voting token identifier
         votingToken.safeTransferFrom(
             address(this),
             _msgSender(),
@@ -300,6 +293,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
         memActiveTokens[_investor][_milestoneId] = 0;
         tokensMinted[_investor][_milestoneId] = 0;
 
+        // Investment pool address is converted to uint256 number and is used as a unique voting token identifier
         votingToken.burn(_investor, getInvestmentPoolId(), burnAmount);
 
         emit BurnVotes(_investor, burnAmount);
@@ -343,6 +337,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
             recipientActiveVotingTokensBalance +
             _amount;
 
+        // Investment pool address is converted to uint256 number and is used as a unique voting token identifier
         votingToken.safeTransferFrom(_msgSender(), _recipient, getInvestmentPoolId(), _amount, "");
 
         emit TransferVotes(_msgSender(), _recipient, _amount);
@@ -376,6 +371,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
         lockedAmount[_msgSender()] += _votes;
         totalLockedAmount += _votes;
 
+        // Investment pool address is converted to uint256 number and is used as a unique voting token identifier
         votingToken.safeTransferFrom(
             _msgSender(),
             address(this),
@@ -529,6 +525,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
      *  @return uint256 -> total supply of tokens minted
      */
     function getVotingTokensSupply() public view returns (uint256) {
+        // Investment pool address is converted to uint256 number and is used as a unique voting token identifier
         return votingToken.totalSupply(getInvestmentPoolId());
     }
 
@@ -537,6 +534,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
      *  @return uint256 -> balance of tokens owned
      */
     function getVotingTokenBalance(address _account) public view returns (uint256) {
+        // Investment pool address is converted to uint256 number and is used as a unique voting token identifier
         return votingToken.balanceOf(_account, getInvestmentPoolId());
     }
 

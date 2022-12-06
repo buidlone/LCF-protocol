@@ -12,10 +12,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {IInvestmentPool, IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
 import {IGovernancePool, IInitializableGovernancePool} from "./interfaces/IGovernancePool.sol";
-
 import {IInvestmentPoolFactory} from "./interfaces/IInvestmentPoolFactory.sol";
-import {IGovernancePool} from "./interfaces/IGovernancePool.sol";
-import {InvestmentPool} from "./InvestmentPool.sol";
+import {IVotingToken} from "./interfaces/IVotingToken.sol";
 
 error InvestmentPoolFactory__ImplementationContractAddressIsZero();
 error InvestmentPoolFactory__HostAddressIsZero();
@@ -83,14 +81,14 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     address payable internal immutable GELATO_OPS;
     address internal investmentPoolImplementation;
     address internal governancePoolImplementation;
-    address internal votingToken;
+    IVotingToken internal votingToken;
 
     constructor(
         ISuperfluid _host,
         address payable _gelatoOps,
         address _ipImplementation,
         address _gpImplementation,
-        address _votingToken
+        IVotingToken _votingToken
     ) {
         if (address(_host) == address(0)) revert InvestmentPoolFactory__HostAddressIsZero();
         if (_gelatoOps == address(0)) revert InvestmentPoolFactory__GelatoOpsAddressIsZero();
@@ -174,6 +172,10 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
             getVotesPercentageThreshold(),
             getVotesWithdrawPercentageFee()
         );
+
+        // Grant newly created governance pool access to mint voting tokens
+        bytes32 governancePoolRole = votingToken.GOVERNANCE_POOL_ROLE();
+        votingToken.grantRole(governancePoolRole, address(govPool));
 
         // Final level is required by the Superfluid's spec right now
         // We only really care about termination callbacks, others - noop
@@ -270,7 +272,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     }
 
     function getVotingToken() public view returns (address) {
-        return votingToken;
+        return address(votingToken);
     }
 
     /** INTERNAL FUNCITONS */

@@ -48,7 +48,7 @@ const deployContracts = async () => {
     governancePool = await governancePoolFactory.deploy();
     await governancePool.deployed();
 
-    // Assign role to allow minting
+    // Assigning governance pool role manually because we create governace pool not from investment pool factory
     governancePoolRole = await votingToken.GOVERNANCE_POOL_ROLE();
     await votingToken.connect(deployer).grantRole(governancePoolRole, governancePool.address);
 
@@ -890,25 +890,6 @@ describe("Governance Pool", async () => {
                     .reverted;
             });
 
-            it("[GP][8.2.3] Shouldn't be able to vote for investment pool, which doesn't exist", async () => {
-                const votesAgainst = ethers.utils.parseEther("1");
-
-                // Governance Pool deployment
-                const governancePoolFactory = await ethers.getContractFactory(
-                    "GovernancePoolMock",
-                    deployer
-                );
-                governancePool = await governancePoolFactory.deploy();
-                await governancePool.deployed();
-
-                await expect(
-                    governancePool.connect(investorA).voteAgainst(votesAgainst)
-                ).to.be.revertedWithCustomError(
-                    governancePool,
-                    "GovernancePool__InvestmentPoolDoesNotExist"
-                );
-            });
-
             it("[GP][8.2.4] Voting with 0 amount should revert", async () => {
                 await expect(
                     governancePool.connect(investorA).voteAgainst(0)
@@ -1151,25 +1132,6 @@ describe("Governance Pool", async () => {
                 await expect(governancePool.connect(investorA).retractVotes(votesToRetract))
                     .to.emit(governancePool, "RetractVotes")
                     .withArgs(investorA.address, votesToRetract);
-            });
-
-            it("[GP][9.2.3] Shouldn't be able to retract votes from investment pool which doesn't exist", async () => {
-                const votesToRetract = ethers.utils.parseEther("1");
-
-                // Governance Pool deployment
-                const governancePoolFactory = await ethers.getContractFactory(
-                    "GovernancePoolMock",
-                    deployer
-                );
-                governancePool = await governancePoolFactory.deploy();
-                await governancePool.deployed();
-
-                await expect(
-                    governancePool.connect(investorA).retractVotes(votesToRetract)
-                ).to.be.revertedWithCustomError(
-                    governancePool,
-                    "GovernancePool__InvestmentPoolDoesNotExist"
-                );
             });
 
             it("[GP][9.2.4] Retracting 0 amount of votes should revert", async () => {
@@ -1615,27 +1577,6 @@ describe("Governance Pool", async () => {
                 );
             });
 
-            it("[GP][10.2.6] Shouldn't be able to transfer votes if investment pool doesn't exist", async () => {
-                const tokensToMint = ethers.utils.parseEther("1");
-                await investmentPoolMock.setProjectState(milestonesOngoingBeforeLastStateValue);
-                // Governance Pool deployment
-                const governancePoolFactory = await ethers.getContractFactory(
-                    "GovernancePoolMock",
-                    deployer
-                );
-                governancePool = await governancePoolFactory.deploy();
-                await governancePool.deployed();
-
-                await expect(
-                    governancePool
-                        .connect(investorA)
-                        .transferVotes(investorB.address, tokensToMint)
-                ).to.be.revertedWithCustomError(
-                    governancePool,
-                    "GovernancePool__InvestmentPoolDoesNotExist"
-                );
-            });
-
             it("[GP][10.2.7] Shouldn't be able to transfer votes if no milestone is ongoing", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
 
@@ -1983,25 +1924,6 @@ describe("Governance Pool", async () => {
                 assert.equal(
                     contractBalance.toString(),
                     priorContractBalance.add(lockAmount).toString()
-                );
-            });
-
-            it("[GP][12.2.6] Shouldn't be able to lock votes if investment pool doesn't exist", async () => {
-                const tokensToMint = ethers.utils.parseEther("1");
-                await investmentPoolMock.setProjectState(milestonesOngoingBeforeLastStateValue);
-                // Governance Pool deployment
-                const governancePoolFactory = await ethers.getContractFactory(
-                    "GovernancePoolMock",
-                    deployer
-                );
-                governancePool = await governancePoolFactory.deploy();
-                await governancePool.deployed();
-
-                await expect(
-                    governancePool.connect(investorA).permanentlyLockVotes(tokensToMint)
-                ).to.be.revertedWithCustomError(
-                    governancePool,
-                    "GovernancePool__InvestmentPoolDoesNotExist"
                 );
             });
 

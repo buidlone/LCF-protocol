@@ -8,6 +8,7 @@ import {
     InvestmentPoolMock,
     GelatoOpsMock,
     GovernancePoolMockForIntegration,
+    VotingTokenMock,
 } from "../typechain-types";
 import traveler from "ganache-time-traveler";
 
@@ -34,15 +35,14 @@ let buidl1Admin: SignerWithAddress;
 let creator: SignerWithAddress;
 let investorA: SignerWithAddress;
 let investorB: SignerWithAddress;
-
 let investors: SignerWithAddress[];
-
 let foreignActor: SignerWithAddress;
 
 let sf: Framework;
 let investmentPoolFactory: InvestmentPoolFactoryMock;
 let investment: InvestmentPoolMock;
 let governancePool: GovernancePoolMockForIntegration;
+let votingToken: VotingTokenMock;
 
 let snapshotId: string;
 
@@ -55,7 +55,6 @@ let milestoneEndDate2: BigNumber;
 let campaignStartDate: BigNumber;
 let campaignEndDate: BigNumber;
 
-let creationRes: ContractTransaction;
 let gelatoOpsMock: GelatoOpsMock;
 
 let gelatoFeeAllocation: BigNumber;
@@ -176,29 +175,31 @@ const createInvestmentWithTwoMilestones = async (feeAmount: BigNumber = gelatoFe
     campaignStartDate = dateToSeconds("2100/07/01") as BigNumber;
     campaignEndDate = dateToSeconds("2100/08/01") as BigNumber;
 
-    creationRes = await investmentPoolFactory.connect(creator).createProjectPools(
-        fUSDTx.address,
-        softCap,
-        hardCap,
-        campaignStartDate,
-        campaignEndDate,
-        0, // CLONE-PROXY
-        [
-            {
-                startDate: milestoneStartDate,
-                endDate: milestoneEndDate,
-                intervalSeedPortion: percent5InIpBigNumber,
-                intervalStreamingPortion: percent70InIpBigNumber,
-            },
-            {
-                startDate: milestoneStartDate2,
-                endDate: milestoneEndDate2,
-                intervalSeedPortion: percent5InIpBigNumber,
-                intervalStreamingPortion: percent20InIpBigNumber,
-            },
-        ],
-        {value: feeAmount}
-    );
+    const creationRes: ContractTransaction = await investmentPoolFactory
+        .connect(creator)
+        .createProjectPools(
+            fUSDTx.address,
+            softCap,
+            hardCap,
+            campaignStartDate,
+            campaignEndDate,
+            0, // CLONE-PROXY
+            [
+                {
+                    startDate: milestoneStartDate,
+                    endDate: milestoneEndDate,
+                    intervalSeedPortion: percent5InIpBigNumber,
+                    intervalStreamingPortion: percent70InIpBigNumber,
+                },
+                {
+                    startDate: milestoneStartDate2,
+                    endDate: milestoneEndDate2,
+                    intervalSeedPortion: percent5InIpBigNumber,
+                    intervalStreamingPortion: percent20InIpBigNumber,
+                },
+            ],
+            {value: feeAmount}
+        );
 
     [investment, governancePool] = await getContractsFromTx(creationRes);
 };
@@ -304,6 +305,11 @@ describe("Investment Pool", async () => {
         const governancePoolLogic = await governancePoolFactory.deploy();
         await governancePoolLogic.deployed();
 
+        // Create voting token
+        const votingTokenDep = await ethers.getContractFactory("VotingTokenMock", buidl1Admin);
+        votingToken = await votingTokenDep.deploy();
+        await votingToken.deployed();
+
         // Create investment pool factory contract
         const investmentPoolDepFactory = await ethers.getContractFactory(
             "InvestmentPoolFactoryMock",
@@ -315,7 +321,7 @@ describe("Investment Pool", async () => {
             gelatoOpsMock.address,
             investmentPoolLogic.address,
             governancePoolLogic.address,
-            ethers.constants.AddressZero
+            votingToken.address
         );
         await investmentPoolFactory.deployed();
 

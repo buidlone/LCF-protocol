@@ -8,6 +8,7 @@ import {
     InvestmentPoolMock,
     GelatoOpsMock,
     GovernancePoolMockForIntegration,
+    VotingTokenMock,
 } from "../typechain-types";
 
 const fTokenAbi = require("./abis/fTokenAbi");
@@ -30,9 +31,10 @@ let foreignActor: SignerWithAddress;
 
 let sf: Framework;
 let investmentPoolFactory: InvestmentPoolFactoryMock;
-let investmentPool: InvestmentPoolMock;
+let investmentPoolLogic: InvestmentPoolMock;
 let gelatoOpsMock: GelatoOpsMock;
-let governancePoolMock: GovernancePoolMockForIntegration;
+let governancePoolLogic: GovernancePoolMockForIntegration;
+let votingToken: VotingTokenMock;
 
 let gelatoFeeAllocation: BigNumber;
 let percentageDivider = BigNumber.from(0);
@@ -88,15 +90,15 @@ const errorHandler = (err: any) => {
 
 const deployLogicContracts = async () => {
     const investmentPoolDep = await ethers.getContractFactory("InvestmentPoolMock", buidl1Admin);
-    investmentPool = await investmentPoolDep.deploy();
-    await investmentPool.deployed();
+    investmentPoolLogic = await investmentPoolDep.deploy();
+    await investmentPoolLogic.deployed();
 
     const governancePoolDep = await ethers.getContractFactory(
         "GovernancePoolMockForIntegration",
         buidl1Admin
     );
-    governancePoolMock = await governancePoolDep.deploy();
-    await governancePoolMock.deployed();
+    governancePoolLogic = await governancePoolDep.deploy();
+    await governancePoolLogic.deployed();
 };
 
 const getConstantVariablesFromContract = async () => {
@@ -107,9 +109,9 @@ const getConstantVariablesFromContract = async () => {
     investmentPoolFactory = await investmentPoolDepFactory.deploy(
         sf.settings.config.hostAddress,
         gelatoOpsMock.address,
-        investmentPool.address,
-        governancePoolMock.address,
-        ethers.constants.AddressZero
+        investmentPoolLogic.address,
+        governancePoolLogic.address,
+        votingToken.address
     );
     await investmentPoolFactory.deployed();
 
@@ -184,6 +186,11 @@ describe("Investment Pool Factory", async () => {
 
         fUSDT = new ethers.Contract(underlyingAddr, fTokenAbi, admin);
 
+        // Create voting token
+        const votingTokenDep = await ethers.getContractFactory("VotingTokenMock", buidl1Admin);
+        votingToken = await votingTokenDep.deploy();
+        await votingToken.deployed();
+
         await deployLogicContracts();
         // It just deploys the factory contract and gets the percentage divider value for other tests
         await getConstantVariablesFromContract();
@@ -204,9 +211,9 @@ describe("Investment Pool Factory", async () => {
                 investmentPoolFactory = await investmentPoolDepFactory.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
-                    investmentPool.address,
-                    governancePoolMock.address,
-                    ethers.constants.AddressZero
+                    investmentPoolLogic.address,
+                    governancePoolLogic.address,
+                    votingToken.address
                 );
                 await investmentPoolFactory.deployed();
 
@@ -216,13 +223,13 @@ describe("Investment Pool Factory", async () => {
                     await investmentPoolFactory.getInvestmentPoolImplementation();
                 const gpContractAddress =
                     await investmentPoolFactory.getGovernancePoolImplementation();
-                const votingToken = await investmentPoolFactory.getVotingToken();
+                const votingTokenAddress = await investmentPoolFactory.getVotingToken();
 
                 assert.equal(contractHost, sf.settings.config.hostAddress);
                 assert.equal(contractGelatoOps, gelatoOpsMock.address);
-                assert.equal(ipContractAddress, investmentPool.address);
-                assert.equal(gpContractAddress, governancePoolMock.address);
-                assert.equal(votingToken, ethers.constants.AddressZero);
+                assert.equal(ipContractAddress, investmentPoolLogic.address);
+                assert.equal(gpContractAddress, governancePoolLogic.address);
+                assert.equal(votingTokenAddress, votingToken.address);
             });
         });
 
@@ -238,9 +245,9 @@ describe("Investment Pool Factory", async () => {
                     investmentPoolDepFactory.deploy(
                         constants.AddressZero,
                         gelatoOpsMock.address,
-                        investmentPool.address,
-                        governancePoolMock.address,
-                        ethers.constants.AddressZero
+                        investmentPoolLogic.address,
+                        governancePoolLogic.address,
+                        votingToken.address
                     )
                 ).to.be.revertedWithCustomError(
                     investmentPoolDepFactory,
@@ -259,9 +266,9 @@ describe("Investment Pool Factory", async () => {
                     investmentPoolDepFactory.deploy(
                         sf.settings.config.hostAddress,
                         constants.AddressZero,
-                        investmentPool.address,
-                        governancePoolMock.address,
-                        ethers.constants.AddressZero
+                        investmentPoolLogic.address,
+                        governancePoolLogic.address,
+                        votingToken.address
                     )
                 ).to.be.revertedWithCustomError(
                     investmentPoolDepFactory,
@@ -281,8 +288,8 @@ describe("Investment Pool Factory", async () => {
                         sf.settings.config.hostAddress,
                         gelatoOpsMock.address,
                         constants.AddressZero,
-                        governancePoolMock.address,
-                        ethers.constants.AddressZero
+                        governancePoolLogic.address,
+                        votingToken.address
                     )
                 ).to.be.revertedWithCustomError(
                     investmentPoolDepFactory,
@@ -299,9 +306,9 @@ describe("Investment Pool Factory", async () => {
                 investmentPoolFactory = await investmentPoolDepFactory.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
-                    investmentPool.address,
-                    governancePoolMock.address,
-                    ethers.constants.AddressZero
+                    investmentPoolLogic.address,
+                    governancePoolLogic.address,
+                    votingToken.address
                 );
                 await investmentPoolFactory.deployed();
 
@@ -323,9 +330,9 @@ describe("Investment Pool Factory", async () => {
                 investmentPoolFactory = await investmentPoolDepFactory.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
-                    investmentPool.address,
-                    governancePoolMock.address,
-                    ethers.constants.AddressZero
+                    investmentPoolLogic.address,
+                    governancePoolLogic.address,
+                    votingToken.address
                 );
                 await investmentPoolFactory.deployed();
 
@@ -352,9 +359,9 @@ describe("Investment Pool Factory", async () => {
                 investmentPoolFactory = await investmentPoolDepFactory.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
-                    investmentPool.address,
-                    governancePoolMock.address,
-                    ethers.constants.AddressZero
+                    investmentPoolLogic.address,
+                    governancePoolLogic.address,
+                    votingToken.address
                 );
                 await investmentPoolFactory.deployed();
 
@@ -377,9 +384,9 @@ describe("Investment Pool Factory", async () => {
                 investmentPoolFactory = await investmentPoolDepFactory.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
-                    investmentPool.address,
-                    governancePoolMock.address,
-                    ethers.constants.AddressZero
+                    investmentPoolLogic.address,
+                    governancePoolLogic.address,
+                    votingToken.address
                 );
                 await investmentPoolFactory.deployed();
 
@@ -400,16 +407,16 @@ describe("Investment Pool Factory", async () => {
                 "InvestmentPoolMock",
                 buidl1Admin
             );
-            investmentPool = await investmentPoolDep.deploy();
-            await investmentPool.deployed();
+            investmentPoolLogic = await investmentPoolDep.deploy();
+            await investmentPoolLogic.deployed();
 
             // Create governance pool mock
             const governancePoolDep = await ethers.getContractFactory(
                 "GovernancePoolMockForIntegration",
                 buidl1Admin
             );
-            governancePoolMock = await governancePoolDep.deploy();
-            await governancePoolMock.deployed();
+            governancePoolLogic = await governancePoolDep.deploy();
+            await governancePoolLogic.deployed();
 
             // Create investment pool factory contract
             const investmentPoolDepFactory = await ethers.getContractFactory(
@@ -419,9 +426,9 @@ describe("Investment Pool Factory", async () => {
             investmentPoolFactory = await investmentPoolDepFactory.deploy(
                 sf.settings.config.hostAddress,
                 gelatoOpsMock.address,
-                investmentPool.address,
-                governancePoolMock.address,
-                ethers.constants.AddressZero
+                investmentPoolLogic.address,
+                governancePoolLogic.address,
+                votingToken.address
             );
             await investmentPoolFactory.deployed();
 

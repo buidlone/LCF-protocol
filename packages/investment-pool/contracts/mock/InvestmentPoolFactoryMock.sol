@@ -6,7 +6,7 @@ pragma solidity ^0.8.14;
 import "@openzeppelin/contracts/proxy/Clones.sol";
 import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {IInitializableInvestmentPool} from "../interfaces/IInvestmentPool.sol";
-
+import {IVotingToken} from "../interfaces/IVotingToken.sol";
 import {InvestmentPoolFactory} from "../InvestmentPoolFactory.sol";
 import {InvestmentPoolMock} from "./InvestmentPoolMock.sol";
 
@@ -22,7 +22,7 @@ contract InvestmentPoolFactoryMock is InvestmentPoolFactory {
         address payable _gelatoOps,
         address _ipImplementation,
         address _gpImplementation,
-        address _votingToken
+        IVotingToken _votingToken
     )
         InvestmentPoolFactory(
             _host,

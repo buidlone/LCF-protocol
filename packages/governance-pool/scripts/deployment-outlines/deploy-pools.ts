@@ -1,11 +1,10 @@
 import {ethers, network} from "hardhat";
 import {networkConfig} from "../../hardhat-helper-config";
 import {BigNumber} from "ethers";
-import {InvestmentPoolFactoryMock, VotingToken} from "../../typechain-types";
 
-export const deployProject = async (
-    votingToken: VotingToken,
-    investmentPoolFactory: InvestmentPoolFactoryMock,
+export const deployPools = async (
+    investmentPoolFactoryType: string,
+    investmentPoolFactoryAddress: string,
     softCap: BigNumber,
     hardCap: BigNumber,
     campaignStartDate: number,
@@ -13,11 +12,16 @@ export const deployProject = async (
     milestones: any,
     gelatoFeeAllocation: BigNumber
 ) => {
-    console.log("-----Creating Investment Pool contract-----");
+    console.log("-----Creating project contracts-----");
     const accounts = await ethers.getSigners();
     const deployer = accounts[0];
     const chainId = network.config.chainId as number;
     const nativeSuperToken = networkConfig[chainId].nativeSuperToken;
+
+    const investmentPoolFactory = await ethers.getContractAt(
+        investmentPoolFactoryType,
+        investmentPoolFactoryAddress
+    );
 
     /******************************************
      * 1. Create project pools
@@ -34,15 +38,9 @@ export const deployProject = async (
     );
 
     const receipt = await creationTx.wait(1);
-    const creationEvent = receipt.events?.find((e) => e.event === "Created");
+    const creationEvent = receipt.events?.find((e: any) => e.event === "Created");
     const ipAddress = creationEvent?.args?.ipContract;
     const gpAddress = creationEvent?.args?.gpContract;
-
-    /******************************************
-     * 2. Assign governance pool role to allow minting
-     *****************************************/
-    const governancePoolRole: string = await votingToken.GOVERNANCE_POOL_ROLE();
-    await votingToken.connect(deployer).grantRole(governancePoolRole, gpAddress);
 
     console.log("Created Investment Pool at address: ", ipAddress);
     console.log("Created Governance Pool at address: ", gpAddress);

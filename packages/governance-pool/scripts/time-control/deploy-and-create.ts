@@ -1,8 +1,8 @@
 import {ethers, network} from "hardhat";
 import {BigNumber} from "ethers";
 import {availableTestnetChains} from "../../hardhat-helper-config";
-import {deployFactory} from "./deploy-factory";
-import {deployProject} from "./deploy-ip-gp";
+import {deployFactory} from "../deployment-outlines/deploy-factory";
+import {deployPools} from "../deployment-outlines/deploy-pools";
 
 const percentageDivider: number = 10 ** 6;
 const percentToIpBigNumber = (percent: number): number => {
@@ -15,8 +15,14 @@ async function main() {
         return;
     }
 
-    // 1. Deploy logic and factory
-    const [votingToken, investmentPoolFactory] = await deployFactory(true);
+    // 1. Deploy logic and factory contracts
+    const investmentPoolFactoryAddress = await deployFactory(
+        true,
+        "InvestmentPoolFactoryMock",
+        "InvestmentPoolMock",
+        "GovernancePoolMock",
+        "VotingToken"
+    );
 
     const softCap: BigNumber = ethers.utils.parseEther("0.01");
     const hardCap: BigNumber = ethers.utils.parseEther("0.02");
@@ -37,10 +43,9 @@ async function main() {
         });
     }
 
-    // 1. Deploy project contracts
-    await deployProject(
-        votingToken,
-        investmentPoolFactory,
+    await deployPools(
+        "InvestmentPoolFactoryMock",
+        investmentPoolFactoryAddress,
         softCap,
         hardCap,
         campaignStartDate,

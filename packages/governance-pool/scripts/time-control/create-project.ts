@@ -1,8 +1,7 @@
 import {ethers, network} from "hardhat";
-import {availableTestnetChains, networkConfig} from "../../hardhat-helper-config";
+import {availableTestnetChains} from "../../hardhat-helper-config";
 import {BigNumber} from "ethers";
-import {InvestmentPoolFactoryMock, VotingToken} from "../../typechain-types";
-import {deployProject} from "./deploy-ip-gp";
+import {deployPools} from "../deployment-outlines/deploy-pools";
 
 const percentageDivider: number = 10 ** 6;
 
@@ -35,16 +34,9 @@ async function main() {
         });
     }
 
-    const investmentPoolFactory: InvestmentPoolFactoryMock = await ethers.getContractAt(
+    await deployPools(
         "InvestmentPoolFactoryMock",
-        "<address>"
-    );
-    const votingTokenAddress = await investmentPoolFactory.getVotingToken();
-    const votingToken: VotingToken = await ethers.getContractAt("VotingToken", votingTokenAddress);
-
-    await deployProject(
-        votingToken,
-        investmentPoolFactory,
+        "<address>",
         softCap,
         hardCap,
         campaignStartDate,

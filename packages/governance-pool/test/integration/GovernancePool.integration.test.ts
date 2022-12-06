@@ -53,18 +53,15 @@ let milestoneStartDate2: BigNumber;
 let milestoneEndDate2: BigNumber;
 let campaignStartDate: BigNumber;
 let campaignEndDate: BigNumber;
-let governancePoolRole: string;
+let adminRole: string;
 
 let creationRes: ContractTransaction;
 
 // Percentages (in divider format)
 let percentageDivider: BigNumber = BigNumber.from(0);
 let percent5InIpBigNumber: BigNumber;
-let percent10InIpBigNumber: BigNumber;
 let percent20InIpBigNumber: BigNumber;
 let percent70InIpBigNumber: BigNumber;
-let percent90InIpBigNumber: BigNumber;
-let percent95InIpBigNumber: BigNumber;
 
 const dateToSeconds = (date: string, isBigNumber: boolean = true): BigNumber | number => {
     const convertedDate = new Date(date).getTime() / 1000;
@@ -107,7 +104,7 @@ const defineVariablesFromIPF = async () => {
     );
     await invPoolFactory.deployed();
 
-    governancePoolRole = await votingToken.GOVERNANCE_POOL_ROLE();
+    adminRole = await votingToken.DEFAULT_ADMIN_ROLE();
     await definePercentageDivider(invPoolFactory);
     await defineGelatoFeeAllocation(invPoolFactory);
 };
@@ -115,11 +112,8 @@ const defineVariablesFromIPF = async () => {
 const definePercentageDivider = async (invPoolFactory: InvestmentPoolFactoryMock) => {
     percentageDivider = await invPoolFactory.getPercentageDivider();
     percent5InIpBigNumber = percentToIpBigNumber(5);
-    percent10InIpBigNumber = percentToIpBigNumber(10);
     percent20InIpBigNumber = percentToIpBigNumber(20);
     percent70InIpBigNumber = percentToIpBigNumber(70);
-    percent90InIpBigNumber = percentToIpBigNumber(90);
-    percent95InIpBigNumber = percentToIpBigNumber(95);
 };
 
 const defineGelatoFeeAllocation = async (invPoolFactory: InvestmentPoolFactoryMock) => {
@@ -186,18 +180,15 @@ const createInvestmentWithTwoMilestones = async (feeAmount: BigNumber = gelatoFe
     );
 
     [investment, governancePool] = await getContractsFromTx(creationRes);
-
-    // Assign role to allow minting
-    await votingToken.connect(deployer).grantRole(governancePoolRole, governancePool.address);
 };
 
 const deployInvestmentPoolFactory = async (): Promise<InvestmentPoolFactoryMock> => {
-    const investmentPoolDep = await ethers.getContractFactory("InvestmentPoolMock", deployer);
-    const ip = await investmentPoolDep.deploy();
-    await ip.deployed();
-    const governancePoolDep = await ethers.getContractFactory("GovernancePoolMock", deployer);
-    const gp = await governancePoolDep.deploy();
-    await gp.deployed();
+    const investmentPoolLogicDep = await ethers.getContractFactory("InvestmentPoolMock", deployer);
+    const ipLogic = await investmentPoolLogicDep.deploy();
+    await ipLogic.deployed();
+    const governancePoolLogicDep = await ethers.getContractFactory("GovernancePoolMock", deployer);
+    const gpLogic = await governancePoolLogicDep.deploy();
+    await gpLogic.deployed();
     const votingTokensFactory = await ethers.getContractFactory("VotingToken", deployer);
     votingToken = await votingTokensFactory.deploy();
     await votingToken.deployed();
@@ -209,11 +200,14 @@ const deployInvestmentPoolFactory = async (): Promise<InvestmentPoolFactoryMock>
     const investmentPoolFactory = await investmentPoolDepFactory.deploy(
         sf.settings.config.hostAddress,
         gelatoOpsMock.address,
-        ip.address,
-        gp.address,
+        ipLogic.address,
+        gpLogic.address,
         votingToken.address
     );
     await investmentPoolFactory.deployed();
+
+    // Assign admin role to IPF, so it can later assign governance pool role for new GP contracts automatically on project creation
+    await votingToken.connect(deployer).grantRole(adminRole, investmentPoolFactory.address);
 
     // Enforce a starting timestamp to avoid time based bugs
     const time = dateToSeconds("2100/06/01");
