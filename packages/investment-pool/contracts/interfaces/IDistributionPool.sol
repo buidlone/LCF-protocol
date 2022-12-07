@@ -3,53 +3,62 @@
 
 pragma solidity ^0.8.14;
 
-import {CFAv1Library} from "@superfluid-finance/ethereum-contracts/contracts/apps/CFAv1Library.sol";
-import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IInvestmentPool} from "./IInvestmentPool.sol";
 
 interface IDistributionPool {
-    // Functions only for creator
     function lockTokens() external;
 
-    function withdrawTokens() external;
-
-    // Functions only for investors
     function allocateTokens(
         uint256 _milestoneId,
         address _investor,
-        uint256 _investmentWeight
+        uint256 _investmentWeight,
+        uint256 _weightDivisor,
+        uint256 _allocationCoefficient
     ) external;
 
     function removeTokensAllocation(uint256 _milestoneId, address _investor) external;
 
-    function openTokensStream(uint256 _milestoneId, address _investor) external;
-
-    function terminateTokensStream(uint256 _milestoneId, address _investor) external;
-
-    function milestoneJump(uint256 _milestoneId, address _investor) external;
-
-    function getLockedTokens() external view returns (uint256);
+    function claimAllocation() external;
 
     function calculateExpectedTokensAllocation(
         uint256 _investedAmount
     ) external view returns (uint256);
 
-    function getAllocatedTokens(
+    function getAllocatedAmount(
         address _investor,
         uint256 _milestoneId
     ) external view returns (uint256);
 
-    function getTotalAllocatedTokens(address _investor) external view returns (uint256);
+    function getAllocationData(
+        address _investor
+    ) external view returns (uint256, uint256, uint256);
+
+    function getAllocatedTokens(address _investor) external view returns (uint256);
+
+    function getClaimedTokens(address _investor) external view returns (uint256);
+
+    function getMilestonesWithAllocation(
+        address _investor
+    ) external view returns (uint256[] memory);
+
+    function getPercentageDivider() external pure returns (uint256);
+
+    function getInvestmentPool() external view returns (address);
 
     function getToken() external view returns (address);
 
-    function getTokensBalance() external view returns (uint256);
+    function getLockedTokens() external view returns (uint256);
+
+    function didCreatorLockedTokens() external view returns (bool);
+
+    function getTotalAllocatedTokens() external view returns (uint256);
 }
 
 interface IInitializableDistributionPool is IDistributionPool {
     function initialize(
         IInvestmentPool _investmentPool,
-        ISuperToken _projectToken,
+        IERC20 _projectToken,
         uint256 _amountToLock
     ) external;
 }

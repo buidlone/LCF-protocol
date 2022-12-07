@@ -203,6 +203,10 @@ interface IInvestmentPool is ISuperApp {
     function getVotingTokensSupplyCap() external view returns (uint256);
 
     function getMaximumWeightDivisor() external view returns (uint256);
+
+    function getMilestonesPortionLeft(uint256 _milestoneId) external view returns (uint256);
+
+    function getMilestoneDuration(uint256 _milestoneId) external view returns (uint256);
 }
 
 interface IInitializableInvestmentPool is IInvestmentPool {

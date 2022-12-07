@@ -674,9 +674,11 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         return subt / getPercentageDivider();
     }
 
-    /** GETTERS */
+    function getMilestoneDuration(uint256 _milestoneId) public view returns (uint256) {
+        Milestone memory milestone = getMilestone(_milestoneId);
+        return milestone.endDate - milestone.startDate;
+    }
 
-    /// @notice get current milestone id
     function getCurrentMilestoneId() public view virtual returns (uint256) {
         return currentMilestone;
     }
@@ -834,6 +836,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     function getVotingTokensSupplyCap() public view returns (uint256) {
         return getMaximumWeightDivisor();
+    }
+
+    function getMilestonesPortionLeft(uint256 _milestoneId) public view returns (uint256) {
+        return memMilestonePortions[_milestoneId];
     }
 
     /**
@@ -1026,7 +1032,6 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     ) internal {
         uint256 investmentCoefficient = memMilestonePortions[_milestoneId];
 
-        // TODO: what if investment is not made in one of the milestones? memMilestoneInvestments will still be 0
         if (memMilestoneInvestments[_milestoneId] == 0 && _milestoneId > 0) {
             memMilestoneInvestments[_milestoneId] = memMilestoneInvestments[_milestoneId - 1];
         }
