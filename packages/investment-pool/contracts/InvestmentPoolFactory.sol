@@ -11,9 +11,9 @@ import "@openzeppelin/contracts/proxy/Clones.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {IInvestmentPool, IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
+import {IGovernancePool, IInitializableGovernancePool} from "./interfaces/IGovernancePool.sol";
 import {IInvestmentPoolFactory} from "./interfaces/IInvestmentPoolFactory.sol";
-import {IGovernancePool} from "./interfaces/IGovernancePool.sol";
-import {InvestmentPool} from "./InvestmentPool.sol";
+import {IVotingToken} from "./interfaces/IVotingToken.sol";
 
 error InvestmentPoolFactory__ImplementationContractAddressIsZero();
 error InvestmentPoolFactory__HostAddressIsZero();
@@ -37,31 +37,32 @@ error InvestmentPoolFactory__MilestonesAreNotAdjacentInTime(
     uint256 oldMilestoneEnd,
     uint256 newMilestoneStart
 );
-error InvestmentPoolFactory__GovernancePoolAlreadyDefined();
-error InvestmentPoolFactory__GovernancePoolNotDefined();
 error InvestmentPoolFactory__NotEnoughEthValue();
 error InvestmentPoolFactory__FailedToSendEthToInvestmentPool();
 error InvestmentPoolFactory__SeedFundsAllocationGreaterThanTotal();
 error InvestmentPoolFactory__SeedFundsAllocationExceedsMax();
+error InvestmentPoolFactory__ThresholdPercentageIsGreaterThan100();
 
 contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     // Assign all Clones library functions to addresses
     using Clones for address;
 
     uint32 internal constant MAX_MILESTONE_COUNT = 10;
-    uint48 internal TERMINATION_WINDOW = 3 days;
-    uint48 internal AUTOMATED_TERMINATION_WINDOW = 1 hours;
-    uint256 internal constant PERCENTAGE_DIVIDER = 10**6;
-    uint256 internal MILESTONE_MIN_DURATION = 30 days;
-    uint256 internal MILESTONE_MAX_DURATION = 90 days;
-    uint256 internal FUNDRAISER_MIN_DURATION = 30 days;
-    uint256 internal FUNDRAISER_MAX_DURATION = 90 days;
-    uint256 internal INVESTMENT_WITHDRAW_FEE = 1; // 1% out of 100%
+    uint48 internal constant TERMINATION_WINDOW = 3 days;
+    uint48 internal constant AUTOMATED_TERMINATION_WINDOW = 1 hours;
+    uint256 internal constant PERCENTAGE_DIVIDER = 10 ** 6;
+    uint256 internal constant MILESTONE_MIN_DURATION = 30 days;
+    uint256 internal constant MILESTONE_MAX_DURATION = 90 days;
+    uint256 internal constant FUNDRAISER_MIN_DURATION = 30 days;
+    uint256 internal constant FUNDRAISER_MAX_DURATION = 90 days;
+    uint256 internal constant INVESTMENT_WITHDRAW_FEE = 1; // 1% out of 100%
+    uint256 internal constant VOTES_WITHDRAW_FEE = 1; // 1% out of 100%
+    uint8 internal constant VOTES_PERCENTAGE_THRESHOLD = 51;
 
     /// * @notice Multiplier for soft cap - 1,9 | hard cap - 1.
     /// * @dev Multiplier is firstly multiplied by 10 to avoid decimal places rounding in solidity
-    uint256 internal SOFT_CAP_MULTIPLIER = 19;
-    uint256 internal HARD_CAP_MULTIPLIER = 10;
+    uint256 internal constant SOFT_CAP_MULTIPLIER = 19;
+    uint256 internal constant HARD_CAP_MULTIPLIER = 10;
 
     /**
      * @notice Amount that will be used to cover transaction fee for gelato automation
@@ -71,7 +72,6 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
      * @dev If gas price is 200 Gwei, the total fee is 0,092448
      */
     uint256 internal gelatoFeeAllocationForProject = 0.1 ether;
-    IGovernancePool internal governancePool;
 
     /* WARNING: NEVER RE-ORDER VARIABLES! Always double-check that new
        variables are added APPEND-ONLY. Re-ordering variables can
@@ -80,31 +80,35 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     ISuperfluid internal immutable HOST;
     address payable internal immutable GELATO_OPS;
     address internal investmentPoolImplementation;
+    address internal governancePoolImplementation;
+    IVotingToken internal votingToken;
 
     constructor(
         ISuperfluid _host,
         address payable _gelatoOps,
-        address _implementationContract
+        address _ipImplementation,
+        address _gpImplementation,
+        IVotingToken _votingToken
     ) {
         if (address(_host) == address(0)) revert InvestmentPoolFactory__HostAddressIsZero();
-
         if (_gelatoOps == address(0)) revert InvestmentPoolFactory__GelatoOpsAddressIsZero();
-
-        if (_implementationContract == address(0))
+        if (_ipImplementation == address(0) || _gpImplementation == address(0))
             revert InvestmentPoolFactory__ImplementationContractAddressIsZero();
 
         HOST = _host;
         GELATO_OPS = _gelatoOps;
 
-        // Assign Investment Pool logic contract
-        investmentPoolImplementation = _implementationContract;
+        // Assign Investment Pool, Governance Pool logic contracts
+        investmentPoolImplementation = _ipImplementation;
+        governancePoolImplementation = _gpImplementation;
+        votingToken = _votingToken;
     }
 
     receive() external payable {}
 
     /** EXTERNAL FUNCTIONS */
 
-    function createInvestmentPool(
+    function createProjectPools(
         ISuperToken _acceptedToken,
         uint96 _softCap,
         uint96 _hardCap,
@@ -117,11 +121,12 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
             revert InvestmentPoolFactory__NotEnoughEthValue();
 
         IInitializableInvestmentPool invPool;
+        IInitializableGovernancePool govPool;
 
         _assertPoolInitArguments(
-            HOST,
             _acceptedToken,
             _msgSender(),
+            getVotesPercentageThreshold(),
             _softCap,
             _hardCap,
             _fundraiserStartAt,
@@ -130,12 +135,13 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         );
 
         if (_proxyType == ProxyType.CLONE_PROXY) {
-            invPool = _deployClone();
+            invPool = _deployInvestmentPoolClone();
+            govPool = _deployGovernancePoolClone();
         } else {
             revert("[IPF]: only CLONE_PROXY is supported");
         }
 
-        // Using the struct and then passing it to the initialize function because we don't want to get the error: "Stack too deep"
+        /// @dev Using the struct to avoid error: "Stack too deep"
         IInvestmentPool.ProjectInfo memory projectDetails = IInvestmentPool.ProjectInfo(
             _acceptedToken,
             _msgSender(),
@@ -157,11 +163,19 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
             multipliers,
             getInvestmentWithdrawPercentageFee(),
             _milestones,
-            governancePool
+            govPool
         );
 
-        // After creating investment pool, call governance pool with investment pool address
-        governancePool.activateInvestmentPool(address(invPool));
+        govPool.initialize(
+            getVotingToken(),
+            invPool,
+            getVotesPercentageThreshold(),
+            getVotesWithdrawPercentageFee()
+        );
+
+        // Grant newly created governance pool access to mint voting tokens
+        bytes32 governancePoolRole = votingToken.GOVERNANCE_POOL_ROLE();
+        votingToken.grantRole(governancePoolRole, address(govPool));
 
         // Final level is required by the Superfluid's spec right now
         // We only really care about termination callbacks, others - noop
@@ -173,17 +187,9 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
 
         HOST.registerAppByFactory(invPool, configWord);
 
-        emit Created(_msgSender(), address(invPool), _proxyType);
+        emit Created(_msgSender(), address(invPool), address(govPool), _proxyType);
 
         return address(invPool);
-    }
-
-    function setGovernancePool(address _governancePool) external onlyOwner {
-        if (getGovernancePool() == address(0)) {
-            governancePool = IGovernancePool(_governancePool);
-        } else {
-            revert InvestmentPoolFactory__GovernancePoolAlreadyDefined();
-        }
     }
 
     function setGelatoFeeAllocation(uint256 _newAmount) external onlyOwner {
@@ -197,11 +203,11 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         return MAX_MILESTONE_COUNT;
     }
 
-    function getTerminationWindow() public view returns (uint48) {
+    function getTerminationWindow() public pure virtual returns (uint48) {
         return TERMINATION_WINDOW;
     }
 
-    function getAutomatedTerminationWindow() public view returns (uint48) {
+    function getAutomatedTerminationWindow() public pure virtual returns (uint48) {
         return AUTOMATED_TERMINATION_WINDOW;
     }
 
@@ -209,40 +215,44 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         return PERCENTAGE_DIVIDER;
     }
 
-    function getMilestoneMinDuration() public view returns (uint256) {
+    function getMilestoneMinDuration() public pure virtual returns (uint256) {
         return MILESTONE_MIN_DURATION;
     }
 
-    function getMilestoneMaxDuration() public view returns (uint256) {
+    function getMilestoneMaxDuration() public pure virtual returns (uint256) {
         return MILESTONE_MAX_DURATION;
     }
 
-    function getFundraiserMinDuration() public view returns (uint256) {
+    function getFundraiserMinDuration() public pure virtual returns (uint256) {
         return FUNDRAISER_MIN_DURATION;
     }
 
-    function getFundraiserMaxDuration() public view returns (uint256) {
+    function getFundraiserMaxDuration() public pure virtual returns (uint256) {
         return FUNDRAISER_MAX_DURATION;
     }
 
-    function getInvestmentWithdrawPercentageFee() public view returns (uint256) {
+    function getInvestmentWithdrawPercentageFee() public pure returns (uint256) {
         return INVESTMENT_WITHDRAW_FEE;
     }
 
-    function getSoftCapMultiplier() public view returns (uint256) {
+    function getVotesWithdrawPercentageFee() public pure returns (uint256) {
+        return VOTES_WITHDRAW_FEE;
+    }
+
+    function getVotesPercentageThreshold() public pure returns (uint8) {
+        return VOTES_PERCENTAGE_THRESHOLD;
+    }
+
+    function getSoftCapMultiplier() public pure returns (uint256) {
         return SOFT_CAP_MULTIPLIER;
     }
 
-    function getHardCapMultiplier() public view returns (uint256) {
+    function getHardCapMultiplier() public pure returns (uint256) {
         return HARD_CAP_MULTIPLIER;
     }
 
     function getGelatoFeeAllocationForProject() public view returns (uint256) {
         return gelatoFeeAllocationForProject;
-    }
-
-    function getGovernancePool() public view returns (address) {
-        return address(governancePool);
     }
 
     function getSuperfluidHost() public view returns (address) {
@@ -257,30 +267,49 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         return investmentPoolImplementation;
     }
 
+    function getGovernancePoolImplementation() public view returns (address) {
+        return governancePoolImplementation;
+    }
+
+    function getVotingToken() public view returns (address) {
+        return address(votingToken);
+    }
+
     /** INTERNAL FUNCITONS */
 
-    function _deployClone() internal virtual returns (IInitializableInvestmentPool pool) {
+    function _deployInvestmentPoolClone()
+        internal
+        virtual
+        returns (IInitializableInvestmentPool pool)
+    {
         pool = IInitializableInvestmentPool(payable(getInvestmentPoolImplementation().clone()));
+    }
+
+    function _deployGovernancePoolClone()
+        internal
+        virtual
+        returns (IInitializableGovernancePool pool)
+    {
+        pool = IInitializableGovernancePool(payable(getGovernancePoolImplementation().clone()));
     }
 
     function _assertPoolInitArguments(
         // solhint-disable-next-line no-unused-vars
-        ISuperfluid, /*_host*/
         ISuperToken _superToken,
         address _creator,
+        uint8 _threshold,
         uint96 _softCap,
         uint96 _hardCap,
         uint96 _fundraiserStartAt,
         uint96 _fundraiserEndAt,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
     ) internal view {
-        if (getGovernancePool() == address(0))
-            revert InvestmentPoolFactory__GovernancePoolNotDefined();
-
         if (address(_superToken) == address(0))
             revert InvestmentPoolFactory__AcceptedTokenAddressIsZero();
 
         if (address(_creator) == address(0)) revert InvestmentPoolFactory__CreatorAddressIsZero();
+
+        if (_threshold > 100) revert InvestmentPoolFactory__ThresholdPercentageIsGreaterThan100();
 
         if (_softCap > _hardCap)
             revert InvestmentPoolFactory__SoftCapIsGreaterThanHardCap(_softCap, _hardCap);
@@ -359,11 +388,9 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         return block.timestamp;
     }
 
-    function _validateMilestoneInterval(IInvestmentPool.MilestoneInterval memory milestone)
-        internal
-        view
-        returns (bool)
-    {
+    function _validateMilestoneInterval(
+        IInvestmentPool.MilestoneInterval memory milestone
+    ) internal pure returns (bool) {
         return (milestone.endDate > milestone.startDate &&
             (milestone.endDate - milestone.startDate >= getMilestoneMinDuration()) &&
             (milestone.endDate - milestone.startDate <= getMilestoneMaxDuration()));

@@ -11,12 +11,12 @@
     "prettier": "prettier --write 'contracts/**/*.sol'",
     "deploy:goerli": "yarn hardhat run scripts/production/deploy.ts --network goerli",
     "deploy_verify:goerli": "yarn hardhat run scripts/production/deploy-and-verify.ts --network goerli",
-    "ip-creation:goerli": "yarn hardhat run scripts/production/create-ip.ts --network goerli",
-    "deploy_testing:goerli": "yarn hardhat run scripts/testnet-testing/deploy-testing.ts --network goerli",
-    "deploy_verify_testing:goerli": "yarn hardhat run scripts/testnet-testing/deploy-and-verify-testing.ts --network goerli",
-    "test-ip-creation:goerli": "yarn hardhat run scripts/testnet-testing/create-ip.ts --network goerli",
-    "deploy_verify_with_time_control:goerli": "yarn hardhat run scripts/time-control/deploy-and-verify.ts --network goerli",
-    "ip-creation_with_time_control:goerli": "yarn hardhat run scripts/time-control/create-ip.ts --network goerli"
+    "create_project:goerli": "yarn hardhat run scripts/production/create-project.ts --network goerli",
+    "deploy:testing:goerli": "yarn hardhat run scripts/testnet-testing/deploy-testing.ts --network goerli",
+    "deploy_verify:testing:goerli": "yarn hardhat run scripts/testnet-testing/deploy-and-verify-testing.ts --network goerli",
+    "create_project:testing:goerli": "yarn hardhat run scripts/testnet-testing/create-project.ts --network goerli",
+    "deploy_verify:time_control:goerli": "yarn hardhat run scripts/time-control/deploy-and-verify.ts --network goerli",
+    "create_project:time_control:goerli": "yarn hardhat run scripts/time-control/create-project.ts --network goerli"
   },
   "devDependencies": {
     "@ethersproject/abi": "^5.4.7",

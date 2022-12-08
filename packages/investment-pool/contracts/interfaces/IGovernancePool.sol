@@ -3,88 +3,77 @@
 
 pragma solidity ^0.8.14;
 
+import {IInvestmentPool} from "./IInvestmentPool.sol";
+
 interface IGovernancePool {
-    function activateInvestmentPool(address _investmentPool) external;
+    function mintVotingTokens(uint256 _milestoneId, address _investor, uint256 _amount) external;
 
-    function mintVotingTokens(
-        uint256 _milestoneId,
-        address _investor,
-        uint256 _amount
-    ) external;
+    function voteAgainst(uint256 _amount) external;
 
-    function voteAgainst(address _investmentPool, uint256 _amount) external;
-
-    function retractVotes(address _investmentPool, uint256 _retractAmount) external;
+    function retractVotes(uint256 _retractAmount) external;
 
     function burnVotes(uint256 _milestoneId, address _investor) external;
 
-    function doesInvestmentPoolExist(uint256 _investmentPoolId) external view returns (bool);
+    function transferVotes(address _recipient, uint256 _amount) external;
 
-    function getInvestmentPoolId(address _investmentPool) external pure returns (uint256);
+    function permanentlyLockVotes(uint256 _votes) external;
 
-    function getVotingTokensSupply(address _investmentPool) external view returns (uint256);
+    function getUnusedVotesAmount() external view returns (uint256);
 
-    function getVotingTokenBalance(address _investmentPool, address _account)
-        external
-        view
-        returns (uint256);
+    function votesAgainstPercentageCount(uint256 _votesAgainst) external view returns (uint8);
 
-    function votesAgainstPercentageCount(address _investmentPool, uint256 _votesAgainst)
-        external
-        view
-        returns (uint8);
-
-    function willInvestorReachThreshold(address _investmentPool, uint256 _investorVotesCount)
-        external
-        view
-        returns (bool);
-
-    function getUnusedVotesAmount(address _investmentPool) external view returns (uint256);
-
-    function transferVotes(
-        address _investmentPool,
-        address _recipient,
-        uint256 _amount
-    ) external;
-
-    function permanentlyLockVotes(address _investmentPool, uint256 _votes) external;
+    function willInvestorReachThreshold(uint256 _investorVotesCount) external view returns (bool);
 
     function getActiveVotingTokensBalance(
-        address _investmentPool,
         uint256 _milestoneId,
         address _account
     ) external view returns (uint256);
 
-    function getVotingTokenAddress() external view returns (address);
+    function getVotingTokensSupply() external view returns (uint256);
 
-    function getInvestmentPoolFactoryAddress() external view returns (address);
+    function getVotingTokenBalance(address _account) external view returns (uint256);
+
+    function getInvestmentPoolId() external view returns (uint256);
+
+    function getVotingTokenAddress() external view returns (address);
 
     function getVotesPercentageThreshold() external view returns (uint8);
 
     function getVotesWithdrawPercentageFee() external view returns (uint256);
 
-    function getVotesAmount(address _investor, uint256 _investmentPoolId)
-        external
-        view
-        returns (uint256);
+    function getFundraiserOngoingStateValue() external pure returns (uint256);
 
-    function getTotalVotesAmount(uint256 _investmentPoolId) external view returns (uint256);
+    function getMilestonesOngoingBeforeLastStateValue() external pure returns (uint256);
 
-    function getLockedAmount(address _investor, uint256 _investmentPoolId)
-        external
-        view
-        returns (uint256);
+    function getLastMilestoneOngoingStateValue() external pure returns (uint256);
 
-    function getTotalLockedAmount(uint256 _investmentPoolId) external view returns (uint256);
+    function getAnyMilestoneOngoingStateValue() external pure returns (uint256);
 
-    function getMilestonesIdsInWhichInvestorInvested(address _investor, uint256 _investmentPoolId)
-        external
-        view
-        returns (uint256[] memory);
+    function getInvestmentPool() external view returns (address);
+
+    function getVotesAmount(address _investor) external view returns (uint256);
+
+    function getTotalVotesAmount() external view returns (uint256);
+
+    function getLockedAmount(address _investor) external view returns (uint256);
+
+    function getTotalLockedAmount() external view returns (uint256);
+
+    function getMilestonesIdsInWhichBalanceChanged(
+        address _investor
+    ) external view returns (uint256[] memory);
 
     function getTokensMinted(
         address _investor,
-        uint256 _investmentPoolId,
         uint256 _milestoneId
     ) external view returns (uint256);
+}
+
+interface IInitializableGovernancePool is IGovernancePool {
+    function initialize(
+        address _votingToken,
+        IInvestmentPool _investmentPool,
+        uint8 _threshold,
+        uint256 _votestWithdrawFee
+    ) external payable;
 }

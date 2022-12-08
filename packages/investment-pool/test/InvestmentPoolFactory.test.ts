@@ -8,6 +8,7 @@ import {
     InvestmentPoolMock,
     GelatoOpsMock,
     GovernancePoolMockForIntegration,
+    VotingTokenMock,
 } from "../typechain-types";
 
 const fTokenAbi = require("./abis/fTokenAbi");
@@ -30,9 +31,10 @@ let foreignActor: SignerWithAddress;
 
 let sf: Framework;
 let investmentPoolFactory: InvestmentPoolFactoryMock;
-let investmentPool: InvestmentPoolMock;
+let investmentPoolLogic: InvestmentPoolMock;
 let gelatoOpsMock: GelatoOpsMock;
-let governancePoolMock: GovernancePoolMockForIntegration;
+let governancePoolLogic: GovernancePoolMockForIntegration;
+let votingToken: VotingTokenMock;
 
 let gelatoFeeAllocation: BigNumber;
 let percentageDivider = BigNumber.from(0);
@@ -86,11 +88,20 @@ const errorHandler = (err: any) => {
     if (err) throw err;
 };
 
-const getConstantVariablesFromContract = async () => {
+const deployLogicContracts = async () => {
     const investmentPoolDep = await ethers.getContractFactory("InvestmentPoolMock", buidl1Admin);
-    investmentPool = await investmentPoolDep.deploy();
-    await investmentPool.deployed();
+    investmentPoolLogic = await investmentPoolDep.deploy();
+    await investmentPoolLogic.deployed();
 
+    const governancePoolDep = await ethers.getContractFactory(
+        "GovernancePoolMockForIntegration",
+        buidl1Admin
+    );
+    governancePoolLogic = await governancePoolDep.deploy();
+    await governancePoolLogic.deployed();
+};
+
+const getConstantVariablesFromContract = async () => {
     const investmentPoolDepFactory = await ethers.getContractFactory(
         "InvestmentPoolFactoryMock",
         buidl1Admin
@@ -98,7 +109,9 @@ const getConstantVariablesFromContract = async () => {
     investmentPoolFactory = await investmentPoolDepFactory.deploy(
         sf.settings.config.hostAddress,
         gelatoOpsMock.address,
-        investmentPool.address
+        investmentPoolLogic.address,
+        governancePoolLogic.address,
+        votingToken.address
     );
     await investmentPoolFactory.deployed();
 
@@ -173,19 +186,19 @@ describe("Investment Pool Factory", async () => {
 
         fUSDT = new ethers.Contract(underlyingAddr, fTokenAbi, admin);
 
+        // Create voting token
+        const votingTokenDep = await ethers.getContractFactory("VotingTokenMock", buidl1Admin);
+        votingToken = await votingTokenDep.deploy();
+        await votingToken.deployed();
+
+        await deployLogicContracts();
         // It just deploys the factory contract and gets the percentage divider value for other tests
         await getConstantVariablesFromContract();
     });
 
     describe("1. Investment pool factory creation", () => {
         beforeEach(async () => {
-            // Create investment pool logic contract
-            const investmentPoolDep = await ethers.getContractFactory(
-                "InvestmentPoolMock",
-                buidl1Admin
-            );
-            investmentPool = await investmentPoolDep.deploy();
-            await investmentPool.deployed();
+            await deployLogicContracts();
         });
 
         describe("1.1 State variables", () => {
@@ -198,18 +211,25 @@ describe("Investment Pool Factory", async () => {
                 investmentPoolFactory = await investmentPoolDepFactory.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
-                    investmentPool.address
+                    investmentPoolLogic.address,
+                    governancePoolLogic.address,
+                    votingToken.address
                 );
                 await investmentPoolFactory.deployed();
 
                 const contractHost = await investmentPoolFactory.getSuperfluidHost();
                 const contractGelatoOps = await investmentPoolFactory.getGelatoOps();
-                const implementationContractAddress =
+                const ipContractAddress =
                     await investmentPoolFactory.getInvestmentPoolImplementation();
+                const gpContractAddress =
+                    await investmentPoolFactory.getGovernancePoolImplementation();
+                const votingTokenAddress = await investmentPoolFactory.getVotingToken();
 
                 assert.equal(contractHost, sf.settings.config.hostAddress);
                 assert.equal(contractGelatoOps, gelatoOpsMock.address);
-                assert.equal(implementationContractAddress, investmentPool.address);
+                assert.equal(ipContractAddress, investmentPoolLogic.address);
+                assert.equal(gpContractAddress, governancePoolLogic.address);
+                assert.equal(votingTokenAddress, votingToken.address);
             });
         });
 
@@ -225,7 +245,9 @@ describe("Investment Pool Factory", async () => {
                     investmentPoolDepFactory.deploy(
                         constants.AddressZero,
                         gelatoOpsMock.address,
-                        investmentPool.address
+                        investmentPoolLogic.address,
+                        governancePoolLogic.address,
+                        votingToken.address
                     )
                 ).to.be.revertedWithCustomError(
                     investmentPoolDepFactory,
@@ -244,7 +266,9 @@ describe("Investment Pool Factory", async () => {
                     investmentPoolDepFactory.deploy(
                         sf.settings.config.hostAddress,
                         constants.AddressZero,
-                        investmentPool.address
+                        investmentPoolLogic.address,
+                        governancePoolLogic.address,
+                        votingToken.address
                     )
                 ).to.be.revertedWithCustomError(
                     investmentPoolDepFactory,
@@ -263,7 +287,9 @@ describe("Investment Pool Factory", async () => {
                     investmentPoolDepFactory.deploy(
                         sf.settings.config.hostAddress,
                         gelatoOpsMock.address,
-                        constants.AddressZero
+                        constants.AddressZero,
+                        governancePoolLogic.address,
+                        votingToken.address
                     )
                 ).to.be.revertedWithCustomError(
                     investmentPoolDepFactory,
@@ -280,11 +306,14 @@ describe("Investment Pool Factory", async () => {
                 investmentPoolFactory = await investmentPoolDepFactory.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
-                    investmentPool.address
+                    investmentPoolLogic.address,
+                    governancePoolLogic.address,
+                    votingToken.address
                 );
                 await investmentPoolFactory.deployed();
 
-                const investmentPoolClone = await investmentPoolFactory.callStatic.deployClone();
+                const investmentPoolClone =
+                    await investmentPoolFactory.callStatic.deployInvestmentPoolClone();
 
                 // New address was created
                 assert.isTrue(ethers.utils.isAddress(investmentPoolClone));
@@ -301,7 +330,9 @@ describe("Investment Pool Factory", async () => {
                 investmentPoolFactory = await investmentPoolDepFactory.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
-                    investmentPool.address
+                    investmentPoolLogic.address,
+                    governancePoolLogic.address,
+                    votingToken.address
                 );
                 await investmentPoolFactory.deployed();
 
@@ -328,7 +359,9 @@ describe("Investment Pool Factory", async () => {
                 investmentPoolFactory = await investmentPoolDepFactory.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
-                    investmentPool.address
+                    investmentPoolLogic.address,
+                    governancePoolLogic.address,
+                    votingToken.address
                 );
                 await investmentPoolFactory.deployed();
 
@@ -351,7 +384,9 @@ describe("Investment Pool Factory", async () => {
                 investmentPoolFactory = await investmentPoolDepFactory.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
-                    investmentPool.address
+                    investmentPoolLogic.address,
+                    governancePoolLogic.address,
+                    votingToken.address
                 );
                 await investmentPoolFactory.deployed();
 
@@ -361,106 +396,6 @@ describe("Investment Pool Factory", async () => {
 
                 const gelatoFee = await investmentPoolFactory.getGelatoFeeAllocationForProject();
                 assert.deepEqual(gelatoFee, gelatoFeeAllocation);
-            });
-
-            it("[IPF][1.2.8] Deployer should be able to update governance pool address", async () => {
-                // Create investment pool factory contract
-                const investmentPoolDepFactory = await ethers.getContractFactory(
-                    "InvestmentPoolFactoryMock",
-                    buidl1Admin
-                );
-                investmentPoolFactory = await investmentPoolDepFactory.deploy(
-                    sf.settings.config.hostAddress,
-                    gelatoOpsMock.address,
-                    investmentPool.address
-                );
-                await investmentPoolFactory.deployed();
-
-                // Create governance pool mock
-                const governancePoolDep = await ethers.getContractFactory(
-                    "GovernancePoolMockForIntegration",
-                    buidl1Admin
-                );
-                governancePoolMock = await governancePoolDep.deploy();
-                await governancePoolMock.deployed();
-
-                // Set governance pool in investment pool factory
-                await expect(
-                    investmentPoolFactory
-                        .connect(buidl1Admin)
-                        .setGovernancePool(governancePoolMock.address)
-                ).not.to.be.reverted;
-
-                const updatedGovernancePool = await investmentPoolFactory.getGovernancePool();
-                assert.equal(governancePoolMock.address, updatedGovernancePool);
-            });
-
-            it("[IPF][1.2.9] Deployer shouldn't be able to update governance pool address if it exists already", async () => {
-                // Create investment pool factory contract
-                const investmentPoolDepFactory = await ethers.getContractFactory(
-                    "InvestmentPoolFactoryMock",
-                    buidl1Admin
-                );
-                investmentPoolFactory = await investmentPoolDepFactory.deploy(
-                    sf.settings.config.hostAddress,
-                    gelatoOpsMock.address,
-                    investmentPool.address
-                );
-                await investmentPoolFactory.deployed();
-
-                // Create governance pool mock
-                const governancePoolDep = await ethers.getContractFactory(
-                    "GovernancePoolMockForIntegration",
-                    buidl1Admin
-                );
-                governancePoolMock = await governancePoolDep.deploy();
-                await governancePoolMock.deployed();
-
-                // Set governance pool in investment pool factory
-                await investmentPoolFactory
-                    .connect(buidl1Admin)
-                    .setGovernancePool(governancePoolMock.address);
-
-                await expect(
-                    investmentPoolFactory
-                        .connect(buidl1Admin)
-                        .setGovernancePool(governancePoolMock.address)
-                ).to.be.revertedWithCustomError(
-                    investmentPoolFactory,
-                    "InvestmentPoolFactory__GovernancePoolAlreadyDefined"
-                );
-            });
-
-            it("[IPF][1.2.10] Bad actor shouldn't be able to update governance pool address", async () => {
-                // Create investment pool factory contract
-                const investmentPoolDepFactory = await ethers.getContractFactory(
-                    "InvestmentPoolFactoryMock",
-                    buidl1Admin
-                );
-                investmentPoolFactory = await investmentPoolDepFactory.deploy(
-                    sf.settings.config.hostAddress,
-                    gelatoOpsMock.address,
-                    investmentPool.address
-                );
-                await investmentPoolFactory.deployed();
-
-                // Create governance pool mock
-                const governancePoolDep = await ethers.getContractFactory(
-                    "GovernancePoolMockForIntegration",
-                    buidl1Admin
-                );
-                governancePoolMock = await governancePoolDep.deploy();
-                await governancePoolMock.deployed();
-
-                // Set governance pool in investment pool factory
-                await expect(
-                    investmentPoolFactory
-                        .connect(foreignActor)
-                        .setGovernancePool(governancePoolMock.address)
-                ).to.be.revertedWith("Ownable: caller is not the owner");
-
-                const updatedGovernancePool = await investmentPoolFactory.getGovernancePool();
-                assert.equal(constants.AddressZero, updatedGovernancePool);
             });
         });
     });
@@ -472,8 +407,16 @@ describe("Investment Pool Factory", async () => {
                 "InvestmentPoolMock",
                 buidl1Admin
             );
-            investmentPool = await investmentPoolDep.deploy();
-            await investmentPool.deployed();
+            investmentPoolLogic = await investmentPoolDep.deploy();
+            await investmentPoolLogic.deployed();
+
+            // Create governance pool mock
+            const governancePoolDep = await ethers.getContractFactory(
+                "GovernancePoolMockForIntegration",
+                buidl1Admin
+            );
+            governancePoolLogic = await governancePoolDep.deploy();
+            await governancePoolLogic.deployed();
 
             // Create investment pool factory contract
             const investmentPoolDepFactory = await ethers.getContractFactory(
@@ -483,26 +426,15 @@ describe("Investment Pool Factory", async () => {
             investmentPoolFactory = await investmentPoolDepFactory.deploy(
                 sf.settings.config.hostAddress,
                 gelatoOpsMock.address,
-                investmentPool.address
+                investmentPoolLogic.address,
+                governancePoolLogic.address,
+                votingToken.address
             );
             await investmentPoolFactory.deployed();
 
             // Enforce a starting timestamp to avoid time based bugs
             const time = dateToSeconds("2100/06/01");
             await investmentPoolFactory.connect(buidl1Admin).setTimestamp(time);
-
-            // Create governance pool mock
-            const governancePoolDep = await ethers.getContractFactory(
-                "GovernancePoolMockForIntegration",
-                buidl1Admin
-            );
-            governancePoolMock = await governancePoolDep.deploy();
-            await governancePoolMock.deployed();
-
-            // Set governance pool in investment pool factory
-            await investmentPoolFactory
-                .connect(buidl1Admin)
-                .setGovernancePool(governancePoolMock.address);
         });
 
         describe("2.1 Interactions", () => {
@@ -517,7 +449,7 @@ describe("Investment Pool Factory", async () => {
 
                 const creationRes = await investmentPoolFactory
                     .connect(creator)
-                    .createInvestmentPool(
+                    .createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
@@ -535,7 +467,7 @@ describe("Investment Pool Factory", async () => {
                         {value: gelatoFeeAllocation}
                     );
 
-                const creationEvent = (await creationRes.wait(1)).events?.find(
+                const creationEvent = (await creationRes.wait()).events?.find(
                     (e) => e.event === "Created"
                 );
 
@@ -554,7 +486,7 @@ describe("Investment Pool Factory", async () => {
 
                 const creationRes = await investmentPoolFactory
                     .connect(creator)
-                    .createInvestmentPool(
+                    .createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
@@ -572,9 +504,9 @@ describe("Investment Pool Factory", async () => {
                         {value: gelatoFeeAllocation}
                     );
 
-                const poolAddress = (await creationRes.wait(1)).events?.find(
+                const poolAddress = (await creationRes.wait()).events?.find(
                     (e) => e.event === "Created"
-                )?.args?.pool;
+                )?.args?.ipContract;
 
                 const contractFactory = await ethers.getContractFactory(
                     "InvestmentPoolMock",
@@ -656,7 +588,7 @@ describe("Investment Pool Factory", async () => {
                 const campaignEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
-                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                    investmentPoolFactory.connect(creator).createProjectPools(
                         constants.AddressZero,
                         softCap,
                         hardCap,
@@ -689,7 +621,7 @@ describe("Investment Pool Factory", async () => {
                 const campaignEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
-                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                    investmentPoolFactory.connect(creator).createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
@@ -728,7 +660,7 @@ describe("Investment Pool Factory", async () => {
                 await investmentPoolFactory.connect(buidl1Admin).setTimestamp(time);
 
                 await expect(
-                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                    investmentPoolFactory.connect(creator).createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
@@ -762,7 +694,7 @@ describe("Investment Pool Factory", async () => {
                 const campaignEndDate = dateToSeconds("2100/07/01");
 
                 await expect(
-                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                    investmentPoolFactory.connect(creator).createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
@@ -795,7 +727,7 @@ describe("Investment Pool Factory", async () => {
                 const campaignEndDate = dateToSeconds("2100/10/10");
 
                 await expect(
-                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                    investmentPoolFactory.connect(creator).createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
@@ -828,7 +760,7 @@ describe("Investment Pool Factory", async () => {
                 const campaignEndDate = dateToSeconds("2100/07/10");
 
                 await expect(
-                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                    investmentPoolFactory.connect(creator).createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
@@ -859,7 +791,7 @@ describe("Investment Pool Factory", async () => {
                 const campaignEndDate = dateToSeconds("2100/08/10");
 
                 await expect(
-                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                    investmentPoolFactory.connect(creator).createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
@@ -888,7 +820,7 @@ describe("Investment Pool Factory", async () => {
                 const maxMilestones = await investmentPoolFactory.getMaxMilestoneCount();
 
                 await expect(
-                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                    investmentPoolFactory.connect(creator).createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
@@ -928,7 +860,7 @@ describe("Investment Pool Factory", async () => {
                 );
 
                 await expect(
-                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                    investmentPoolFactory.connect(creator).createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
@@ -952,7 +884,7 @@ describe("Investment Pool Factory", async () => {
                 const campaignEndDate = dateToSeconds("2100/10/01");
 
                 await expect(
-                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                    investmentPoolFactory.connect(creator).createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
@@ -986,7 +918,7 @@ describe("Investment Pool Factory", async () => {
                 const campaignEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
-                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                    investmentPoolFactory.connect(creator).createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
@@ -1019,7 +951,7 @@ describe("Investment Pool Factory", async () => {
                 const campaignEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
-                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                    investmentPoolFactory.connect(creator).createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
@@ -1052,7 +984,7 @@ describe("Investment Pool Factory", async () => {
                 const campaignEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
-                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                    investmentPoolFactory.connect(creator).createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
@@ -1087,7 +1019,7 @@ describe("Investment Pool Factory", async () => {
                 const campaignEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
-                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                    investmentPoolFactory.connect(creator).createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
@@ -1126,7 +1058,7 @@ describe("Investment Pool Factory", async () => {
                 const campaignEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
-                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                    investmentPoolFactory.connect(creator).createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
@@ -1161,7 +1093,7 @@ describe("Investment Pool Factory", async () => {
                 const campaignEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
-                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                    investmentPoolFactory.connect(creator).createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
@@ -1191,7 +1123,7 @@ describe("Investment Pool Factory", async () => {
                 const campaignEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
-                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                    investmentPoolFactory.connect(creator).createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
@@ -1224,7 +1156,7 @@ describe("Investment Pool Factory", async () => {
                 const campaignEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
-                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                    investmentPoolFactory.connect(creator).createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
@@ -1259,7 +1191,7 @@ describe("Investment Pool Factory", async () => {
                 const campaignEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
-                    investmentPoolFactory.connect(creator).createInvestmentPool(
+                    investmentPoolFactory.connect(creator).createProjectPools(
                         fUSDTx.address,
                         softCap,
                         hardCap,
