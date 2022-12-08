@@ -6,17 +6,20 @@ pragma solidity ^0.8.14;
 import {IInvestmentPool} from "../interfaces/IInvestmentPool.sol";
 
 contract GovernancePoolMockForIntegration {
+    function initialize(
+        address _votingToken,
+        IInvestmentPool _investmentPool,
+        uint8 _threshold,
+        uint256 _votestWithdrawFee
+    ) external payable {}
+
     function cancelDuringMilestones(address _investment) external {
         IInvestmentPool(_investment).cancelDuringMilestones();
     }
 
-    function activateInvestmentPool(
-        address /*_investmentPool*/
-    ) external pure {}
-
     function mintVotingTokens(
-        uint256, /*_milestoneId*/
-        address, /*_investor*/
+        uint256 /*_milestoneId*/,
+        address /*_investor*/,
         uint256 /*_amount*/
     ) external pure {}
 

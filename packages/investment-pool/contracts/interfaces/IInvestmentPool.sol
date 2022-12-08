@@ -145,7 +145,7 @@ interface IInvestmentPool is ISuperApp {
 
     function getUnknownStateValue() external pure returns (uint256);
 
-    function getAnyMilestoneOngoingStateValue() external view returns (uint256);
+    function getAnyMilestoneOngoingStateValue() external pure returns (uint256);
 
     function getEthAddress() external pure returns (address);
 

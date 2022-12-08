@@ -1,10 +1,8 @@
 import {ethers, network} from "hardhat";
-import {availableTestnetChains, networkConfig} from "../../hardhat-helper-config";
+import {availableTestnetChains} from "../../hardhat-helper-config";
 import {BigNumber} from "ethers";
-import {InvestmentPoolFactoryMock} from "../../typechain-types";
+import {deployPools} from "../deployment-outlines/deploy-pools";
 
-let nativeSuperToken: string;
-let investmentPoolFactory: InvestmentPoolFactoryMock;
 const percentageDivider: number = 10 ** 6;
 
 const percentToIpBigNumber = (percent: number): number => {
@@ -16,17 +14,10 @@ async function main() {
         console.log("Network is not available for deployment.");
         return;
     }
-    console.log("-----Creating Investment Pool contract-----");
-
-    const accounts = await ethers.getSigners();
-    const deployer = accounts[0];
-    const chainId = network.config.chainId as number;
-    nativeSuperToken = networkConfig[chainId].nativeSuperToken;
 
     const softCap: BigNumber = ethers.utils.parseEther("0.01");
     const hardCap: BigNumber = ethers.utils.parseEther("0.02");
     const gelatoFeeAllocation: BigNumber = ethers.utils.parseEther("0.1");
-
     const twoMonthsInSeconds: number = 60 * 60 * 24 * 30 * 2;
     const campaignStartDate: number = Math.round(new Date().getTime() / 1000) + 10 * 60; // current time + 5 minutes
     const campaignEndDate: number = campaignStartDate + twoMonthsInSeconds; // campaignStartDate + 2 months
@@ -34,7 +25,6 @@ async function main() {
     const percentagePart2: number = percentToIpBigNumber(9.5);
 
     let milestones = [];
-
     for (let i = 0; i < 10; i++) {
         milestones.push({
             startDate: campaignEndDate + i * twoMonthsInSeconds,
@@ -44,26 +34,16 @@ async function main() {
         });
     }
 
-    investmentPoolFactory = await ethers.getContractAt("InvestmentPoolFactoryMock", "<address>");
-
-    const creationTx = await investmentPoolFactory.connect(deployer).createInvestmentPool(
-        nativeSuperToken,
+    await deployPools(
+        "InvestmentPoolFactoryMock",
+        "<address>",
         softCap,
         hardCap,
         campaignStartDate,
         campaignEndDate,
-        0, // CLONE-PROXY
         milestones,
-        {value: gelatoFeeAllocation}
+        gelatoFeeAllocation
     );
-
-    const receipt = await creationTx.wait(1);
-    const poolAddress = receipt.events?.find((e) => e.event === "Created")?.args?.pool;
-
-    console.log("Created Investment Pool at address: ", poolAddress);
-    console.log("---Timeline---");
-    console.log("Fundraiser start date: ", new Date(campaignStartDate * 1000));
-    console.log("Fundraiser end date: ", new Date(campaignEndDate * 1000));
 }
 
 main().catch((error) => {

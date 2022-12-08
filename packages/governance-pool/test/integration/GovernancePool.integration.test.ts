@@ -53,17 +53,15 @@ let milestoneStartDate2: BigNumber;
 let milestoneEndDate2: BigNumber;
 let campaignStartDate: BigNumber;
 let campaignEndDate: BigNumber;
+let adminRole: string;
 
 let creationRes: ContractTransaction;
 
 // Percentages (in divider format)
 let percentageDivider: BigNumber = BigNumber.from(0);
 let percent5InIpBigNumber: BigNumber;
-let percent10InIpBigNumber: BigNumber;
 let percent20InIpBigNumber: BigNumber;
 let percent70InIpBigNumber: BigNumber;
-let percent90InIpBigNumber: BigNumber;
-let percent95InIpBigNumber: BigNumber;
 
 const dateToSeconds = (date: string, isBigNumber: boolean = true): BigNumber | number => {
     const convertedDate = new Date(date).getTime() / 1000;
@@ -86,6 +84,12 @@ const defineVariablesFromIPF = async () => {
     const investmentPoolDep = await ethers.getContractFactory("InvestmentPoolMock", deployer);
     const invPool = await investmentPoolDep.deploy();
     await invPool.deployed();
+    const governancePoolDep = await ethers.getContractFactory("GovernancePoolMock", deployer);
+    const govPool = await governancePoolDep.deploy();
+    await govPool.deployed();
+    const votingTokensFactory = await ethers.getContractFactory("VotingToken", deployer);
+    const votingToken = await votingTokensFactory.deploy();
+    await votingToken.deployed();
 
     const investmentPoolDepFactory = await ethers.getContractFactory(
         "InvestmentPoolFactoryMock",
@@ -94,10 +98,13 @@ const defineVariablesFromIPF = async () => {
     const invPoolFactory = await investmentPoolDepFactory.deploy(
         sf.settings.config.hostAddress,
         gelatoOpsMock.address,
-        invPool.address
+        invPool.address,
+        govPool.address,
+        votingToken.address
     );
     await invPoolFactory.deployed();
 
+    adminRole = await votingToken.DEFAULT_ADMIN_ROLE();
     await definePercentageDivider(invPoolFactory);
     await defineGelatoFeeAllocation(invPoolFactory);
 };
@@ -105,11 +112,8 @@ const defineVariablesFromIPF = async () => {
 const definePercentageDivider = async (invPoolFactory: InvestmentPoolFactoryMock) => {
     percentageDivider = await invPoolFactory.getPercentageDivider();
     percent5InIpBigNumber = percentToIpBigNumber(5);
-    percent10InIpBigNumber = percentToIpBigNumber(10);
     percent20InIpBigNumber = percentToIpBigNumber(20);
     percent70InIpBigNumber = percentToIpBigNumber(70);
-    percent90InIpBigNumber = percentToIpBigNumber(90);
-    percent95InIpBigNumber = percentToIpBigNumber(95);
 };
 
 const defineGelatoFeeAllocation = async (invPoolFactory: InvestmentPoolFactoryMock) => {
@@ -134,18 +138,24 @@ const investMoney = async (
     await investment.connect(investorObj).invest(investedMoney, false);
 };
 
-const getInvestmentFromTx = async (tx: ContractTransaction): Promise<InvestmentPoolMock> => {
+const getContractsFromTx = async (
+    tx: ContractTransaction
+): Promise<[InvestmentPoolMock, GovernancePoolMock]> => {
     const creationEvent = (await tx.wait(1)).events?.find((e) => e.event === "Created");
     assert.isDefined(creationEvent, "Didn't emit creation event");
 
-    const poolAddress = creationEvent?.args?.pool;
-    const contractFactory = await ethers.getContractFactory("InvestmentPoolMock", deployer);
-    const pool = contractFactory.attach(poolAddress);
-    return pool;
-};
+    const ipAddress = creationEvent?.args?.ipContract;
+    const ipContractFactory = await ethers.getContractFactory("InvestmentPoolMock", deployer);
+    const ipContract = ipContractFactory.attach(ipAddress);
 
+    const gpAddress = creationEvent?.args?.gpContract;
+    const gpContractFactory = await ethers.getContractFactory("GovernancePoolMock", deployer);
+    const gpContract = gpContractFactory.attach(gpAddress);
+
+    return [ipContract, gpContract];
+};
 const createInvestmentWithTwoMilestones = async (feeAmount: BigNumber = gelatoFeeAllocation) => {
-    creationRes = await investmentPoolFactory.connect(creator).createInvestmentPool(
+    creationRes = await investmentPoolFactory.connect(creator).createProjectPools(
         fUSDTx.address,
         softCap,
         hardCap,
@@ -169,7 +179,41 @@ const createInvestmentWithTwoMilestones = async (feeAmount: BigNumber = gelatoFe
         {value: feeAmount}
     );
 
-    investment = await getInvestmentFromTx(creationRes);
+    [investment, governancePool] = await getContractsFromTx(creationRes);
+};
+
+const deployInvestmentPoolFactory = async (): Promise<InvestmentPoolFactoryMock> => {
+    const investmentPoolLogicDep = await ethers.getContractFactory("InvestmentPoolMock", deployer);
+    const ipLogic = await investmentPoolLogicDep.deploy();
+    await ipLogic.deployed();
+    const governancePoolLogicDep = await ethers.getContractFactory("GovernancePoolMock", deployer);
+    const gpLogic = await governancePoolLogicDep.deploy();
+    await gpLogic.deployed();
+    const votingTokensFactory = await ethers.getContractFactory("VotingToken", deployer);
+    votingToken = await votingTokensFactory.deploy();
+    await votingToken.deployed();
+
+    const investmentPoolDepFactory = await ethers.getContractFactory(
+        "InvestmentPoolFactoryMock",
+        deployer
+    );
+    const investmentPoolFactory = await investmentPoolDepFactory.deploy(
+        sf.settings.config.hostAddress,
+        gelatoOpsMock.address,
+        ipLogic.address,
+        gpLogic.address,
+        votingToken.address
+    );
+    await investmentPoolFactory.deployed();
+
+    // Assign admin role to IPF, so it can later assign governance pool role for new GP contracts automatically on project creation
+    await votingToken.connect(deployer).grantRole(adminRole, investmentPoolFactory.address);
+
+    // Enforce a starting timestamp to avoid time based bugs
+    const time = dateToSeconds("2100/06/01");
+    await investmentPoolFactory.connect(deployer).setTimestamp(time);
+
+    return investmentPoolFactory;
 };
 
 describe("Governance Pool integration with Investment Pool Factory and Investment Pool", async () => {
@@ -258,237 +302,17 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
     });
 
     describe("1. IPF request to activate investment pool (in GP)", () => {
-        beforeEach(async () => {
-            // Create investment pool implementation contract
-            const investmentPoolDep = await ethers.getContractFactory(
-                "InvestmentPoolMock",
-                deployer
-            );
-            investment = await investmentPoolDep.deploy();
-            await investment.deployed();
-
-            // Create investment pool factory contract
-            const investmentPoolDepFactory = await ethers.getContractFactory(
-                "InvestmentPoolFactoryMock",
-                deployer
-            );
-            investmentPoolFactory = await investmentPoolDepFactory.deploy(
-                sf.settings.config.hostAddress,
-                gelatoOpsMock.address,
-                investment.address
-            );
-            await investmentPoolFactory.deployed();
-
-            // Enforce a starting timestamp to avoid time based bugs
-            const time = dateToSeconds("2100/06/01");
-            await investmentPoolFactory.connect(deployer).setTimestamp(time);
-        });
-
-        it("[IPF-GP][1.1] On CLONE_PROXY investment pool creation, governance pool adds it to active list", async () => {
-            // Deploy voting token
-            const votingTokensFactory = await ethers.getContractFactory("VotingToken", deployer);
-            votingToken = await votingTokensFactory.deploy();
-            await votingToken.deployed();
-
-            // Governance Pool deployment
-            const governancePoolFactory = await ethers.getContractFactory(
-                "GovernancePoolMock",
-                deployer
-            );
-            governancePool = await governancePoolFactory.deploy(
-                votingToken.address,
-                investmentPoolFactory.address,
-                51, // Votes threshold
-                1 // 1% Votes withdraw fee
-            );
-            await governancePool.deployed();
-
-            // Transfer ownership to governance pool
-            await votingToken.transferOwnership(governancePool.address);
-
-            // Assign governance pool to the IPF
-            await investmentPoolFactory
-                .connect(deployer)
-                .setGovernancePool(governancePool.address);
-
-            const creationRes = await investmentPoolFactory.connect(creator).createInvestmentPool(
-                fUSDTx.address,
-                softCap,
-                hardCap,
-                campaignStartDate,
-                campaignEndDate,
-                0, // CLONE-PROXY
-                [
-                    {
-                        startDate: milestoneStartDate,
-                        endDate: milestoneEndDate,
-                        intervalSeedPortion: percent10InIpBigNumber,
-                        intervalStreamingPortion: percent90InIpBigNumber,
-                    },
-                ],
-                {value: gelatoFeeAllocation}
-            );
-
-            const poolAddress = (await creationRes.wait(1)).events?.find(
-                (e) => e.event === "Created"
-            )?.args?.pool;
-        });
-
-        it("[IPF-GP][1.2] Reverts creation if governance pool is not defined", async () => {
-            await expect(
-                investmentPoolFactory.connect(creator).createInvestmentPool(
-                    fUSDTx.address,
-                    softCap,
-                    hardCap,
-                    campaignStartDate,
-                    campaignEndDate,
-                    0, // CLONE-PROXY
-                    [
-                        {
-                            startDate: milestoneStartDate,
-                            endDate: milestoneEndDate,
-                            intervalSeedPortion: percent10InIpBigNumber,
-                            intervalStreamingPortion: percent90InIpBigNumber,
-                        },
-                    ],
-                    {value: gelatoFeeAllocation}
-                )
-            ).to.be.revertedWithCustomError(
-                investmentPoolFactory,
-                "InvestmentPoolFactory__GovernancePoolNotDefined"
-            );
-        });
-    });
-
-    describe("2. IPF request to set governance pool state variable", () => {
-        beforeEach(async () => {
-            // Create investment pool implementation contract
-            const investmentPoolDep = await ethers.getContractFactory(
-                "InvestmentPoolMock",
-                deployer
-            );
-
-            investment = await investmentPoolDep.deploy();
-            await investment.deployed();
-
-            // Create investment pool factory contract
-            const investmentPoolDepFactory = await ethers.getContractFactory(
-                "InvestmentPoolFactoryMock",
-                deployer
-            );
-
-            investmentPoolFactory = await investmentPoolDepFactory.deploy(
-                sf.settings.config.hostAddress,
-                gelatoOpsMock.address,
-                investment.address
-            );
-            await investmentPoolFactory.deployed();
-
-            // Enforce a starting timestamp to avoid time based bugs
-            const time = dateToSeconds("2100/06/01");
-            await investmentPoolFactory.connect(deployer).setTimestamp(time);
-
-            const votingTokensFactory = await ethers.getContractFactory("VotingToken", deployer);
-            votingToken = await votingTokensFactory.deploy();
-            await votingToken.deployed();
-
-            // Governance Pool deployment
-            const governancePoolFactory = await ethers.getContractFactory(
-                "GovernancePoolMock",
-                deployer
-            );
-            governancePool = await governancePoolFactory.deploy(
-                votingToken.address,
-                investmentPoolFactory.address,
-                51, // Votes threshold
-                1 // 1% Votes withdraw fee
-            );
-            await governancePool.deployed();
-        });
-
-        it("[GP-IPF][2.1] Should set governance pool variable correctly", async () => {
-            await expect(
-                investmentPoolFactory.connect(deployer).setGovernancePool(governancePool.address)
-            ).not.to.be.reverted;
-
-            const definedGovernancePool = await investmentPoolFactory.getGovernancePool();
-            assert.equal(governancePool.address, definedGovernancePool);
-        });
-
-        it("[GP-IPF][2.2] Shouldn't be able to set governance pool if not the owner", async () => {
-            await expect(
-                investmentPoolFactory
-                    .connect(foreignActor)
-                    .setGovernancePool(governancePool.address)
-            ).to.be.revertedWith("Ownable: caller is not the owner");
-        });
-
-        it("[GP-IPF][2.3] Shouldn't be able to set governance pool if it's already defined", async () => {
-            await investmentPoolFactory
-                .connect(deployer)
-                .setGovernancePool(governancePool.address);
-
-            await expect(
-                investmentPoolFactory.connect(deployer).setGovernancePool(governancePool.address)
-            ).to.be.revertedWithCustomError(
-                investmentPoolFactory,
-                "InvestmentPoolFactory__GovernancePoolAlreadyDefined"
-            );
+        it("[IPF-GP][1.1] On CLONE_PROXY investment pool creation, governance pool links with invemstment pool", async () => {
+            investmentPoolFactory = await deployInvestmentPoolFactory();
+            await createInvestmentWithTwoMilestones();
+            assert.equal(await investment.getGovernancePool(), governancePool.address);
+            assert.equal(await governancePool.getInvestmentPool(), investment.address);
         });
     });
 
     describe("3. IP request to mint voting tokens (in GP)", () => {
         it("[IP-GP][3.1] Governance pool should mint voting tokens on investment", async () => {
-            // Create investment pool implementation contract
-            const investmentPoolDep = await ethers.getContractFactory(
-                "InvestmentPoolMock",
-                deployer
-            );
-            investment = await investmentPoolDep.deploy();
-            await investment.deployed();
-
-            // Create investment pool factory contract
-            const investmentPoolDepFactory = await ethers.getContractFactory(
-                "InvestmentPoolFactoryMock",
-                deployer
-            );
-            investmentPoolFactory = await investmentPoolDepFactory.deploy(
-                sf.settings.config.hostAddress,
-                gelatoOpsMock.address,
-                investment.address
-            );
-            await investmentPoolFactory.deployed();
-
-            // Deploy voting token
-            const votingTokensFactory = await ethers.getContractFactory("VotingToken", deployer);
-            votingToken = await votingTokensFactory.deploy();
-            await votingToken.deployed();
-
-            // Governance Pool deployment
-            const governancePoolFactory = await ethers.getContractFactory(
-                "GovernancePoolMock",
-                deployer
-            );
-            governancePool = await governancePoolFactory.deploy(
-                votingToken.address,
-                investmentPoolFactory.address,
-                51, // Votes threshold
-                1 // 1% Votes withdraw fee
-            );
-            await governancePool.deployed();
-
-            // Transfer ownership to governance pool
-            await votingToken.transferOwnership(governancePool.address);
-
-            // Assign governance pool to the IPF
-            await investmentPoolFactory
-                .connect(deployer)
-                .setGovernancePool(governancePool.address);
-
-            // Enforce a starting timestamp to avoid time based bugs
-            const time = dateToSeconds("2100/06/01");
-            await investmentPoolFactory.connect(deployer).setTimestamp(time);
-
+            investmentPoolFactory = await deployInvestmentPoolFactory();
             await createInvestmentWithTwoMilestones();
 
             const investedAmount: BigNumber = ethers.utils.parseEther("100");
@@ -498,7 +322,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             // Approve and invest money
             await investMoney(fUSDTx, investment, investorA, investedAmount);
             const softCapMultiplier = await investment.getSoftCapMultiplier();
-            const totalSupply = await governancePool.getVotingTokensSupply(investment.address);
+            const totalSupply = await governancePool.getVotingTokensSupply();
 
             assert.equal(investedAmount.mul(softCapMultiplier).toString(), totalSupply.toString());
         });
@@ -506,56 +330,7 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
 
     describe("4. GP request to terminate project (in IP)", () => {
         it("[GP-IP][4.1] If threshold was reached, should call investment pool and cancel the project", async () => {
-            // Create investment pool implementation contract
-            const investmentPoolDep = await ethers.getContractFactory(
-                "InvestmentPoolMock",
-                deployer
-            );
-            investment = await investmentPoolDep.deploy();
-            await investment.deployed();
-
-            // Create investment pool factory contract
-            const investmentPoolDepFactory = await ethers.getContractFactory(
-                "InvestmentPoolFactoryMock",
-                deployer
-            );
-            investmentPoolFactory = await investmentPoolDepFactory.deploy(
-                sf.settings.config.hostAddress,
-                gelatoOpsMock.address,
-                investment.address
-            );
-            await investmentPoolFactory.deployed();
-
-            // Deploy voting token
-            const votingTokensFactory = await ethers.getContractFactory("VotingToken", deployer);
-            votingToken = await votingTokensFactory.deploy();
-            await votingToken.deployed();
-
-            // Governance Pool deployment
-            const governancePoolFactory = await ethers.getContractFactory(
-                "GovernancePoolMock",
-                deployer
-            );
-            governancePool = await governancePoolFactory.deploy(
-                votingToken.address,
-                investmentPoolFactory.address,
-                51, // Votes threshold
-                1 // 1% Votes withdraw fee
-            );
-            await governancePool.deployed();
-
-            // Transfer ownership to governance pool
-            await votingToken.transferOwnership(governancePool.address);
-
-            // Assign governance pool to the IPF
-            await investmentPoolFactory
-                .connect(deployer)
-                .setGovernancePool(governancePool.address);
-
-            // Enforce a starting timestamp to avoid time based bugs
-            const time = dateToSeconds("2100/06/01");
-            await investmentPoolFactory.connect(deployer).setTimestamp(time);
-
+            investmentPoolFactory = await deployInvestmentPoolFactory();
             await createInvestmentWithTwoMilestones();
 
             const investedAmount: BigNumber = ethers.utils.parseEther("2000");
@@ -575,64 +350,16 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             // Approve the governance pool contract to spend investor's tokens
             await votingToken.connect(investorA).setApprovalForAll(governancePool.address, true);
 
-            await expect(
-                governancePool.connect(investorA).voteAgainst(investment.address, votesAgainst)
-            ).to.emit(investment, "Cancel");
+            await expect(governancePool.connect(investorA).voteAgainst(votesAgainst)).to.emit(
+                investment,
+                "Cancel"
+            );
         });
     });
 
     describe("5. IP request to burn voting tokens (in GP on unpledge)", () => {
         it("[IP-GP][5.1] Should call governance pool and burn voting tokens from total supply", async () => {
-            // Create investment pool implementation contract
-            const investmentPoolDep = await ethers.getContractFactory(
-                "InvestmentPoolMock",
-                deployer
-            );
-            investment = await investmentPoolDep.deploy();
-            await investment.deployed();
-
-            // Create investment pool factory contract
-            const investmentPoolDepFactory = await ethers.getContractFactory(
-                "InvestmentPoolFactoryMock",
-                deployer
-            );
-            investmentPoolFactory = await investmentPoolDepFactory.deploy(
-                sf.settings.config.hostAddress,
-                gelatoOpsMock.address,
-                investment.address
-            );
-            await investmentPoolFactory.deployed();
-
-            // Deploy voting token
-            const votingTokensFactory = await ethers.getContractFactory("VotingToken", deployer);
-            votingToken = await votingTokensFactory.deploy();
-            await votingToken.deployed();
-
-            // Governance Pool deployment
-            const governancePoolFactory = await ethers.getContractFactory(
-                "GovernancePoolMock",
-                deployer
-            );
-            governancePool = await governancePoolFactory.deploy(
-                votingToken.address,
-                investmentPoolFactory.address,
-                51, // Votes threshold
-                1 // 1% Votes withdraw fee
-            );
-            await governancePool.deployed();
-
-            // Transfer ownership to governance pool
-            await votingToken.transferOwnership(governancePool.address);
-
-            // Assign governance pool to the IPF
-            await investmentPoolFactory
-                .connect(deployer)
-                .setGovernancePool(governancePool.address);
-
-            // Enforce a starting timestamp to avoid time based bugs
-            const time = dateToSeconds("2100/06/01");
-            await investmentPoolFactory.connect(deployer).setTimestamp(time);
-
+            investmentPoolFactory = await deployInvestmentPoolFactory();
             await createInvestmentWithTwoMilestones();
 
             const investedAmount: BigNumber = ethers.utils.parseEther("2000");
@@ -649,13 +376,9 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             await votingToken.connect(investorA).setApprovalForAll(governancePool.address, true);
             await investment.connect(investorA).unpledge();
 
-            const investmentPoolId = await governancePool.getInvestmentPoolId(investment.address);
-            const totalSupply = await governancePool.getVotingTokensSupply(investment.address);
-            const amountLeft = await governancePool.getTokensMinted(
-                investorB.address,
-                investmentPoolId,
-                0
-            );
+            const investmentPoolId = await governancePool.getInvestmentPoolId();
+            const totalSupply = await governancePool.getVotingTokensSupply();
+            const amountLeft = await governancePool.getTokensMinted(investorB.address, 0);
 
             assert.equal(totalSupply.toString(), amountLeft.toString());
         });

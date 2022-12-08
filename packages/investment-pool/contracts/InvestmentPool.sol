@@ -69,7 +69,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     uint256 internal constant TERMINATED_BY_GELATO_STATE_VALUE = 256;
     uint256 internal constant SUCCESSFULLY_ENDED_STATE_VALUE = 512;
     uint256 internal constant UNKNOWN_STATE_VALUE = 1024;
-    uint256 internal ANY_MILESTONE_ONGOING_STATE_VALUE;
+    uint256 internal constant ANY_MILESTONE_ONGOING_STATE_VALUE =
+        MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE | LAST_MILESTONE_ONGOING_STATE_VALUE;
 
     /* WARNING: NEVER RE-ORDER VARIABLES! Always double-check that new
        variables are added APPEND-ONLY. Re-ordering variables can
@@ -107,11 +108,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     mapping(address => mapping(uint256 => uint256)) internal investedAmount;
 
     /// @dev Milestone data
-    // Total amount of milestones in this investment pool
     uint256 internal milestoneCount;
+    uint256 internal currentMilestone;
     // TODO: Look into, maybe an array would be better, since we have a fixed amount?
     mapping(uint256 => Milestone) internal milestones;
-    uint256 internal currentMilestone;
 
     uint256 internal investmentWithdrawFee;
     uint256 internal softCapMultiplier;
@@ -235,9 +235,6 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             _host,
             IConstantFlowAgreementV1(address(_host.getAgreementClass(getCfaId())))
         );
-        ANY_MILESTONE_ONGOING_STATE_VALUE =
-            getMilestonesOngoingBeforeLastStateValue() |
-            getLastMilestoneOngoingStateValue();
 
         acceptedToken = _projectInfo.acceptedToken;
         creator = _projectInfo.creator;
@@ -735,7 +732,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         return UNKNOWN_STATE_VALUE;
     }
 
-    function getAnyMilestoneOngoingStateValue() public view returns (uint256) {
+    function getAnyMilestoneOngoingStateValue() public pure returns (uint256) {
         return ANY_MILESTONE_ONGOING_STATE_VALUE;
     }
 

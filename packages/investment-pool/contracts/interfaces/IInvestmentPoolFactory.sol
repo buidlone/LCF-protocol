@@ -17,9 +17,14 @@ interface IInvestmentPoolFactory {
         UUPS_PROXY
     }
 
-    event Created(address indexed creator, address indexed pool, ProxyType proxyType);
+    event Created(
+        address indexed creator,
+        address indexed ipContract,
+        address indexed gpContract,
+        ProxyType proxyType
+    );
 
-    function createInvestmentPool(
+    function createProjectPools(
         ISuperToken _acceptedToken,
         uint96 _softCap,
         uint96 _hardCap,
@@ -31,33 +36,35 @@ interface IInvestmentPoolFactory {
 
     function getMaxMilestoneCount() external pure returns (uint32);
 
-    function getTerminationWindow() external view returns (uint48);
+    function getTerminationWindow() external pure returns (uint48);
 
-    function getAutomatedTerminationWindow() external view returns (uint48);
+    function getAutomatedTerminationWindow() external pure returns (uint48);
 
     function getPercentageDivider() external pure returns (uint256);
 
-    function getMilestoneMinDuration() external view returns (uint256);
+    function getMilestoneMinDuration() external pure returns (uint256);
 
-    function getMilestoneMaxDuration() external view returns (uint256);
+    function getMilestoneMaxDuration() external pure returns (uint256);
 
-    function getFundraiserMinDuration() external view returns (uint256);
+    function getFundraiserMinDuration() external pure returns (uint256);
 
-    function getFundraiserMaxDuration() external view returns (uint256);
+    function getFundraiserMaxDuration() external pure returns (uint256);
 
-    function getInvestmentWithdrawPercentageFee() external view returns (uint256);
+    function getInvestmentWithdrawPercentageFee() external pure returns (uint256);
 
-    function getSoftCapMultiplier() external view returns (uint256);
+    function getSoftCapMultiplier() external pure returns (uint256);
 
-    function getHardCapMultiplier() external view returns (uint256);
+    function getHardCapMultiplier() external pure returns (uint256);
 
     function getGelatoFeeAllocationForProject() external view returns (uint256);
-
-    function getGovernancePool() external view returns (address);
 
     function getSuperfluidHost() external view returns (address);
 
     function getGelatoOps() external view returns (address payable);
 
     function getInvestmentPoolImplementation() external view returns (address);
+
+    function getGovernancePoolImplementation() external view returns (address);
+
+    function getVotingToken() external view returns (address);
 }
