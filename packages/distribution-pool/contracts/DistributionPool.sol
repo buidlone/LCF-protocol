@@ -123,7 +123,7 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
         uint256 _weightDivisor,
         uint256 _allocationCoefficient
     ) external onlyInvestmentPool {
-        /// @dev Function is called only by innvestment pool that's why we don't check if data is valid
+        /// @dev Function is called only by investment pool that's why we don't check if data is valid
 
         uint256 tokenAllocation = (_investmentWeight * getLockedTokens()) / _weightDivisor;
         uint256 scaledAllocation = (tokenAllocation * getPercentageDivider()) /
@@ -155,7 +155,7 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
         uint256 _milestoneId,
         address _investor
     ) external onlyInvestmentPool {
-        /// @dev Function is called only by innvestment pool that's why we don't check if data is valid
+        /// @dev Function is called only by investment pool that's why we don't check if data is valid
 
         uint256 tokenAllocation = getAllocatedAmount(_investor, _milestoneId);
 

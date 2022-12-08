@@ -43,7 +43,7 @@ error InvestmentPoolFactory__NotEnoughEthValue();
 error InvestmentPoolFactory__FailedToSendEthToInvestmentPool();
 error InvestmentPoolFactory__SeedFundsAllocationGreaterThanTotal();
 error InvestmentPoolFactory__SeedFundsAllocationExceedsMax();
-error InvestmentPoolFactory__HardCapIsLargerThanSoftCapMoreTimesThanAllowed();
+error InvestmentPoolFactory__SoftCapAndHardCapDifferenceIsTooLarge();
 
 contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     // Assign all Clones library functions to addresses
@@ -284,7 +284,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
             revert InvestmentPoolFactory__SoftCapIsGreaterThanHardCap(_softCap, _hardCap);
 
         if (_softCap * SOFT_CAP_MAX_MULTIPLIER < _hardCap)
-            revert InvestmentPoolFactory__HardCapIsLargerThanSoftCapMoreTimesThanAllowed();
+            revert InvestmentPoolFactory__SoftCapAndHardCapDifferenceIsTooLarge();
 
         if (_fundraiserStartAt < _getNow())
             revert InvestmentPoolFactory__FundraiserStartIsInPast();
