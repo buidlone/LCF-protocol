@@ -5,11 +5,12 @@ import {ethers, web3, network} from "hardhat";
 import {assert, expect} from "chai";
 
 import {
+    GelatoOpsMock,
     VotingToken,
-    GovernancePoolMock,
     InvestmentPoolFactoryMock,
     InvestmentPoolMock,
-    GelatoOpsMock,
+    GovernancePoolMock,
+    DistributionPoolMock,
 } from "../../typechain-types";
 
 const fTokenAbi = require("../abis/fTokenAbi");
@@ -38,9 +39,13 @@ let investorB: SignerWithAddress;
 let sf: Framework;
 let investmentPoolFactory: InvestmentPoolFactoryMock;
 let investment: InvestmentPoolMock;
-let gelatoOpsMock: GelatoOpsMock;
 let governancePool: GovernancePoolMock;
+let distributionPool: DistributionPoolMock;
+let gelatoOpsMock: GelatoOpsMock;
 let votingToken: VotingToken;
+let investmentPoolLogic: InvestmentPoolMock;
+let governancePoolLogic: GovernancePoolMock;
+let distributionPoolLogic: DistributionPoolMock;
 
 let snapshotId: string;
 let gelatoFeeAllocation: BigNumber;
@@ -81,16 +86,6 @@ const percentToIpBigNumber = (percent: number): BigNumber => {
 };
 
 const defineVariablesFromIPF = async () => {
-    const investmentPoolDep = await ethers.getContractFactory("InvestmentPoolMock", deployer);
-    const invPool = await investmentPoolDep.deploy();
-    await invPool.deployed();
-    const governancePoolDep = await ethers.getContractFactory("GovernancePoolMock", deployer);
-    const govPool = await governancePoolDep.deploy();
-    await govPool.deployed();
-    const votingTokensFactory = await ethers.getContractFactory("VotingToken", deployer);
-    const votingToken = await votingTokensFactory.deploy();
-    await votingToken.deployed();
-
     const investmentPoolDepFactory = await ethers.getContractFactory(
         "InvestmentPoolFactoryMock",
         deployer
@@ -98,26 +93,20 @@ const defineVariablesFromIPF = async () => {
     const invPoolFactory = await investmentPoolDepFactory.deploy(
         sf.settings.config.hostAddress,
         gelatoOpsMock.address,
-        invPool.address,
-        govPool.address,
+        investmentPoolLogic.address,
+        governancePoolLogic.address,
+        distributionPoolLogic.address,
         votingToken.address
     );
     await invPoolFactory.deployed();
 
     adminRole = await votingToken.DEFAULT_ADMIN_ROLE();
-    await definePercentageDivider(invPoolFactory);
-    await defineGelatoFeeAllocation(invPoolFactory);
-};
+    gelatoFeeAllocation = await invPoolFactory.getGelatoFeeAllocationForProject();
 
-const definePercentageDivider = async (invPoolFactory: InvestmentPoolFactoryMock) => {
     percentageDivider = await invPoolFactory.getPercentageDivider();
     percent5InIpBigNumber = percentToIpBigNumber(5);
     percent20InIpBigNumber = percentToIpBigNumber(20);
     percent70InIpBigNumber = percentToIpBigNumber(70);
-};
-
-const defineGelatoFeeAllocation = async (invPoolFactory: InvestmentPoolFactoryMock) => {
-    gelatoFeeAllocation = await invPoolFactory.getGelatoFeeAllocationForProject();
 };
 
 const investMoney = async (
@@ -130,7 +119,7 @@ const investMoney = async (
     await fUSDTxToken
         .approve({
             receiver: investment.address,
-            amount: UINT256_MAX.toString(),
+            amount: investedMoney.toString(),
         })
         .exec(investorObj);
 
@@ -140,7 +129,7 @@ const investMoney = async (
 
 const getContractsFromTx = async (
     tx: ContractTransaction
-): Promise<[InvestmentPoolMock, GovernancePoolMock]> => {
+): Promise<[InvestmentPoolMock, GovernancePoolMock, DistributionPoolMock]> => {
     const creationEvent = (await tx.wait(1)).events?.find((e) => e.event === "Created");
     assert.isDefined(creationEvent, "Didn't emit creation event");
 
@@ -152,15 +141,24 @@ const getContractsFromTx = async (
     const gpContractFactory = await ethers.getContractFactory("GovernancePoolMock", deployer);
     const gpContract = gpContractFactory.attach(gpAddress);
 
-    return [ipContract, gpContract];
+    const dpAddress = creationEvent?.args?.dpContract;
+    const dpContractFactory = await ethers.getContractFactory("DistributionPoolMock", deployer);
+    const dpContract = dpContractFactory.attach(dpAddress);
+
+    return [ipContract, gpContract, dpContract];
 };
+
 const createInvestmentWithTwoMilestones = async (feeAmount: BigNumber = gelatoFeeAllocation) => {
     creationRes = await investmentPoolFactory.connect(creator).createProjectPools(
-        fUSDTx.address,
-        softCap,
-        hardCap,
-        campaignStartDate,
-        campaignEndDate,
+        {
+            softCap: softCap,
+            hardCap: hardCap,
+            fundraiserStartAt: campaignStartDate,
+            fundraiserEndAt: campaignEndDate,
+            acceptedToken: fUSDTx.address,
+            projectToken: fUSDT.address,
+            tokenRewards: ethers.utils.parseEther("100"),
+        },
         0, // CLONE-PROXY
         [
             {
@@ -179,16 +177,28 @@ const createInvestmentWithTwoMilestones = async (feeAmount: BigNumber = gelatoFe
         {value: feeAmount}
     );
 
-    [investment, governancePool] = await getContractsFromTx(creationRes);
+    [investment, governancePool, distributionPool] = await getContractsFromTx(creationRes);
+
+    await fUSDT.connect(creator).approve(distributionPool.address, constants.MaxUint256);
+    await distributionPool.connect(creator).lockTokens();
+};
+
+const deployLogicContracts = async () => {
+    const investmentPoolLogicDep = await ethers.getContractFactory("InvestmentPoolMock", deployer);
+    investmentPoolLogic = await investmentPoolLogicDep.deploy();
+    await investmentPoolLogic.deployed();
+    const governancePoolLogicDep = await ethers.getContractFactory("GovernancePoolMock", deployer);
+    governancePoolLogic = await governancePoolLogicDep.deploy();
+    await governancePoolLogic.deployed();
+    const distributionPoolLogicDep = await ethers.getContractFactory(
+        "DistributionPoolMock",
+        deployer
+    );
+    distributionPoolLogic = await distributionPoolLogicDep.deploy();
+    await distributionPoolLogic.deployed();
 };
 
 const deployInvestmentPoolFactory = async (): Promise<InvestmentPoolFactoryMock> => {
-    const investmentPoolLogicDep = await ethers.getContractFactory("InvestmentPoolMock", deployer);
-    const ipLogic = await investmentPoolLogicDep.deploy();
-    await ipLogic.deployed();
-    const governancePoolLogicDep = await ethers.getContractFactory("GovernancePoolMock", deployer);
-    const gpLogic = await governancePoolLogicDep.deploy();
-    await gpLogic.deployed();
     const votingTokensFactory = await ethers.getContractFactory("VotingToken", deployer);
     votingToken = await votingTokensFactory.deploy();
     await votingToken.deployed();
@@ -200,8 +210,9 @@ const deployInvestmentPoolFactory = async (): Promise<InvestmentPoolFactoryMock>
     const investmentPoolFactory = await investmentPoolDepFactory.deploy(
         sf.settings.config.hostAddress,
         gelatoOpsMock.address,
-        ipLogic.address,
-        gpLogic.address,
+        investmentPoolLogic.address,
+        governancePoolLogic.address,
+        distributionPoolLogic.address,
         votingToken.address
     );
     await investmentPoolFactory.deployed();
@@ -216,6 +227,68 @@ const deployInvestmentPoolFactory = async (): Promise<InvestmentPoolFactoryMock>
     return investmentPoolFactory;
 };
 
+const deploySuperfluidToken = async () => {
+    // deploy the framework
+    await deployFramework(errorHandler, {
+        web3,
+        from: deployer.address,
+    });
+
+    // deploy a fake erc20 token
+    const fUSDTAddress = await deployTestToken(errorHandler, [":", "fUSDT"], {
+        web3,
+        from: deployer.address,
+    });
+
+    // deploy a fake erc20 wrapper super token around the fUSDT token
+    const fUSDTxAddress = await deploySuperToken(errorHandler, [":", "fUSDT"], {
+        web3,
+        from: deployer.address,
+    });
+
+    console.log("fUSDT  Address: ", fUSDTAddress);
+    console.log("fUSDTx Address: ", fUSDTxAddress);
+
+    sf = await Framework.create({
+        resolverAddress: process.env.RESOLVER_ADDRESS,
+        chainId: 31337,
+        provider,
+        protocolReleaseVersion: "test",
+    });
+
+    fUSDTx = await sf.loadWrapperSuperToken("fUSDTx");
+    fUSDT = new ethers.Contract(fUSDTx.underlyingToken.address, fTokenAbi, deployer);
+};
+
+const transferSuperTokens = async () => {
+    await fUSDT.connect(deployer).mint(creator.address, ethers.utils.parseEther("1000000000"));
+
+    const totalAmount = INVESTOR_INITIAL_FUNDS.mul(investors.length);
+
+    // Fund investors
+    await fUSDT.connect(deployer).mint(deployer.address, totalAmount);
+    await fUSDT
+        .connect(deployer)
+        .approve(fUSDTx.address, INVESTOR_INITIAL_FUNDS.mul(investors.length));
+
+    const upgradeOperation = fUSDTx.upgrade({
+        amount: totalAmount.toString(),
+    });
+    const operations = [upgradeOperation];
+
+    // Transfer upgraded tokens to investors
+    for (let i = 0; i < investors.length; i++) {
+        const operation = fUSDTx.transferFrom({
+            sender: deployer.address,
+            amount: INVESTOR_INITIAL_FUNDS.toString(),
+            receiver: investors[i].address,
+        });
+        operations.push(operation);
+    }
+
+    await sf.batchCall(operations).exec(deployer);
+};
+
 describe("Governance Pool integration with Investment Pool Factory and Investment Pool", async () => {
     before(async () => {
         accounts = await ethers.getSigners();
@@ -226,69 +299,19 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
         investorB = accounts[4];
         investors = [investorA, investorB];
 
-        // deploy the framework
-        await deployFramework(errorHandler, {
-            web3,
-            from: deployer.address,
-        });
-
-        // deploy a fake erc20 token
-        const fUSDTAddress = await deployTestToken(errorHandler, [":", "fUSDT"], {
-            web3,
-            from: deployer.address,
-        });
-
-        // deploy a fake erc20 wrapper super token around the fUSDT token
-        const fUSDTxAddress = await deploySuperToken(errorHandler, [":", "fUSDT"], {
-            web3,
-            from: deployer.address,
-        });
-
-        console.log("fUSDT  Address: ", fUSDTAddress);
-        console.log("fUSDTx Address: ", fUSDTxAddress);
-
-        sf = await Framework.create({
-            resolverAddress: process.env.RESOLVER_ADDRESS,
-            chainId: 31337,
-            provider,
-            protocolReleaseVersion: "test",
-        });
+        await deploySuperfluidToken();
+        await transferSuperTokens();
+        await deployLogicContracts();
 
         // Create and deploy Gelato Ops contract mock
         const GelatoOpsMock = await ethers.getContractFactory("GelatoOpsMock", deployer);
         gelatoOpsMock = await GelatoOpsMock.deploy();
         await gelatoOpsMock.deployed();
 
-        fUSDTx = await sf.loadWrapperSuperToken("fUSDTx");
-        const underlyingAddr = fUSDTx.underlyingToken.address;
-        fUSDT = new ethers.Contract(underlyingAddr, fTokenAbi, deployer);
+        const votingTokensFactory = await ethers.getContractFactory("VotingToken", deployer);
+        votingToken = await votingTokensFactory.deploy();
+        await votingToken.deployed();
 
-        const totalAmount = INVESTOR_INITIAL_FUNDS.mul(investors.length);
-
-        // Fund investors
-        await fUSDT.connect(deployer).mint(deployer.address, totalAmount);
-        await fUSDT
-            .connect(deployer)
-            .approve(fUSDTx.address, INVESTOR_INITIAL_FUNDS.mul(investors.length));
-
-        const upgradeOperation = fUSDTx.upgrade({
-            amount: totalAmount.toString(),
-        });
-        const operations = [upgradeOperation];
-
-        // Transfer upgraded tokens to investors
-        for (let i = 0; i < investors.length; i++) {
-            const operation = fUSDTx.transferFrom({
-                sender: deployer.address,
-                amount: INVESTOR_INITIAL_FUNDS.toString(),
-                receiver: investors[i].address,
-            });
-            operations.push(operation);
-        }
-
-        await sf.batchCall(operations).exec(deployer);
-
-        // It just deploys the factory contract and gets the variabe values that will be needed
         await defineVariablesFromIPF();
 
         milestoneStartDate = dateToSeconds("2100/09/01") as BigNumber;
@@ -310,8 +333,8 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
         });
     });
 
-    describe("3. IP request to mint voting tokens (in GP)", () => {
-        it("[IP-GP][3.1] Governance pool should mint voting tokens on investment", async () => {
+    describe("3. IP request to invest", () => {
+        it("[IP-GP][3.1] Governance pool should mint voting tokens on investment.", async () => {
             investmentPoolFactory = await deployInvestmentPoolFactory();
             await createInvestmentWithTwoMilestones();
 
@@ -325,6 +348,27 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             const totalSupply = await governancePool.getVotingTokensSupply();
 
             assert.equal(investedAmount.mul(softCapMultiplier).toString(), totalSupply.toString());
+        });
+
+        it("[IP-DP][3.2] Distribution pool should allocate tokens.", async () => {
+            investmentPoolFactory = await deployInvestmentPoolFactory();
+            await createInvestmentWithTwoMilestones();
+
+            const investedAmount: BigNumber = ethers.utils.parseEther("100");
+            const investmentWeight = await investment.calculateInvestmentWeight(investedAmount);
+            const timeStamp = dateToSeconds("2100/07/15");
+            await investment.setTimestamp(timeStamp);
+
+            // Approve and invest money
+            await investMoney(fUSDTx, investment, investorA, investedAmount);
+            const allocatedTokens = await distributionPool.getAllocatedTokens(investorA.address);
+            const lockedTokens = await distributionPool.getLockedTokens();
+            const maximumWeightDivisor = await investment.getMaximumWeightDivisor();
+            const predictedAllocation = lockedTokens
+                .mul(investmentWeight)
+                .div(maximumWeightDivisor);
+
+            assert.equal(allocatedTokens.toString(), predictedAllocation.toString());
         });
     });
 
@@ -357,8 +401,8 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
         });
     });
 
-    describe("5. IP request to burn voting tokens (in GP on unpledge)", () => {
-        it("[IP-GP][5.1] Should call governance pool and burn voting tokens from total supply", async () => {
+    describe("5. IP request to undpledge investment", () => {
+        it("[IP-GP][5.1] Should call governance pool and burn voting tokens.", async () => {
             investmentPoolFactory = await deployInvestmentPoolFactory();
             await createInvestmentWithTwoMilestones();
 
@@ -376,11 +420,41 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
             await votingToken.connect(investorA).setApprovalForAll(governancePool.address, true);
             await investment.connect(investorA).unpledge();
 
-            const investmentPoolId = await governancePool.getInvestmentPoolId();
             const totalSupply = await governancePool.getVotingTokensSupply();
             const amountLeft = await governancePool.getTokensMinted(investorB.address, 0);
 
             assert.equal(totalSupply.toString(), amountLeft.toString());
+        });
+
+        it("[IP-DP][5.2] Should call governance pool and burn voting tokens + remove project tokens allocation in distribution pool", async () => {
+            investmentPoolFactory = await deployInvestmentPoolFactory();
+            await createInvestmentWithTwoMilestones();
+
+            const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+            let timeStamp = dateToSeconds("2100/07/15");
+            await investment.setTimestamp(timeStamp);
+            await investMoney(fUSDTx, investment, investorB, investedAmount.mul(2));
+
+            timeStamp = dateToSeconds("2100/09/15");
+            await investment.setTimestamp(timeStamp);
+            await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+            const priorAllocation = await distributionPool.getAllocatedTokens(investorA.address);
+            const proirTotalAllocation = await distributionPool.getTotalAllocatedTokens();
+
+            // Unpledge functionality
+            await votingToken.connect(investorA).setApprovalForAll(governancePool.address, true);
+            await investment.connect(investorA).unpledge();
+
+            const allocation = await distributionPool.getAllocatedTokens(investorA.address);
+            const totalAllocation = await distributionPool.getTotalAllocatedTokens();
+
+            assert.equal(
+                totalAllocation.toString(),
+                proirTotalAllocation.sub(priorAllocation).toString()
+            );
+            assert.equal(allocation.toString(), "0");
         });
     });
 });

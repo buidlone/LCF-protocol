@@ -6,13 +6,13 @@ import {assert, expect} from "chai";
 import {
     InvestmentPoolFactoryMock,
     InvestmentPoolMock,
-    GelatoOpsMock,
     GovernancePoolMockForIntegration,
+    DistributionPoolMockForIntegration,
+    GelatoOpsMock,
     VotingTokenMock,
 } from "../typechain-types";
 
 const fTokenAbi = require("./abis/fTokenAbi");
-
 const deployFramework = require("@superfluid-finance/ethereum-contracts/scripts/deploy-framework");
 const deployTestToken = require("@superfluid-finance/ethereum-contracts/scripts/deploy-test-token");
 const deploySuperToken = require("@superfluid-finance/ethereum-contracts/scripts/deploy-super-token");
@@ -25,15 +25,15 @@ let fUSDTx: WrapperSuperToken;
 
 let accounts: SignerWithAddress[];
 let admin: SignerWithAddress;
-let buidl1Admin: SignerWithAddress;
 let creator: SignerWithAddress;
 let foreignActor: SignerWithAddress;
 
 let sf: Framework;
 let investmentPoolFactory: InvestmentPoolFactoryMock;
 let investmentPoolLogic: InvestmentPoolMock;
-let gelatoOpsMock: GelatoOpsMock;
 let governancePoolLogic: GovernancePoolMockForIntegration;
+let distributionPoolLogic: DistributionPoolMockForIntegration;
+let gelatoOpsMock: GelatoOpsMock;
 let votingToken: VotingTokenMock;
 
 let gelatoFeeAllocation: BigNumber;
@@ -89,37 +89,42 @@ const errorHandler = (err: any) => {
 };
 
 const deployLogicContracts = async () => {
-    const investmentPoolDep = await ethers.getContractFactory("InvestmentPoolMock", buidl1Admin);
-    investmentPoolLogic = await investmentPoolDep.deploy();
+    const investmentPoolLogicDep = await ethers.getContractFactory("InvestmentPoolMock", admin);
+    investmentPoolLogic = await investmentPoolLogicDep.deploy();
     await investmentPoolLogic.deployed();
 
-    const governancePoolDep = await ethers.getContractFactory(
+    const governancePoolLogicDep = await ethers.getContractFactory(
         "GovernancePoolMockForIntegration",
-        buidl1Admin
+        admin
     );
-    governancePoolLogic = await governancePoolDep.deploy();
+    governancePoolLogic = await governancePoolLogicDep.deploy();
     await governancePoolLogic.deployed();
+
+    const distributionPoolLogicDep = await ethers.getContractFactory(
+        "DistributionPoolMockForIntegration",
+        admin
+    );
+    distributionPoolLogic = await distributionPoolLogicDep.deploy();
+    await distributionPoolLogic.deployed();
 };
 
 const getConstantVariablesFromContract = async () => {
+    await deployLogicContracts();
+
     const investmentPoolDepFactory = await ethers.getContractFactory(
         "InvestmentPoolFactoryMock",
-        buidl1Admin
+        admin
     );
     investmentPoolFactory = await investmentPoolDepFactory.deploy(
         sf.settings.config.hostAddress,
         gelatoOpsMock.address,
         investmentPoolLogic.address,
         governancePoolLogic.address,
+        distributionPoolLogic.address,
         votingToken.address
     );
     await investmentPoolFactory.deployed();
 
-    await definePercentageDivider(investmentPoolFactory);
-    await defineGelatoFeeAllocation(investmentPoolFactory);
-};
-
-const definePercentageDivider = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
     percentageDivider = await investmentPoolFactory.getPercentageDivider();
     percent5InIpBigNumber = percentToIpBigNumber(5);
     percent6InIpBigNumber = percentToIpBigNumber(6);
@@ -130,69 +135,66 @@ const definePercentageDivider = async (investmentPoolFactory: InvestmentPoolFact
     percent51InIpBigNumber = percentToIpBigNumber(51);
     percent90InIpBigNumber = percentToIpBigNumber(90);
     percent95InIpBigNumber = percentToIpBigNumber(95);
+
+    gelatoFeeAllocation = await investmentPoolFactory.getGelatoFeeAllocationForProject();
 };
 
-const defineGelatoFeeAllocation = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
-    gelatoFeeAllocation = await investmentPoolFactory.getGelatoFeeAllocationForProject();
+const deploySuperfluidToken = async () => {
+    // deploy the framework
+    await deployFramework(errorHandler, {
+        web3,
+        from: admin.address,
+    });
+
+    // deploy a fake erc20 token
+    const fUSDTAddress = await deployTestToken(errorHandler, [":", "fUSDT"], {
+        web3,
+        from: admin.address,
+    });
+
+    // deploy a fake erc20 wrapper super token around the fUSDT token
+    const fUSDTxAddress = await deploySuperToken(errorHandler, [":", "fUSDT"], {
+        web3,
+        from: admin.address,
+    });
+
+    console.log("fUSDT  Address: ", fUSDTAddress);
+    console.log("fUSDTx Address: ", fUSDTxAddress);
+
+    // initialize the superfluid framework...put custom and web3 only bc we are using hardhat locally
+    sf = await Framework.create({
+        resolverAddress: process.env.RESOLVER_ADDRESS,
+        chainId: 31337,
+        provider,
+        protocolReleaseVersion: "test",
+    });
+
+    fUSDTx = await sf.loadWrapperSuperToken("fUSDTx");
+    fUSDT = new ethers.Contract(fUSDTx.underlyingToken.address, fTokenAbi, admin);
+
+    await fUSDT.connect(admin).mint(creator.address, ethers.utils.parseEther("10000000"));
 };
 
 describe("Investment Pool Factory", async () => {
     before(async () => {
         // get accounts from hardhat
         accounts = await ethers.getSigners();
-
         admin = accounts[0];
-        buidl1Admin = accounts[1];
-        creator = accounts[2];
-        foreignActor = accounts[3];
+        creator = accounts[1];
+        foreignActor = accounts[2];
 
-        // deploy the framework
-        await deployFramework(errorHandler, {
-            web3,
-            from: admin.address,
-        });
-
-        // deploy a fake erc20 token
-        const fUSDTAddress = await deployTestToken(errorHandler, [":", "fUSDT"], {
-            web3,
-            from: admin.address,
-        });
-
-        // deploy a fake erc20 wrapper super token around the fUSDT token
-        const fUSDTxAddress = await deploySuperToken(errorHandler, [":", "fUSDT"], {
-            web3,
-            from: admin.address,
-        });
-
-        console.log("fUSDT  Address: ", fUSDTAddress);
-        console.log("fUSDTx Address: ", fUSDTxAddress);
-
-        // initialize the superfluid framework...put custom and web3 only bc we are using hardhat locally
-        sf = await Framework.create({
-            resolverAddress: process.env.RESOLVER_ADDRESS,
-            chainId: 31337,
-            provider,
-            protocolReleaseVersion: "test",
-        });
+        await deploySuperfluidToken();
 
         // Create and deploy Gelato Ops contract mock
-        const GelatoOpsMock = await ethers.getContractFactory("GelatoOpsMock", buidl1Admin);
+        const GelatoOpsMock = await ethers.getContractFactory("GelatoOpsMock", admin);
         gelatoOpsMock = await GelatoOpsMock.deploy();
         await gelatoOpsMock.deployed();
 
-        fUSDTx = await sf.loadWrapperSuperToken("fUSDTx");
-
-        const underlyingAddr = fUSDTx.underlyingToken.address;
-
-        fUSDT = new ethers.Contract(underlyingAddr, fTokenAbi, admin);
-
         // Create voting token
-        const votingTokenDep = await ethers.getContractFactory("VotingTokenMock", buidl1Admin);
+        const votingTokenDep = await ethers.getContractFactory("VotingTokenMock", admin);
         votingToken = await votingTokenDep.deploy();
         await votingToken.deployed();
 
-        await deployLogicContracts();
-        // It just deploys the factory contract and gets the percentage divider value for other tests
         await getConstantVariablesFromContract();
     });
 
@@ -206,13 +208,14 @@ describe("Investment Pool Factory", async () => {
                 // Create investment pool factory contract
                 const investmentPoolDepFactory = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
-                    buidl1Admin
+                    admin
                 );
                 investmentPoolFactory = await investmentPoolDepFactory.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
                     investmentPoolLogic.address,
                     governancePoolLogic.address,
+                    distributionPoolLogic.address,
                     votingToken.address
                 );
                 await investmentPoolFactory.deployed();
@@ -238,7 +241,7 @@ describe("Investment Pool Factory", async () => {
                 // Create investment pool factory contract
                 const investmentPoolDepFactory = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
-                    buidl1Admin
+                    admin
                 );
 
                 await expect(
@@ -247,6 +250,7 @@ describe("Investment Pool Factory", async () => {
                         gelatoOpsMock.address,
                         investmentPoolLogic.address,
                         governancePoolLogic.address,
+                        distributionPoolLogic.address,
                         votingToken.address
                     )
                 ).to.be.revertedWithCustomError(
@@ -259,7 +263,7 @@ describe("Investment Pool Factory", async () => {
                 // Create investment pool factory contract
                 const investmentPoolDepFactory = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
-                    buidl1Admin
+                    admin
                 );
 
                 await expect(
@@ -268,6 +272,7 @@ describe("Investment Pool Factory", async () => {
                         constants.AddressZero,
                         investmentPoolLogic.address,
                         governancePoolLogic.address,
+                        distributionPoolLogic.address,
                         votingToken.address
                     )
                 ).to.be.revertedWithCustomError(
@@ -280,7 +285,7 @@ describe("Investment Pool Factory", async () => {
                 // Create investment pool factory contract
                 const investmentPoolDepFactory = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
-                    buidl1Admin
+                    admin
                 );
 
                 await expect(
@@ -289,6 +294,7 @@ describe("Investment Pool Factory", async () => {
                         gelatoOpsMock.address,
                         constants.AddressZero,
                         governancePoolLogic.address,
+                        distributionPoolLogic.address,
                         votingToken.address
                     )
                 ).to.be.revertedWithCustomError(
@@ -301,13 +307,14 @@ describe("Investment Pool Factory", async () => {
                 // Create investment pool factory contract
                 const investmentPoolDepFactory = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
-                    buidl1Admin
+                    admin
                 );
                 investmentPoolFactory = await investmentPoolDepFactory.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
                     investmentPoolLogic.address,
                     governancePoolLogic.address,
+                    distributionPoolLogic.address,
                     votingToken.address
                 );
                 await investmentPoolFactory.deployed();
@@ -325,18 +332,19 @@ describe("Investment Pool Factory", async () => {
                 // Create investment pool factory contract
                 const investmentPoolDepFactory = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
-                    buidl1Admin
+                    admin
                 );
                 investmentPoolFactory = await investmentPoolDepFactory.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
                     investmentPoolLogic.address,
                     governancePoolLogic.address,
+                    distributionPoolLogic.address,
                     votingToken.address
                 );
                 await investmentPoolFactory.deployed();
 
-                await buidl1Admin.sendTransaction({
+                await admin.sendTransaction({
                     to: investmentPoolFactory.address,
                     value: ethAmountToReceive,
                 });
@@ -354,19 +362,20 @@ describe("Investment Pool Factory", async () => {
                 // Create investment pool factory contract
                 const investmentPoolDepFactory = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
-                    buidl1Admin
+                    admin
                 );
                 investmentPoolFactory = await investmentPoolDepFactory.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
                     investmentPoolLogic.address,
                     governancePoolLogic.address,
+                    distributionPoolLogic.address,
                     votingToken.address
                 );
                 await investmentPoolFactory.deployed();
 
                 await expect(
-                    investmentPoolFactory.connect(buidl1Admin).setGelatoFeeAllocation(newEthFee)
+                    investmentPoolFactory.connect(admin).setGelatoFeeAllocation(newEthFee)
                 ).not.to.be.reverted;
 
                 const gelatoFee = await investmentPoolFactory.getGelatoFeeAllocationForProject();
@@ -379,13 +388,14 @@ describe("Investment Pool Factory", async () => {
                 // Create investment pool factory contract
                 const investmentPoolDepFactory = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
-                    buidl1Admin
+                    admin
                 );
                 investmentPoolFactory = await investmentPoolDepFactory.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
                     investmentPoolLogic.address,
                     governancePoolLogic.address,
+                    distributionPoolLogic.address,
                     votingToken.address
                 );
                 await investmentPoolFactory.deployed();
@@ -403,38 +413,39 @@ describe("Investment Pool Factory", async () => {
     describe("2. Investment creation", () => {
         beforeEach(async () => {
             // Create investment pool implementation contract
-            const investmentPoolDep = await ethers.getContractFactory(
+            const investmentPoolLogicDep = await ethers.getContractFactory(
                 "InvestmentPoolMock",
-                buidl1Admin
+                admin
             );
-            investmentPoolLogic = await investmentPoolDep.deploy();
+            investmentPoolLogic = await investmentPoolLogicDep.deploy();
             await investmentPoolLogic.deployed();
 
             // Create governance pool mock
-            const governancePoolDep = await ethers.getContractFactory(
+            const governancePoolLogicDep = await ethers.getContractFactory(
                 "GovernancePoolMockForIntegration",
-                buidl1Admin
+                admin
             );
-            governancePoolLogic = await governancePoolDep.deploy();
+            governancePoolLogic = await governancePoolLogicDep.deploy();
             await governancePoolLogic.deployed();
 
             // Create investment pool factory contract
             const investmentPoolDepFactory = await ethers.getContractFactory(
                 "InvestmentPoolFactoryMock",
-                buidl1Admin
+                admin
             );
             investmentPoolFactory = await investmentPoolDepFactory.deploy(
                 sf.settings.config.hostAddress,
                 gelatoOpsMock.address,
                 investmentPoolLogic.address,
                 governancePoolLogic.address,
+                distributionPoolLogic.address,
                 votingToken.address
             );
             await investmentPoolFactory.deployed();
 
             // Enforce a starting timestamp to avoid time based bugs
             const time = dateToSeconds("2100/06/01");
-            await investmentPoolFactory.connect(buidl1Admin).setTimestamp(time);
+            await investmentPoolFactory.connect(admin).setTimestamp(time);
         });
 
         describe("2.1 Interactions", () => {
@@ -450,11 +461,15 @@ describe("Investment Pool Factory", async () => {
                 const creationRes = await investmentPoolFactory
                     .connect(creator)
                     .createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         [
                             {
@@ -487,11 +502,15 @@ describe("Investment Pool Factory", async () => {
                 const creationRes = await investmentPoolFactory
                     .connect(creator)
                     .createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         [
                             {
@@ -510,7 +529,7 @@ describe("Investment Pool Factory", async () => {
 
                 const contractFactory = await ethers.getContractFactory(
                     "InvestmentPoolMock",
-                    buidl1Admin
+                    admin
                 );
 
                 const pool = contractFactory.attach(poolAddress);
@@ -589,11 +608,15 @@ describe("Investment Pool Factory", async () => {
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
-                        constants.AddressZero,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: constants.AddressZero,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         [
                             {
@@ -622,11 +645,15 @@ describe("Investment Pool Factory", async () => {
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         [
                             {
@@ -657,15 +684,19 @@ describe("Investment Pool Factory", async () => {
 
                 // Move forward in time to simulate retrospective creation for fundraiser
                 const time = dateToSeconds("2100/07/15");
-                await investmentPoolFactory.connect(buidl1Admin).setTimestamp(time);
+                await investmentPoolFactory.connect(admin).setTimestamp(time);
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         [
                             {
@@ -695,11 +726,15 @@ describe("Investment Pool Factory", async () => {
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         [
                             {
@@ -728,11 +763,15 @@ describe("Investment Pool Factory", async () => {
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         [
                             {
@@ -761,11 +800,15 @@ describe("Investment Pool Factory", async () => {
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         [
                             {
@@ -792,11 +835,15 @@ describe("Investment Pool Factory", async () => {
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         [],
                         {value: gelatoFeeAllocation}
@@ -821,11 +868,15 @@ describe("Investment Pool Factory", async () => {
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         generateGaplessMilestones(
                             milestoneStartDate,
@@ -861,11 +912,15 @@ describe("Investment Pool Factory", async () => {
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         milestones,
                         {value: gelatoFeeAllocation}
@@ -885,11 +940,15 @@ describe("Investment Pool Factory", async () => {
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         [
                             {
@@ -919,11 +978,15 @@ describe("Investment Pool Factory", async () => {
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         [
                             {
@@ -952,11 +1015,15 @@ describe("Investment Pool Factory", async () => {
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         [
                             {
@@ -985,11 +1052,15 @@ describe("Investment Pool Factory", async () => {
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         [
                             {
@@ -1020,11 +1091,15 @@ describe("Investment Pool Factory", async () => {
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         [
                             {
@@ -1059,11 +1134,15 @@ describe("Investment Pool Factory", async () => {
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         [
                             {
@@ -1094,11 +1173,15 @@ describe("Investment Pool Factory", async () => {
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         1, // CLONE-PROXY
                         [
                             {
@@ -1124,11 +1207,15 @@ describe("Investment Pool Factory", async () => {
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         [
                             {
@@ -1157,11 +1244,15 @@ describe("Investment Pool Factory", async () => {
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         [
                             {
@@ -1192,11 +1283,15 @@ describe("Investment Pool Factory", async () => {
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
-                        fUSDTx.address,
-                        softCap,
-                        hardCap,
-                        campaignStartDate,
-                        campaignEndDate,
+                        {
+                            softCap: softCap,
+                            hardCap: hardCap,
+                            fundraiserStartAt: campaignStartDate,
+                            fundraiserEndAt: campaignEndDate,
+                            acceptedToken: fUSDTx.address,
+                            projectToken: fUSDT.address,
+                            tokenRewards: ethers.utils.parseEther("100"),
+                        },
                         0, // CLONE-PROXY
                         [
                             {

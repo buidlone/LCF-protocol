@@ -67,14 +67,14 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
 
     /** MODIFIERS */
 
-    modifier onlyCreator() {
-        if (_msgSender() != investmentPool.getCreator())
-            revert DistributionPool__NotProjectCreator();
+    modifier onlyInvestmentPool() {
+        if (_msgSender() != getInvestmentPool()) revert DistributionPool__NotInvestmentPool();
         _;
     }
 
-    modifier onlyInvestmentPool() {
-        if (_msgSender() != getInvestmentPool()) revert DistributionPool__NotInvestmentPool();
+    modifier onlyCreator() {
+        if (_msgSender() != investmentPool.getCreator())
+            revert DistributionPool__NotProjectCreator();
         _;
     }
 
@@ -87,7 +87,7 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
         IInvestmentPool _investmentPool,
         IERC20 _projectToken,
         uint256 _amountToLock
-    ) external initializer {
+    ) external payable initializer {
         investmentPool = _investmentPool;
         projectToken = _projectToken;
         lockedTokens = _amountToLock;
@@ -99,7 +99,7 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
      * @notice Prior approval is needed before this execution
      */
     function lockTokens() external onlyCreator {
-        if (didCreatorLockedTokens()) revert DistributionPool__ProjectTokensAlreadyLocked();
+        if (didCreatorLockTokens()) revert DistributionPool__ProjectTokensAlreadyLocked();
         creatorLockedTokens = true;
 
         bool success = projectToken.transferFrom(_msgSender(), address(this), lockedTokens);
@@ -230,8 +230,8 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
         uint256 _milestoneId
     ) public view returns (uint256) {
         return
-            investmentPool.getMilestonesPortionLeft(_milestoneId) *
-            _getMemoizedMilestoneAllocation(_investor, _milestoneId);
+            (_getMemoizedMilestoneAllocation(_investor, _milestoneId) *
+                investmentPool.getMilestonesPortionLeft(_milestoneId)) / getPercentageDivider();
     }
 
     /**
@@ -284,7 +284,7 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
         return lockedTokens;
     }
 
-    function didCreatorLockedTokens() public view returns (bool) {
+    function didCreatorLockTokens() public view returns (bool) {
         return creatorLockedTokens;
     }
 

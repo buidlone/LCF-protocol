@@ -16,6 +16,7 @@ import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeE
 
 import {IInitializableInvestmentPool, IInvestmentPool} from "./interfaces/IInvestmentPool.sol";
 import {IGovernancePool} from "./interfaces/IGovernancePool.sol";
+import {IDistributionPool} from "./interfaces/IDistributionPool.sol";
 import "./interfaces/GelatoTypes.sol";
 
 /// @notice Superfluid ERRORS for callbacks
@@ -84,6 +85,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     address internal creator;
     IGovernancePool internal governancePool;
+    IDistributionPool internal distributionPool;
 
     // Gelato variables
     IOps internal gelatoOps;
@@ -226,7 +228,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         IInvestmentPool.VotingTokensMultipliers calldata _multipliers,
         uint256 _investmentWithdrawFee,
         MilestoneInterval[] calldata _milestones,
-        IGovernancePool _governancePool
+        IGovernancePool _governancePool,
+        IDistributionPool _distributionPool
     ) external payable initializer {
         /// @dev Parameter validation was already done for us by the Factory, so it's safe to use "as is" and save gas
 
@@ -252,6 +255,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         milestoneCount = _milestones.length;
         currentMilestone = 0;
         governancePool = _governancePool;
+        distributionPool = _distributionPool;
 
         gelatoOps = IOps(_gelatoOps);
         gelato = IOps(_gelatoOps).gelato();
@@ -307,6 +311,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     {
         uint256 untilHardcap = getHardCap() - getTotalInvestedAmount();
         uint256 votingTokensToMint = getVotingTokensAmountToMint(_amount);
+        uint256 investmentWeight = calculateInvestmentWeight(_amount);
 
         if (untilHardcap < _amount) {
             // Edge case, trying to invest, when hard cap is reached or almost reached
@@ -325,6 +330,14 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         if (!successfulTransfer) revert InvestmentPool__SuperTokenTransferFailed();
 
         governancePool.mintVotingTokens(investToMilestoneId, _msgSender(), votingTokensToMint);
+
+        distributionPool.allocateTokens(
+            investToMilestoneId,
+            _msgSender(),
+            investmentWeight,
+            getMaximumWeightDivisor(),
+            memMilestonePortions[investToMilestoneId]
+        );
 
         emit Invest(_msgSender(), _amount);
     }
@@ -360,6 +373,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         if (!successfulTransfer) revert InvestmentPool__SuperTokenTransferFailed();
 
         governancePool.burnVotes(unpledgeFromMilestoneId, _msgSender());
+
+        distributionPool.removeTokensAllocation(unpledgeFromMilestoneId, _msgSender());
 
         emit Unpledge(_msgSender(), amount);
     }
@@ -603,10 +618,13 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             return getCanceledProjectStateValue();
         } else if (isFundraiserNotStarted() && !isEmergencyTerminated()) {
             return getBeforeFundraiserStateValue();
+        } else if (
+            (isFailedFundraiser() || !distributionPool.didCreatorLockTokens()) &&
+            !isEmergencyTerminated()
+        ) {
+            return getFailedFundraiserStateValue();
         } else if (isFundraiserOngoingNow() && !isEmergencyTerminated()) {
             return getFundraiserOngoingStateValue();
-        } else if (isFailedFundraiser() && !isEmergencyTerminated()) {
-            return getFailedFundraiserStateValue();
         } else if (
             isFundraiserEndedButNoMilestoneIsActive() &&
             !isEmergencyTerminated() &&
@@ -768,6 +786,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         return address(governancePool);
     }
 
+    function getDistributionPool() public view returns (address) {
+        return address(distributionPool);
+    }
+
     function getSoftCap() public view returns (uint96) {
         return softCap;
     }
@@ -864,6 +886,41 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             investmentsList[i] = memMilestoneInvestments[i];
         }
         return investmentsList;
+    }
+
+    function getVotingTokensAmountToMint(uint256 _amount) public view returns (uint256) {
+        return calculateInvestmentWeight(_amount);
+    }
+
+    function calculateInvestmentWeight(uint256 _amount) public view returns (uint256) {
+        if (getTotalInvestedAmount() <= getSoftCap()) {
+            // Private funding
+            if (getTotalInvestedAmount() + _amount <= getSoftCap()) {
+                // Multiplier will be the same for all voting tokens
+                return _amount * getSoftCapMultiplier();
+            } else if (getTotalInvestedAmount() + _amount <= getHardCap()) {
+                // Multiplier is going to be different. That's why we need to calculate
+                // the amount which is going to be invested in private funding and which in public funding.
+                // Investor invested while in private funding. Remaining funds went to public funding.
+                uint256 amountInSoftCap = getSoftCap() - getTotalInvestedAmount();
+                uint256 maxWeightForSoftCap = amountInSoftCap * getSoftCapMultiplier();
+                uint256 amountInHardCap = _amount - amountInSoftCap;
+                uint256 maxWeightForHardCap = amountInHardCap * getHardCapMultiplier();
+
+                return maxWeightForSoftCap + maxWeightForHardCap;
+            }
+        } else if (
+            getTotalInvestedAmount() > getSoftCap() && getTotalInvestedAmount() <= getHardCap()
+        ) {
+            // Public limited funding
+            if (getTotalInvestedAmount() + _amount <= getHardCap()) {
+                // Multiplier will be the same for all voting tokens
+                return _amount * getHardCapMultiplier();
+            }
+        }
+
+        // For unexpected cases
+        return 0;
     }
 
     /** INTERNAL FUNCTIONS */
@@ -1043,40 +1100,6 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     /**
      * @notice Get the amount of voting tokens to mint. It is determined by the period (until soft cap or hard cap)
      */
-    function getVotingTokensAmountToMint(uint256 _amount) public view returns (uint256) {
-        return calculateInvestmentWeight(_amount);
-    }
-
-    function calculateInvestmentWeight(uint256 _amount) public view returns (uint256) {
-        if (getTotalInvestedAmount() <= getSoftCap()) {
-            // Private funding
-            if (getTotalInvestedAmount() + _amount <= getSoftCap()) {
-                // Multiplier will be the same for all voting tokens
-                return _amount * getSoftCapMultiplier();
-            } else if (getTotalInvestedAmount() + _amount <= getHardCap()) {
-                // Multiplier is going to be different. That's why we need to calculate
-                // the amount which is going to be invested in private funding and which in public funding.
-                // Investor invested while in private funding. Remaining funds went to public funding.
-                uint256 amountInSoftCap = getSoftCap() - getTotalInvestedAmount();
-                uint256 maxWeightForSoftCap = amountInSoftCap * getSoftCapMultiplier();
-                uint256 amountInHardCap = _amount - amountInSoftCap;
-                uint256 maxWeightForHardCap = amountInHardCap * getHardCapMultiplier();
-
-                return maxWeightForSoftCap + maxWeightForHardCap;
-            }
-        } else if (
-            getTotalInvestedAmount() > getSoftCap() && getTotalInvestedAmount() <= getHardCap()
-        ) {
-            // Public limited funding
-            if (getTotalInvestedAmount() + _amount <= getHardCap()) {
-                // Multiplier will be the same for all voting tokens
-                return _amount * getHardCapMultiplier();
-            }
-        }
-
-        // For unexpected cases
-        return 0;
-    }
 
     /// @notice Get the total project PORTION percentage. It shouldn't be confused with total investment percentage that is left.
     function _getEarlyTerminationProjectLeftPortion(

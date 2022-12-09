@@ -4,6 +4,7 @@
 pragma solidity ^0.8.14;
 
 import {ISuperToken, ISuperfluid} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IInvestmentPool} from "./IInvestmentPool.sol";
 import {IGovernancePool} from "./IGovernancePool.sol";
 
@@ -17,19 +18,26 @@ interface IInvestmentPoolFactory {
         UUPS_PROXY
     }
 
+    struct ProjectDetails {
+        uint96 softCap;
+        uint96 hardCap;
+        uint48 fundraiserStartAt;
+        uint48 fundraiserEndAt;
+        ISuperToken acceptedToken;
+        IERC20 projectToken;
+        uint256 tokenRewards;
+    }
+
     event Created(
         address indexed creator,
         address indexed ipContract,
-        address indexed gpContract,
+        address gpContract,
+        address dpContract,
         ProxyType proxyType
     );
 
     function createProjectPools(
-        ISuperToken _acceptedToken,
-        uint96 _softCap,
-        uint96 _hardCap,
-        uint48 _fundraiserStartAt,
-        uint48 _fundraiserEndAt,
+        ProjectDetails calldata _projectDetails,
         ProxyType _proxyType,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
     ) external payable returns (address);

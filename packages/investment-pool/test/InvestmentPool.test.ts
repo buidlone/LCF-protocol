@@ -6,8 +6,9 @@ import {assert, expect} from "chai";
 import {
     InvestmentPoolFactoryMock,
     InvestmentPoolMock,
-    GelatoOpsMock,
     GovernancePoolMockForIntegration,
+    DistributionPoolMockForIntegration,
+    GelatoOpsMock,
     VotingTokenMock,
 } from "../typechain-types";
 import traveler from "ganache-time-traveler";
@@ -30,7 +31,7 @@ let fUSDT: InstanceType<typeof fTokenAbi>;
 let fUSDTx: WrapperSuperToken;
 
 let accounts: SignerWithAddress[];
-let admin: SignerWithAddress;
+let superfluidAdmin: SignerWithAddress;
 let buidl1Admin: SignerWithAddress;
 let creator: SignerWithAddress;
 let investorA: SignerWithAddress;
@@ -42,6 +43,7 @@ let sf: Framework;
 let investmentPoolFactory: InvestmentPoolFactoryMock;
 let investment: InvestmentPoolMock;
 let governancePool: GovernancePoolMockForIntegration;
+let distributionPool: DistributionPoolMockForIntegration;
 let votingToken: VotingTokenMock;
 
 let snapshotId: string;
@@ -94,26 +96,6 @@ const errorHandler = (err: any) => {
     if (err) throw err;
 };
 
-const getContractsFromTx = async (
-    tx: ContractTransaction
-): Promise<[InvestmentPoolMock, GovernancePoolMockForIntegration]> => {
-    const creationEvent = (await tx.wait(1)).events?.find((e) => e.event === "Created");
-    assert.isDefined(creationEvent, "Didn't emit creation event");
-
-    const ipAddress = creationEvent?.args?.ipContract;
-    const ipContractFactory = await ethers.getContractFactory("InvestmentPoolMock", buidl1Admin);
-    const ipContract = ipContractFactory.attach(ipAddress);
-
-    const gpAddress = creationEvent?.args?.gpContract;
-    const gpContractFactory = await ethers.getContractFactory(
-        "GovernancePoolMockForIntegration",
-        buidl1Admin
-    );
-    const gpContract = gpContractFactory.attach(gpAddress);
-
-    return [ipContract, gpContract];
-};
-
 const dateToSeconds = (date: string, isBigNumber: boolean = true): BigNumber | number => {
     const convertedDate = new Date(date).getTime() / 1000;
     if (isBigNumber) {
@@ -123,13 +105,78 @@ const dateToSeconds = (date: string, isBigNumber: boolean = true): BigNumber | n
     }
 };
 
-const definePercentageDivider = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
+const timeTravelToDate = async (date: number | BigNumber) => {
+    if (date instanceof BigNumber) {
+        date = date.toNumber();
+    }
+    await traveler.advanceBlockAndSetTime(date);
+};
+
+const timeTravelByIncreasingSeconds = async (seconds: number | BigNumber) => {
+    if (seconds instanceof BigNumber) {
+        seconds = seconds.toNumber();
+    }
+    await traveler.advanceTimeAndBlock(seconds);
+};
+
+const deployLogicContracts = async (): Promise<
+    [InvestmentPoolMock, GovernancePoolMockForIntegration, DistributionPoolMockForIntegration]
+> => {
+    // Create investment pool implementation contract
+    const investmentPoolDep = await ethers.getContractFactory("InvestmentPoolMock", buidl1Admin);
+    const investmentPoolLogic = await investmentPoolDep.deploy();
+    await investmentPoolLogic.deployed();
+
+    // Create governance pool implementation contract
+    const governancePoolFactory = await ethers.getContractFactory(
+        "GovernancePoolMockForIntegration",
+        buidl1Admin
+    );
+    const governancePoolLogic = await governancePoolFactory.deploy();
+    await governancePoolLogic.deployed();
+
+    const distributionPoolLogicDep = await ethers.getContractFactory(
+        "DistributionPoolMockForIntegration",
+        buidl1Admin
+    );
+    const distributionPoolLogic = await distributionPoolLogicDep.deploy();
+    await distributionPoolLogic.deployed();
+
+    return [investmentPoolLogic, governancePoolLogic, distributionPoolLogic];
+};
+
+const getConstantVariablesFromContract = async () => {
+    const [investmentPoolLogic, governancePoolLogic, distributionPoolLogic] =
+        await deployLogicContracts();
+
+    const investmentPoolDepFactory = await ethers.getContractFactory(
+        "InvestmentPoolFactoryMock",
+        buidl1Admin
+    );
+    investmentPoolFactory = await investmentPoolDepFactory.deploy(
+        sf.settings.config.hostAddress,
+        gelatoOpsMock.address,
+        investmentPoolLogic.address,
+        governancePoolLogic.address,
+        distributionPoolLogic.address,
+        votingToken.address
+    );
+    await investmentPoolFactory.deployed();
+
     percentageDivider = await investmentPoolFactory.getPercentageDivider();
     percent5InIpBigNumber = percentToIpBigNumber(5);
     percent20InIpBigNumber = percentToIpBigNumber(20);
     percent25InIpBigNumber = percentToIpBigNumber(25);
     percent70InIpBigNumber = percentToIpBigNumber(70);
     percent95InIpBigNumber = percentToIpBigNumber(95);
+
+    gelatoFeeAllocation = await investmentPoolFactory.getGelatoFeeAllocationForProject();
+    ethAddress = await investmentPoolLogic.getEthAddress();
+    investmentWithdrawFee = await investmentPoolFactory.getInvestmentWithdrawPercentageFee();
+    softCapMultiplier = await investmentPoolFactory.getSoftCapMultiplier();
+    hardCapMultiplier = await investmentPoolFactory.getHardCapMultiplier();
+
+    await defineProjectStateByteValues(investmentPoolLogic);
 };
 
 const defineProjectStateByteValues = async (investment: InvestmentPoolMock) => {
@@ -148,21 +195,50 @@ const defineProjectStateByteValues = async (investment: InvestmentPoolMock) => {
     unknownStateValue = await investment.getUnknownStateValue();
 };
 
-const defineGelatoFeeAllocation = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
-    gelatoFeeAllocation = await investmentPoolFactory.getGelatoFeeAllocationForProject();
+const investMoney = async (
+    fUSDTxToken: WrapperSuperToken,
+    investmentPool: InvestmentPoolMock,
+    investorObj: SignerWithAddress,
+    investedMoney: BigNumber
+) => {
+    // Give token approval
+    await fUSDTxToken
+        .approve({
+            receiver: investmentPool.address,
+            amount: investedMoney.toString(),
+        })
+        .exec(investorObj);
+
+    // Invest money
+    await investmentPool.connect(investorObj).invest(investedMoney, false);
 };
 
-const defineInvestmentWithdrawFee = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
-    investmentWithdrawFee = await investmentPoolFactory.getInvestmentWithdrawPercentageFee();
-};
+const getContractsFromTx = async (
+    tx: ContractTransaction
+): Promise<
+    [InvestmentPoolMock, GovernancePoolMockForIntegration, DistributionPoolMockForIntegration]
+> => {
+    const creationEvent = (await tx.wait(1)).events?.find((e) => e.event === "Created");
+    assert.isDefined(creationEvent, "Didn't emit creation event");
 
-const defineEthAddress = async (investmentPool: InvestmentPoolMock) => {
-    ethAddress = await investmentPool.getEthAddress();
-};
+    const ipAddress = creationEvent?.args?.ipContract;
+    const ipContractFactory = await ethers.getContractFactory("InvestmentPoolMock", buidl1Admin);
+    const ipContract = ipContractFactory.attach(ipAddress);
 
-const defineMultipliers = async (investmentPoolFactory: InvestmentPoolFactoryMock) => {
-    softCapMultiplier = await investmentPoolFactory.getSoftCapMultiplier();
-    hardCapMultiplier = await investmentPoolFactory.getHardCapMultiplier();
+    const gpAddress = creationEvent?.args?.gpContract;
+    const gpContractFactory = await ethers.getContractFactory(
+        "GovernancePoolMockForIntegration",
+        buidl1Admin
+    );
+    const gpContract = gpContractFactory.attach(gpAddress);
+
+    const dpAddress = creationEvent?.args?.dpContract;
+    const dpContractFactory = await ethers.getContractFactory(
+        "DistributionPoolMockForIntegration",
+        buidl1Admin
+    );
+    const dpContract = dpContractFactory.attach(dpAddress);
+    return [ipContract, gpContract, dpContract];
 };
 
 const createInvestmentWithTwoMilestones = async (feeAmount: BigNumber = gelatoFeeAllocation) => {
@@ -178,11 +254,15 @@ const createInvestmentWithTwoMilestones = async (feeAmount: BigNumber = gelatoFe
     const creationRes: ContractTransaction = await investmentPoolFactory
         .connect(creator)
         .createProjectPools(
-            fUSDTx.address,
-            softCap,
-            hardCap,
-            campaignStartDate,
-            campaignEndDate,
+            {
+                softCap: softCap,
+                hardCap: hardCap,
+                fundraiserStartAt: campaignStartDate,
+                fundraiserEndAt: campaignEndDate,
+                acceptedToken: fUSDTx.address,
+                projectToken: fUSDT.address,
+                tokenRewards: ethers.utils.parseEther("100"),
+            },
             0, // CLONE-PROXY
             [
                 {
@@ -201,166 +281,97 @@ const createInvestmentWithTwoMilestones = async (feeAmount: BigNumber = gelatoFe
             {value: feeAmount}
         );
 
-    [investment, governancePool] = await getContractsFromTx(creationRes);
+    [investment, governancePool, distributionPool] = await getContractsFromTx(creationRes);
 };
 
-const investMoney = async (
-    fUSDTxToken: WrapperSuperToken,
-    investmentPool: InvestmentPoolMock,
-    investorObj: SignerWithAddress,
-    investedMoney: BigNumber
-) => {
-    // Give token approval
-    await fUSDTxToken
-        .approve({
-            receiver: investmentPool.address,
-            amount: UINT256_MAX.toString(),
-        })
-        .exec(investorObj);
+const deploySuperfluidToken = async () => {
+    // deploy the framework
+    await deployFramework(errorHandler, {
+        web3,
+        from: superfluidAdmin.address,
+    });
 
-    // Invest money
-    await investmentPool.connect(investorObj).invest(investedMoney, false);
+    // deploy a fake erc20 token
+    const fUSDTAddress = await deployTestToken(errorHandler, [":", "fUSDT"], {
+        web3,
+        from: superfluidAdmin.address,
+    });
+
+    // deploy a fake erc20 wrapper super token around the fUSDT token
+    const fUSDTxAddress = await deploySuperToken(errorHandler, [":", "fUSDT"], {
+        web3,
+        from: superfluidAdmin.address,
+    });
+
+    console.log("fUSDT  Address: ", fUSDTAddress);
+    console.log("fUSDTx Address: ", fUSDTxAddress);
+
+    sf = await Framework.create({
+        resolverAddress: process.env.RESOLVER_ADDRESS,
+        chainId: 31337,
+        provider,
+        protocolReleaseVersion: "test",
+    });
+
+    fUSDTx = await sf.loadWrapperSuperToken("fUSDTx");
+    fUSDT = new ethers.Contract(fUSDTx.underlyingToken.address, fTokenAbi, superfluidAdmin);
 };
 
-const timeTravelToDate = async (date: number | BigNumber) => {
-    if (date instanceof BigNumber) {
-        date = date.toNumber();
+const transferSuperTokens = async () => {
+    const totalAmount = INVESTOR_INITIAL_FUNDS.mul(investors.length);
+
+    // Fund investors
+    await fUSDT.connect(superfluidAdmin).mint(superfluidAdmin.address, totalAmount);
+    await fUSDT.connect(superfluidAdmin).approve(fUSDTx.address, totalAmount);
+
+    const upgradeOperation = fUSDTx.upgrade({
+        amount: totalAmount.toString(),
+    });
+    const operations = [upgradeOperation];
+
+    // Transfer upgraded tokens to investors
+    for (let i = 0; i < investors.length; i++) {
+        const operation = fUSDTx.transferFrom({
+            sender: superfluidAdmin.address,
+            amount: INVESTOR_INITIAL_FUNDS.toString(),
+            receiver: investors[i].address,
+        });
+        operations.push(operation);
     }
-    await traveler.advanceBlockAndSetTime(date);
-};
 
-const timeTravelByIncreasingSeconds = async (seconds: number | BigNumber) => {
-    if (seconds instanceof BigNumber) {
-        seconds = seconds.toNumber();
-    }
-    await traveler.advanceTimeAndBlock(seconds);
+    await sf.batchCall(operations).exec(superfluidAdmin);
 };
 
 describe("Investment Pool", async () => {
     before(async () => {
         // get accounts from hardhat
         accounts = await ethers.getSigners();
-
-        admin = accounts[0];
+        superfluidAdmin = accounts[0];
         buidl1Admin = accounts[1];
         creator = accounts[2];
         investorA = accounts[3];
         investorB = accounts[4];
-
-        foreignActor = accounts[8];
+        foreignActor = accounts[5];
         investors = [investorA, investorB];
 
-        // deploy the framework
-        await deployFramework(errorHandler, {
-            web3,
-            from: admin.address,
-        });
-
-        // deploy a fake erc20 token
-        const fUSDTAddress = await deployTestToken(errorHandler, [":", "fUSDT"], {
-            web3,
-            from: admin.address,
-        });
-
-        // deploy a fake erc20 wrapper super token around the fUSDT token
-        const fUSDTxAddress = await deploySuperToken(errorHandler, [":", "fUSDT"], {
-            web3,
-            from: admin.address,
-        });
-
-        console.log("fUSDT  Address: ", fUSDTAddress);
-        console.log("fUSDTx Address: ", fUSDTxAddress);
-
-        sf = await Framework.create({
-            resolverAddress: process.env.RESOLVER_ADDRESS,
-            chainId: 31337,
-            provider,
-            protocolReleaseVersion: "test",
-        });
+        await deploySuperfluidToken();
+        await transferSuperTokens();
 
         // Create and deploy Gelato Ops contract mock
         const GelatoOpsMock = await ethers.getContractFactory("GelatoOpsMock", buidl1Admin);
         gelatoOpsMock = await GelatoOpsMock.deploy();
         await gelatoOpsMock.deployed();
 
-        fUSDTx = await sf.loadWrapperSuperToken("fUSDTx");
-
-        const underlyingAddr = fUSDTx.underlyingToken.address;
-
-        fUSDT = new ethers.Contract(underlyingAddr, fTokenAbi, admin);
-
-        // Create investment pool implementation contract
-        const investmentPoolDep = await ethers.getContractFactory(
-            "InvestmentPoolMock",
-            buidl1Admin
-        );
-        const investmentPoolLogic = await investmentPoolDep.deploy();
-        await investmentPoolLogic.deployed();
-
-        // Create governance pool implementation contract
-        const governancePoolFactory = await ethers.getContractFactory(
-            "GovernancePoolMockForIntegration",
-            buidl1Admin
-        );
-        const governancePoolLogic = await governancePoolFactory.deploy();
-        await governancePoolLogic.deployed();
-
         // Create voting token
         const votingTokenDep = await ethers.getContractFactory("VotingTokenMock", buidl1Admin);
         votingToken = await votingTokenDep.deploy();
         await votingToken.deployed();
 
-        // Create investment pool factory contract
-        const investmentPoolDepFactory = await ethers.getContractFactory(
-            "InvestmentPoolFactoryMock",
-            buidl1Admin
-        );
-
-        investmentPoolFactory = await investmentPoolDepFactory.deploy(
-            sf.settings.config.hostAddress,
-            gelatoOpsMock.address,
-            investmentPoolLogic.address,
-            governancePoolLogic.address,
-            votingToken.address
-        );
-        await investmentPoolFactory.deployed();
-
-        // Get percentage divider and byte values from contract constant variables
-        await definePercentageDivider(investmentPoolFactory);
-        await defineGelatoFeeAllocation(investmentPoolFactory);
-        await defineProjectStateByteValues(investmentPoolLogic);
-        await defineEthAddress(investmentPoolLogic);
-        await defineInvestmentWithdrawFee(investmentPoolFactory);
-        await defineMultipliers(investmentPoolFactory);
+        await getConstantVariablesFromContract();
 
         // Enforce a starting timestamp to avoid time based bugs
         const time = dateToSeconds("2100/06/01");
         await investmentPoolFactory.setTimestamp(time);
-
-        const totalAmount = INVESTOR_INITIAL_FUNDS.mul(investors.length);
-
-        // Fund investors
-        await fUSDT.connect(admin).mint(admin.address, totalAmount);
-        await fUSDT
-            .connect(admin)
-            .approve(fUSDTx.address, INVESTOR_INITIAL_FUNDS.mul(investors.length));
-
-        const upgradeOperation = fUSDTx.upgrade({
-            amount: totalAmount.toString(),
-        });
-        const operations = [upgradeOperation];
-
-        // Transfer upgraded tokens to investors
-        for (let i = 0; i < investors.length; i++) {
-            const operation = fUSDTx.transferFrom({
-                sender: admin.address,
-                amount: INVESTOR_INITIAL_FUNDS.toString(),
-                receiver: investors[i].address,
-            });
-            operations.push(operation);
-        }
-
-        await sf.batchCall(operations).exec(admin);
     });
 
     beforeEach(async () => {

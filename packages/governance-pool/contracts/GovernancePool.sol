@@ -455,7 +455,14 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
         address _account
     ) public view returns (uint256) {
         uint256[] memory milestonesIds = getMilestonesIdsInWhichBalanceChanged(_account);
+        uint256 currentState = investmentPool.getProjectStateByteValue();
 
+        // If no milestone is ongoing, always return 0
+        if (currentState & getAnyMilestoneOngoingStateValue() == 0) {
+            return 0;
+        }
+
+        // Calculate the real balance
         if (milestonesIds.length == 0) {
             // If milestonesIds array is empty that means that no investments were made
             // and no voting tokens were minted. Return zero.

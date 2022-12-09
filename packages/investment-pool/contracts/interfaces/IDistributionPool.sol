@@ -50,7 +50,7 @@ interface IDistributionPool {
 
     function getLockedTokens() external view returns (uint256);
 
-    function didCreatorLockedTokens() external view returns (bool);
+    function didCreatorLockTokens() external view returns (bool);
 
     function getTotalAllocatedTokens() external view returns (uint256);
 }
@@ -60,5 +60,5 @@ interface IInitializableDistributionPool is IDistributionPool {
         IInvestmentPool _investmentPool,
         IERC20 _projectToken,
         uint256 _amountToLock
-    ) external;
+    ) external payable;
 }

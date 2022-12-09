@@ -7,11 +7,13 @@ pragma solidity ^0.8.14;
 import {ISuperfluid, ISuperToken, ISuperApp, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 
 // Openzepelin imports
-import "@openzeppelin/contracts/proxy/Clones.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IInvestmentPool, IInitializableInvestmentPool} from "./interfaces/IInvestmentPool.sol";
 import {IGovernancePool, IInitializableGovernancePool} from "./interfaces/IGovernancePool.sol";
+import {IDistributionPool, IInitializableDistributionPool} from "./interfaces/IDistributionPool.sol";
 import {IInvestmentPoolFactory} from "./interfaces/IInvestmentPoolFactory.sol";
 import {IVotingToken} from "./interfaces/IVotingToken.sol";
 
@@ -83,6 +85,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     address payable internal immutable GELATO_OPS;
     address internal investmentPoolImplementation;
     address internal governancePoolImplementation;
+    address internal distributionPoolImplementation;
     IVotingToken internal votingToken;
 
     constructor(
@@ -90,12 +93,16 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         address payable _gelatoOps,
         address _ipImplementation,
         address _gpImplementation,
+        address _dpImplementation,
         IVotingToken _votingToken
     ) {
         if (address(_host) == address(0)) revert InvestmentPoolFactory__HostAddressIsZero();
         if (_gelatoOps == address(0)) revert InvestmentPoolFactory__GelatoOpsAddressIsZero();
-        if (_ipImplementation == address(0) || _gpImplementation == address(0))
-            revert InvestmentPoolFactory__ImplementationContractAddressIsZero();
+        if (
+            _ipImplementation == address(0) ||
+            _gpImplementation == address(0) ||
+            _dpImplementation == address(0)
+        ) revert InvestmentPoolFactory__ImplementationContractAddressIsZero();
 
         HOST = _host;
         GELATO_OPS = _gelatoOps;
@@ -103,6 +110,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         // Assign Investment Pool, Governance Pool logic contracts
         investmentPoolImplementation = _ipImplementation;
         governancePoolImplementation = _gpImplementation;
+        distributionPoolImplementation = _dpImplementation;
         votingToken = _votingToken;
     }
 
@@ -111,11 +119,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     /** EXTERNAL FUNCTIONS */
 
     function createProjectPools(
-        ISuperToken _acceptedToken,
-        uint96 _softCap,
-        uint96 _hardCap,
-        uint48 _fundraiserStartAt,
-        uint48 _fundraiserEndAt,
+        ProjectDetails calldata _projectDetails,
         ProxyType _proxyType,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
     ) external payable returns (address) {
@@ -124,33 +128,35 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
 
         IInitializableInvestmentPool invPool;
         IInitializableGovernancePool govPool;
+        IInitializableDistributionPool distPool;
 
         _assertPoolInitArguments(
-            _acceptedToken,
+            _projectDetails.acceptedToken,
             _msgSender(),
             getVotesPercentageThreshold(),
-            _softCap,
-            _hardCap,
-            _fundraiserStartAt,
-            _fundraiserEndAt,
+            _projectDetails.softCap,
+            _projectDetails.hardCap,
+            _projectDetails.fundraiserStartAt,
+            _projectDetails.fundraiserEndAt,
             _milestones
         );
 
         if (_proxyType == ProxyType.CLONE_PROXY) {
             invPool = _deployInvestmentPoolClone();
             govPool = _deployGovernancePoolClone();
+            distPool = _deployDistributionPoolClone();
         } else {
             revert("[IPF]: only CLONE_PROXY is supported");
         }
 
         /// @dev Using the struct to avoid error: "Stack too deep"
-        IInvestmentPool.ProjectInfo memory projectDetails = IInvestmentPool.ProjectInfo(
-            _acceptedToken,
+        IInvestmentPool.ProjectInfo memory projectInfo = IInvestmentPool.ProjectInfo(
+            _projectDetails.acceptedToken,
             _msgSender(),
-            _softCap,
-            _hardCap,
-            _fundraiserStartAt,
-            _fundraiserEndAt,
+            _projectDetails.softCap,
+            _projectDetails.hardCap,
+            _projectDetails.fundraiserStartAt,
+            _projectDetails.fundraiserEndAt,
             getTerminationWindow(),
             getAutomatedTerminationWindow()
         );
@@ -161,11 +167,12 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         invPool.initialize{value: msg.value}(
             HOST,
             getGelatoOps(),
-            projectDetails,
+            projectInfo,
             multipliers,
             getInvestmentWithdrawPercentageFee(),
             _milestones,
-            govPool
+            govPool,
+            distPool
         );
 
         govPool.initialize(
@@ -174,6 +181,8 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
             getVotesPercentageThreshold(),
             getVotesWithdrawPercentageFee()
         );
+
+        distPool.initialize(invPool, _projectDetails.projectToken, _projectDetails.tokenRewards);
 
         // Grant newly created governance pool access to mint voting tokens
         bytes32 governancePoolRole = votingToken.GOVERNANCE_POOL_ROLE();
@@ -189,7 +198,13 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
 
         HOST.registerAppByFactory(invPool, configWord);
 
-        emit Created(_msgSender(), address(invPool), address(govPool), _proxyType);
+        emit Created(
+            _msgSender(),
+            address(invPool),
+            address(govPool),
+            address(distPool),
+            _proxyType
+        );
 
         return address(invPool);
     }
@@ -273,6 +288,10 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         return governancePoolImplementation;
     }
 
+    function getDistributionPoolImplementation() public view returns (address) {
+        return distributionPoolImplementation;
+    }
+
     function getVotingToken() public view returns (address) {
         return address(votingToken);
     }
@@ -287,12 +306,17 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         pool = IInitializableInvestmentPool(payable(getInvestmentPoolImplementation().clone()));
     }
 
-    function _deployGovernancePoolClone()
-        internal
-        virtual
-        returns (IInitializableGovernancePool pool)
-    {
+    function _deployGovernancePoolClone() internal returns (IInitializableGovernancePool pool) {
         pool = IInitializableGovernancePool(payable(getGovernancePoolImplementation().clone()));
+    }
+
+    function _deployDistributionPoolClone()
+        internal
+        returns (IInitializableDistributionPool pool)
+    {
+        pool = IInitializableDistributionPool(
+            payable(getDistributionPoolImplementation().clone())
+        );
     }
 
     function _assertPoolInitArguments(

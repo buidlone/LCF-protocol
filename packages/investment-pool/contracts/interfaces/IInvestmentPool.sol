@@ -6,6 +6,7 @@ pragma solidity ^0.8.14;
 import {CFAv1Library} from "@superfluid-finance/ethereum-contracts/contracts/apps/CFAv1Library.sol";
 import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {IGovernancePool} from "./IGovernancePool.sol";
+import {IDistributionPool} from "./IDistributionPool.sol";
 
 interface IInvestmentPool is ISuperApp {
     struct ProjectInfo {
@@ -217,6 +218,7 @@ interface IInitializableInvestmentPool is IInvestmentPool {
         IInvestmentPool.VotingTokensMultipliers calldata _multipliers,
         uint256 _investmentWithdrawFee,
         MilestoneInterval[] calldata _milestones,
-        IGovernancePool _governancePool
+        IGovernancePool _governancePool,
+        IDistributionPool _distributionPool
     ) external payable;
 }
