@@ -55,7 +55,7 @@ export const deployPools = async (
     console.log("Created Distribution Pool at address: ", dpAddress);
 
     const distributionPool = await ethers.getContractAt(distributionPoolType, dpAddress);
-    const projectToken = await ethers.getContractAt("ERC20", nativeProjectToken);
+    const projectToken = await ethers.getContractAt("IERC20", nativeProjectToken);
     await projectToken.approve(dpAddress, tokenRewards);
     await distributionPool.lockTokens();
 
