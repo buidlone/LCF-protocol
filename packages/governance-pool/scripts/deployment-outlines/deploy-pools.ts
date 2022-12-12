@@ -41,9 +41,11 @@ export const deployPools = async (
     const creationEvent = receipt.events?.find((e: any) => e.event === "Created");
     const ipAddress = creationEvent?.args?.ipContract;
     const gpAddress = creationEvent?.args?.gpContract;
+    const dpAddress = creationEvent?.args?.dpContract;
 
     console.log("Created Investment Pool at address: ", ipAddress);
     console.log("Created Governance Pool at address: ", gpAddress);
+    console.log("Created Distribution Pool at address: ", dpAddress);
     console.log("---Timeline---");
     console.log("Fundraiser start date: ", new Date(campaignStartDate * 1000));
     console.log("Fundraiser end date: ", new Date(campaignEndDate * 1000));

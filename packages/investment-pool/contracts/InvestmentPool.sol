@@ -10,6 +10,7 @@ import {CFAv1Library} from "@superfluid-finance/ethereum-contracts/contracts/app
 import {SuperAppBase} from "@superfluid-finance/ethereum-contracts/contracts/apps/SuperAppBase.sol";
 
 // Openzepelin imports
+import "@openzeppelin/contracts/utils/Arrays.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -48,6 +49,7 @@ error InvestmentPool__NotGelatoDedicatedSender();
 
 contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, Initializable {
     using CFAv1Library for CFAv1Library.InitData;
+    using Arrays for uint256[];
 
     /** STATE VARIABLES */
 
@@ -106,8 +108,27 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     /// @dev Investment data
     uint256 internal totalInvestedAmount;
-    // Mapping from investor => milestoneId => amount invested
+    /**
+     * @dev Mapping holds amoun of tokens, which was invested in the milestone only.
+     * @dev It doesn't hold the total invested amount.
+     * @dev Mapping from investor => milestone Id => amount invested
+     */
     mapping(address => mapping(uint256 => uint256)) internal investedAmount;
+    //
+    /**
+     * @dev Mapping holds milestone ids, in which investor invested size increased.
+     * @dev It will be used with memInvestorInvestments data to find the right nubmer
+     * @dev Mapping from invstor => list of milestone ids
+     */
+    mapping(address => uint256[]) internal milestonesWithInvestment;
+    /**
+     * @dev It's a memoization mapping for milestone Investments for each investor
+     * @dev n-th element describes how much money is invested into the project
+     * @dev It doesn't hold real money value, but a value, which will be used in other formulas.
+     * @dev Memoization will never be used on it's own, to get invested value.
+     * @dev Mapping investor => milestone Id => amount
+     */
+    mapping(address => mapping(uint256 => uint256)) internal memInvestorInvestments;
 
     /// @dev Milestone data
     uint256 internal milestoneCount;
@@ -366,6 +387,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         investedAmount[_msgSender()][unpledgeFromMilestoneId] -= amount;
         totalInvestedAmount -= amount;
 
+        milestonesWithInvestment[_msgSender()].pop();
+        memInvestorInvestments[_msgSender()][unpledgeFromMilestoneId] = 0;
+
         // Apply fee for withdrawal during the same period as invested (milestone or fundraiser)
         uint256 amountToTransfer = (amount * (100 - getInvestmentWithdrawPercentageFee())) / 100;
 
@@ -397,6 +421,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             if (investment == 0) revert InvestmentPool__NoMoneyInvested();
 
             investedAmount[_msgSender()][0] = 0;
+
             bool successfulTransfer1 = acceptedToken.transfer(_msgSender(), investment);
             if (!successfulTransfer1) revert InvestmentPool__SuperTokenTransferFailed();
 
@@ -694,6 +719,40 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         return milestone.endDate - milestone.startDate;
     }
 
+    function getMilestonesWithInvestment(
+        address _investor
+    ) public view returns (uint256[] memory) {
+        return milestonesWithInvestment[_investor];
+    }
+
+    function getInvestorTokensAllocation(
+        address _investor,
+        uint256 _milestoneId
+    ) public view returns (uint256) {
+        return
+            (_getMemoizedInvestorInvestment(_investor, _milestoneId) *
+                (getMilestone(_milestoneId).intervalSeedPortion +
+                    getMilestone(_milestoneId).intervalStreamingPortion)) / getPercentageDivider();
+    }
+
+    /**
+     * @dev Function returns the amount of funds that were already streamed and the flow rate of current milestoness
+     * @dev Will be used by frontend
+     */
+    function getUsedInvestmentsData(address _investor) public view returns (uint256, uint256) {
+        uint256 milestoneId = getCurrentMilestoneId();
+        uint256 previousMilestonesAllocation = 0;
+
+        for (uint256 i = 0; i < milestoneId; i++) {
+            previousMilestonesAllocation += getInvestorTokensAllocation(_investor, i);
+        }
+
+        uint256 allocationPerSecond = getInvestorTokensAllocation(_investor, milestoneId) /
+            getMilestoneDuration(milestoneId);
+
+        return (previousMilestonesAllocation, allocationPerSecond);
+    }
+
     function getCurrentMilestoneId() public view virtual returns (uint256) {
         return currentMilestone;
     }
@@ -925,6 +984,69 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     /** INTERNAL FUNCTIONS */
 
+    function _getMemoizedInvestorInvestment(
+        address _investor,
+        uint256 _milestoneId
+    ) public view returns (uint256) {
+        uint256[] memory milestonesIds = getMilestonesWithInvestment(_investor);
+
+        // Calculate the real balance
+        if (milestonesIds.length == 0) {
+            // If milestonesIds array is empty that means that no investments were made.
+            // Return zero.
+            return 0;
+        } else if (_milestoneId == 0 || memInvestorInvestments[_investor][_milestoneId] != 0) {
+            // Return the value that mapping holds.
+            // If milestone is zero, no matter the tokens amount (it can be 0 or more),
+            // it is the correct one, as no investments were made before it.
+            // If tokens amount is not zero, that means investor invested in that milestone,
+            // that is why we can get the value immediately, without any additional step.
+            return memInvestorInvestments[_investor][_milestoneId];
+        } else if (memInvestorInvestments[_investor][_milestoneId] == 0) {
+            // If tokens amount is zero, that means investment was MADE before it,
+            // or was NOT MADE at all. It also means that investment definitely was not made in the current milestone.
+            // Because those cases are already handled.
+
+            // array.findUpperBound(element) searches a sorted array and returns the first index that contains a value greater or equal to element.
+            // If no such index exists (i.e. all values in the array are strictly less than element), the array length is returned.
+            // Because in previous condition we checked if investments were made to the milestone id,
+            // we can be sure that findUpperBound function will return the value greater than element of length of the array,
+            /// @dev not using milestonesIds variable because findUpperBound works only with storage variables.
+            uint256 largerMilestoneIndex = milestonesWithInvestment[_investor].findUpperBound(
+                _milestoneId
+            );
+
+            if (largerMilestoneIndex == milestonesIds.length) {
+                // If length of an array was returned, it means
+                // no milestone id in the array is greater than the current one.
+                // Get the last value on milestonesIds array, because all the milestones after it
+                // have the same tokens amount.
+                uint256 lastMilestone = milestonesIds[milestonesIds.length - 1];
+                return memInvestorInvestments[_investor][lastMilestone];
+            } else if (
+                largerMilestoneIndex == 0 && _milestoneId < milestonesIds[largerMilestoneIndex]
+            ) {
+                // If the index of milestone that was found is zero AND
+                // current milestone is LESS than milestone retrieved from milestonesIds
+                // it means no investments were made before the current milestone.
+                // Thus, no voting tokens were minted at all.
+                // This condition can be met when looking for tokens amount in past milestones
+                return 0;
+            } else if (milestonesIds.length > 1 && largerMilestoneIndex > 0) {
+                // If more than 1 investment was made, nearestMilestoneIdFromTop will return
+                // the index that is higher by 1 array element. That is we need to subtract 1, to get the right index
+                // When we have the right index, we can return the tokens amount
+                // This condition can be met when looking for tokens amount in past milestones
+                uint256 milestoneIdWithInvestment = milestonesIds[largerMilestoneIndex - 1];
+                return memInvestorInvestments[_investor][milestoneIdWithInvestment];
+            }
+        }
+
+        // At this point all of the cases should be handled and value should already be returns
+        // This part of code should never be reached, but for unknown cases we will return zero.
+        return 0;
+    }
+
     /// @notice Update value memMilestoneInvestments value, to make sure it doesn't return zero by mistake
     function _ifNeededUpdateMemInvestmentValue(uint256 _milestoneId) internal {
         uint256 memInvAmount = memMilestoneInvestments[_milestoneId];
@@ -1095,6 +1217,17 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         memMilestoneInvestments[_milestoneId] += scaledInvestment;
         investedAmount[_investor][_milestoneId] += _amount;
         totalInvestedAmount += _amount;
+
+        // This allows us to know the memoized amount of tokens that investor started owning from the provided milestone start.
+        if (memInvestorInvestments[_investor][_milestoneId] == 0) {
+            // If it's first investment for this milestone, add milestone id to the array.
+            milestonesWithInvestment[_investor].push(_milestoneId);
+        }
+
+        // Add the the current scaled allocation to the previous allocation.
+        memInvestorInvestments[_investor][_milestoneId] =
+            _getMemoizedInvestorInvestment(_investor, _milestoneId) +
+            scaledInvestment;
     }
 
     /**

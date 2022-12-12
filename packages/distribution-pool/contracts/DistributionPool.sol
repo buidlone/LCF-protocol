@@ -222,16 +222,18 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
     }
 
     /**
-     * @notice Function calculates how many tokens where allocated during the provided milestone
+     * @notice Function calculates how many tokens are allocated to the provided milestone
      * @notice If investors invested, we can be sure that portion of tokens were allocated, else it will return 0.
      */
     function getAllocatedAmount(
         address _investor,
         uint256 _milestoneId
     ) public view returns (uint256) {
+        IInvestmentPool.Milestone memory milestone = investmentPool.getMilestone(_milestoneId);
         return
             (_getMemoizedMilestoneAllocation(_investor, _milestoneId) *
-                investmentPool.getMilestonesPortionLeft(_milestoneId)) / getPercentageDivider();
+                (milestone.intervalSeedPortion + milestone.intervalStreamingPortion)) /
+            getPercentageDivider();
     }
 
     /**
@@ -243,10 +245,11 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
      */
     function getAllocationData(address _investor) public view returns (uint256, uint256, uint256) {
         uint256 currentMilestone = investmentPool.getCurrentMilestoneId();
-        uint256 completedPortion = getPercentageDivider() -
-            investmentPool.getMilestonesPortionLeft(currentMilestone);
-        uint256 memAllocation = _getMemoizedMilestoneAllocation(_investor, currentMilestone);
-        uint256 previousMilestonesAllocation = completedPortion * memAllocation;
+        uint256 previousMilestonesAllocation = 0;
+
+        for (uint256 i = 0; i < currentMilestone; i++) {
+            previousMilestonesAllocation += getAllocatedAmount(_investor, i);
+        }
 
         uint256 allocationPerSecond = getAllocatedAmount(_investor, currentMilestone) /
             investmentPool.getMilestoneDuration(currentMilestone);
