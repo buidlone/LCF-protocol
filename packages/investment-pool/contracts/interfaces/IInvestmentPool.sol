@@ -114,6 +114,17 @@ interface IInvestmentPool is ISuperApp {
 
     function getTotalMilestoneTokenAllocation(uint _milestoneId) external returns (uint256);
 
+    function getInvestorTokensAllocation(
+        address _investor,
+        uint256 _milestoneId
+    ) external view returns (uint256);
+
+    function getUsedInvestmentsData(address _investor) external view returns (uint256, uint256);
+
+    function getMilestonesWithInvestment(
+        address _investor
+    ) external view returns (uint256[] memory);
+
     function gelatoChecker() external view returns (bool canExec, bytes memory execPayload);
 
     function startGelatoTask() external payable;

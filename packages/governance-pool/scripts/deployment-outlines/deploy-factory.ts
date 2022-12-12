@@ -95,6 +95,7 @@ export const deployFactory = async (
             gelatoOpsAddress,
             investmentPoolLogic.address,
             governancePoolLogic.address,
+            distributionPoolLogic.address,
             votingToken.address,
         ]);
     }
