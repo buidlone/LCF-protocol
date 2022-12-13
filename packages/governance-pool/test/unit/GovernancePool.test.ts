@@ -208,7 +208,7 @@ describe("Governance Pool", async () => {
                 it("[GP][3.2.5] Should return value from last milestone in which investor invested if no mints were made after the current milestone", async () => {
                     const tokensToMint: BigNumber = ethers.utils.parseEther("1");
 
-                    await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                    await investmentPoolMock.setProjectState(anyMilestoneOngoingStateValue);
                     await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
 
                     const activeTokensForVoting =
@@ -1403,7 +1403,7 @@ describe("Governance Pool", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
                 const transferAmount = ethers.utils.parseEther("0.4");
 
-                await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                await investmentPoolMock.setProjectState(anyMilestoneOngoingStateValue);
                 await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
                 await investmentPoolMock.setMilestoneId(1);
                 const currentMilestoneId = await investmentPoolMock.getCurrentMilestoneId();
@@ -1624,7 +1624,7 @@ describe("Governance Pool", async () => {
             it("[GP][11.1.1] Should return full active voting tokens amount when no votes were used", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
 
-                await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                await investmentPoolMock.setProjectState(anyMilestoneOngoingStateValue);
                 await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
 
                 const votesAmount = await governancePool.connect(investorA).getUnusedVotesAmount();
@@ -1635,7 +1635,7 @@ describe("Governance Pool", async () => {
             it("[GP][11.1.2] Should return full active voting tokens amount for later milestones when no votes were used", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
 
-                await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                await investmentPoolMock.setProjectState(anyMilestoneOngoingStateValue);
                 await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
                 await investmentPoolMock.setMilestoneId(1);
 
@@ -1748,7 +1748,7 @@ describe("Governance Pool", async () => {
                 const tokensToMint = ethers.utils.parseEther("1");
                 const lockAmount = ethers.utils.parseEther("0.4");
 
-                await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                await investmentPoolMock.setProjectState(anyMilestoneOngoingStateValue);
                 await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMint);
                 await investmentPoolMock.setMilestoneId(1);
                 const currentMilestoneId = await investmentPoolMock.getCurrentMilestoneId();

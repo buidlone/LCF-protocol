@@ -7,6 +7,7 @@ export const deployFactory = async (
     investmentPoolFactoryType: string,
     investmentPoolType: string,
     governancePoolType: string,
+    distributionPoolType: string,
     votingTokenType: string
 ): Promise<string> => {
     console.log("-----Deploying contracts-----");
@@ -36,7 +37,19 @@ export const deployFactory = async (
     console.log("Governance pool logic address: ", governancePoolLogic.address);
 
     /******************************************
-     * 3. Deploy voting token
+     * 3. Deploy distribution pool logic contract
+     *****************************************/
+    console.log("Deploying distribution pool logic...");
+    const distributionPoolLogicDep = await ethers.getContractFactory(
+        distributionPoolType,
+        deployer
+    );
+    const distributionPoolLogic = await distributionPoolLogicDep.deploy();
+    await distributionPoolLogic.deployed();
+    console.log("Distribution pool logic address: ", distributionPoolLogic.address);
+
+    /******************************************
+     * 4. Deploy voting token
      *****************************************/
     console.log("Deploying voting token contract...");
     const votingTokensDep = await ethers.getContractFactory(votingTokenType, deployer);
@@ -45,7 +58,7 @@ export const deployFactory = async (
     console.log("Voting token address: ", votingToken.address);
 
     /******************************************
-     * 4. Deploy investment pool factory contract
+     * 5. Deploy investment pool factory contract
      *****************************************/
     console.log("Deploying investment pool factory...");
     const investmentPoolFactoryDep = await ethers.getContractFactory(
@@ -57,13 +70,14 @@ export const deployFactory = async (
         gelatoOpsAddress,
         investmentPoolLogic.address,
         governancePoolLogic.address,
+        distributionPoolLogic.address,
         votingToken.address
     );
     await investmentPoolFactory.deployed();
     console.log("Investment pool factory address: ", investmentPoolFactory.address);
 
     /******************************************
-     * 5. Grant ADMIN role to the investment pool factory
+     * 6. Grant ADMIN role to the investment pool factory
      *****************************************/
     const adminRole: string = await votingToken.DEFAULT_ADMIN_ROLE();
     await votingToken.connect(deployer).grantRole(adminRole, investmentPoolFactory.address);
@@ -74,12 +88,14 @@ export const deployFactory = async (
 
         await verify(investmentPoolLogic.address, []);
         await verify(governancePoolLogic.address, []);
+        await verify(distributionPoolLogic.address, []);
         await verify(votingToken.address, []);
         await verify(investmentPoolFactory.address, [
             superfluidHostAddress,
             gelatoOpsAddress,
             investmentPoolLogic.address,
             governancePoolLogic.address,
+            distributionPoolLogic.address,
             votingToken.address,
         ]);
     }

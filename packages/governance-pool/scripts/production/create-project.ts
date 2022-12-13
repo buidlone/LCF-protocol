@@ -18,6 +18,7 @@ async function main() {
     const softCap: BigNumber = ethers.utils.parseEther("1500");
     const hardCap: BigNumber = ethers.utils.parseEther("5000");
     const gelatoFeeAllocation: BigNumber = ethers.utils.parseEther("0.1");
+    const tokenRewards: BigNumber = ethers.utils.parseEther("0.001");
     const campaignStartDate: number = Math.round(new Date().getTime() / 1000) + 10 * 60; // current time + 5 minutes
     const campaignEndDate: number = campaignStartDate + 60 * 60 * 24 * 30 * 2; // campaignStartDate + 2 months
     const milestone1StartDate: number = campaignEndDate; // = campaignStartDate
@@ -42,12 +43,14 @@ async function main() {
     await deployPools(
         "InvestmentPoolFactory",
         "<address>",
+        "DistributionPool",
         softCap,
         hardCap,
         campaignStartDate,
         campaignEndDate,
         milestones,
-        gelatoFeeAllocation
+        gelatoFeeAllocation,
+        tokenRewards
     );
 }
 

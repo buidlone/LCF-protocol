@@ -22,6 +22,7 @@ contract InvestmentPoolFactoryMock is InvestmentPoolFactory {
         address payable _gelatoOps,
         address _ipImplementation,
         address _gpImplementation,
+        address _dpImplementation,
         IVotingToken _votingToken
     )
         InvestmentPoolFactory(
@@ -29,6 +30,7 @@ contract InvestmentPoolFactoryMock is InvestmentPoolFactory {
             _gelatoOps,
             _ipImplementation,
             _gpImplementation,
+            _dpImplementation,
             _votingToken
         )
     {}
@@ -45,7 +47,6 @@ contract InvestmentPoolFactoryMock is InvestmentPoolFactory {
 
     function _deployInvestmentPoolClone()
         internal
-        virtual
         override
         returns (IInitializableInvestmentPool pool)
     {

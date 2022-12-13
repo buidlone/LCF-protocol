@@ -455,7 +455,14 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
         address _account
     ) public view returns (uint256) {
         uint256[] memory milestonesIds = getMilestonesIdsInWhichBalanceChanged(_account);
+        uint256 currentState = investmentPool.getProjectStateByteValue();
 
+        // If no milestone is ongoing, always return 0
+        if (currentState & getAnyMilestoneOngoingStateValue() == 0) {
+            return 0;
+        }
+
+        // Calculate the real balance
         if (milestonesIds.length == 0) {
             // If milestonesIds array is empty that means that no investments were made
             // and no voting tokens were minted. Return zero.
@@ -476,7 +483,6 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
             // If no such index exists (i.e. all values in the array are strictly less than element), the array length is returned.
             // Because in previous condition we checked if investments were made to the milestone id,
             // we can be sure that findUpperBound function will return the value greater than element of length of the array,
-            // but not the value that is equal.
             /// @dev not using milestonesIds variable because findUpperBound works only with storage variables.
             uint256 nearestMilestoneIdFromTop = milestonesIdsInWhichBalanceChanged[_account]
                 .findUpperBound(_milestoneId);

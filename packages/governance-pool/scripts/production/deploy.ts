@@ -13,6 +13,7 @@ async function main() {
         "InvestmentPoolFactory",
         "InvestmentPool",
         "GovernancePool",
+        "DistributionPool",
         "VotingToken"
     );
 }

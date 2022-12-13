@@ -6,6 +6,7 @@ pragma solidity ^0.8.14;
 import {CFAv1Library} from "@superfluid-finance/ethereum-contracts/contracts/apps/CFAv1Library.sol";
 import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinitions} from "@superfluid-finance/ethereum-contracts/contracts/interfaces/superfluid/ISuperfluid.sol";
 import {IGovernancePool} from "./IGovernancePool.sol";
+import {IDistributionPool} from "./IDistributionPool.sol";
 
 interface IInvestmentPool is ISuperApp {
     struct ProjectInfo {
@@ -113,6 +114,17 @@ interface IInvestmentPool is ISuperApp {
 
     function getTotalMilestoneTokenAllocation(uint _milestoneId) external returns (uint256);
 
+    function getInvestorTokensAllocation(
+        address _investor,
+        uint256 _milestoneId
+    ) external view returns (uint256);
+
+    function getUsedInvestmentsData(address _investor) external view returns (uint256, uint256);
+
+    function getMilestonesWithInvestment(
+        address _investor
+    ) external view returns (uint256[] memory);
+
     function gelatoChecker() external view returns (bool canExec, bytes memory execPayload);
 
     function startGelatoTask() external payable;
@@ -196,7 +208,17 @@ interface IInvestmentPool is ISuperApp {
 
     function getHardCapMultiplier() external view returns (uint256);
 
+    function getVotingTokensAmountToMint(uint256 _amount) external view returns (uint256);
+
+    function calculateInvestmentWeight(uint256 _amount) external view returns (uint256);
+
     function getVotingTokensSupplyCap() external view returns (uint256);
+
+    function getMaximumWeightDivisor() external view returns (uint256);
+
+    function getMilestonesPortionLeft(uint256 _milestoneId) external view returns (uint256);
+
+    function getMilestoneDuration(uint256 _milestoneId) external view returns (uint256);
 }
 
 interface IInitializableInvestmentPool is IInvestmentPool {
@@ -207,6 +229,7 @@ interface IInitializableInvestmentPool is IInvestmentPool {
         IInvestmentPool.VotingTokensMultipliers calldata _multipliers,
         uint256 _investmentWithdrawFee,
         MilestoneInterval[] calldata _milestones,
-        IGovernancePool _governancePool
+        IGovernancePool _governancePool,
+        IDistributionPool _distributionPool
     ) external payable;
 }
