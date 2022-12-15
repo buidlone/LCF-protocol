@@ -55,11 +55,9 @@ contract InvestmentPoolMock is InvestmentPool {
         gelatoTaskCreated = _isCreated;
     }
 
-    function encodeGelatoTerminationWithSelector(uint256 _milestoneId)
-        public
-        pure
-        returns (bytes memory)
-    {
+    function encodeGelatoTerminationWithSelector(
+        uint256 _milestoneId
+    ) public pure returns (bytes memory) {
         return
             abi.encodeWithSelector(
                 this.gelatoTerminateMilestoneStreamFinal.selector,
@@ -69,5 +67,19 @@ contract InvestmentPoolMock is InvestmentPool {
 
     function ifNeededUpdateMemInvestmentValue(uint256 _milestoneId) public {
         _ifNeededUpdateMemInvestmentValue(_milestoneId);
+    }
+
+    function getMemoizedInvestorInvestment(
+        address _investor,
+        uint256 _milestoneId
+    ) public view returns (uint256) {
+        return _getMemoizedInvestorInvestment(_investor, _milestoneId);
+    }
+
+    function getMemInvestorInvestments(
+        address _investor,
+        uint256 _milestoneId
+    ) public view returns (uint256) {
+        return memInvestorInvestments[_investor][_milestoneId];
     }
 }

@@ -739,18 +739,68 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      * @dev Function returns the amount of funds that were already streamed and the flow rate of current milestoness
      * @dev Will be used by frontend
      */
-    function getUsedInvestmentsData(address _investor) public view returns (uint256, uint256) {
+    function getUsedInvestmentsData(address _investor) public view returns (uint256 alreadyAllocated, uint256 allocationFlowRate) {
         uint256 milestoneId = getCurrentMilestoneId();
-        uint256 previousMilestonesAllocation = 0;
+        uint256 currentState = getProjectStateByteValue();
 
-        for (uint256 i = 0; i < milestoneId; i++) {
-            previousMilestonesAllocation += getInvestorTokensAllocation(_investor, i);
+        // If no milestone is ongoing, always return 0
+        if (
+            currentState == getCanceledProjectStateValue() ||
+            currentState == getBeforeFundraiserStateValue() ||
+            currentState == getFundraiserOngoingStateValue() ||
+            currentState == getFailedFundraiserStateValue() ||
+            currentState == getFundraiserEndedNoMilestonesOngoingStateValue()
+        ) {
+            // Milestones haven't started, so return 0;
+            return (0, 0);
+        } else if (isStateAnyMilestoneOngoing()) {
+            uint256 previousMilestonesAllocation = 0;
+            for (uint256 i = 0; i < milestoneId; i++) {
+                previousMilestonesAllocation += getInvestorTokensAllocation(_investor, i);
+            }
+
+            uint256 allocationPerSecond = getInvestorTokensAllocation(_investor, milestoneId) /
+                getMilestoneDuration(milestoneId);
+
+            return (previousMilestonesAllocation, allocationPerSecond);
+        } else if (
+            currentState == getTerminatedByVotingStateValue() ||
+            currentState == getTerminatedByGelatoStateValue()
+        ) {
+            uint48 milestoneStartDate = getMilestone(milestoneId).startDate;
+            uint256 previousMilestonesAllocation = 0;
+            for (uint256 i = 0; i < milestoneId; i++) {
+                previousMilestonesAllocation += getInvestorTokensAllocation(_investor, i);
+            }
+
+            // There is and edge case, where project is terminated during the previous milestone period.
+            // Thats why we check if milestone started before emergency termination.
+            if (getEmergencyTerminationTimestamp() > milestoneStartDate) {
+                uint48 timePassed = getEmergencyTerminationTimestamp() - milestoneStartDate;
+                uint256 allocationPerSecond = getInvestorTokensAllocation(_investor, milestoneId) /
+                    getMilestoneDuration(milestoneId);
+                previousMilestonesAllocation += uint256(timePassed) * allocationPerSecond;
+            }
+
+            return (previousMilestonesAllocation, 0);
+        } else if (currentState == getSuccessfullyEndedStateValue()) {
+            // Return all investment
+            uint256[] memory milestonesIds = getMilestonesWithInvestment(_investor);
+            uint256 totalInvestment = 0;
+            for (uint256 i = 0; i < milestonesIds.length; i++) {
+                uint256 milestone = milestonesIds[i];
+                totalInvestment += getInvestedAmount(_investor, milestone);
+            }
+            return (totalInvestment, 0);
         }
+    }
 
-        uint256 allocationPerSecond = getInvestorTokensAllocation(_investor, milestoneId) /
-            getMilestoneDuration(milestoneId);
-
-        return (previousMilestonesAllocation, allocationPerSecond);
+    function isStateAnyMilestoneOngoing() public view returns (bool) {
+        if (getProjectStateByteValue() & getAnyMilestoneOngoingStateValue() == 0) {
+            return false;
+        } else {
+            return true;
+        }
     }
 
     function getCurrentMilestoneId() public view virtual returns (uint256) {
@@ -1245,7 +1295,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
          */
 
         Milestone memory terminationMilestone = getMilestone(_terminationMilestoneId);
-        uint256 milestonPortion = memMilestonePortions[_terminationMilestoneId];
+        uint256 milestonePortion = memMilestonePortions[_terminationMilestoneId];
         uint256 tokensReserved;
 
         if (terminationMilestone.paidAmount > 0) {
@@ -1261,7 +1311,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         }
 
         /// @dev Example: 25% - (60$ * 25% / 300$) = 20%
-        return milestonPortion - (((tokensReserved * milestonPortion) / leftAllocation));
+        return milestonePortion - (((tokensReserved * milestonePortion) / leftAllocation));
     }
 
     function _getNow() internal view virtual returns (uint256) {

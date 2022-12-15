@@ -80,12 +80,13 @@ export const deployFactory = async (
      * 6. Grant ADMIN role to the investment pool factory
      *****************************************/
     const adminRole: string = await votingToken.DEFAULT_ADMIN_ROLE();
-    await votingToken.connect(deployer).grantRole(adminRole, investmentPoolFactory.address);
+    const grantTx = await votingToken
+        .connect(deployer)
+        .grantRole(adminRole, investmentPoolFactory.address);
+    grantTx.wait(blockConfirmations);
 
     // Verify
     if (verification) {
-        await investmentPoolFactory.deployTransaction.wait(blockConfirmations);
-
         await verify(investmentPoolLogic.address, []);
         await verify(governancePoolLogic.address, []);
         await verify(distributionPoolLogic.address, []);

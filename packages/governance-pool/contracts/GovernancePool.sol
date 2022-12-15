@@ -6,9 +6,7 @@ pragma solidity ^0.8.14;
 import {ERC1155Holder} from "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
-
 import {Arrays} from "@openzeppelin/contracts/utils/Arrays.sol";
-
 import {IInvestmentPool} from "@buidlone/investment-pool/contracts/interfaces/IInvestmentPool.sol";
 import {IInitializableGovernancePool} from "@buidlone/investment-pool/contracts/interfaces/IGovernancePool.sol";
 import {VotingToken} from "./VotingToken.sol";
@@ -21,7 +19,6 @@ error GovernancePool__NoActiveVotingTokensOwned();
 error GovernancePool__AmountIsGreaterThanVotingTokensBalance(uint256 amount, uint256 balance);
 error GovernancePool__NoVotesAgainstProject();
 error GovernancePool__AmountIsGreaterThanDelegatedVotes(uint256 amount, uint256 votes);
-error GovernancePool__TotalSupplyIsZero();
 error GovernancePool__TotalSupplyIsSmallerThanVotesAgainst(uint256 totalSupply, uint256 votes);
 error GovernancePool__InvestmentPoolStateNotAllowed(uint256 stateValue);
 error GovernancePool__CannotTransferMoreThanUnlockedTokens();
@@ -410,7 +407,9 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
     function votesAgainstPercentageCount(uint256 _votesAgainst) public view returns (uint8) {
         uint256 totalSupply = getVotingTokensSupply();
 
-        if (totalSupply == 0) revert GovernancePool__TotalSupplyIsZero();
+        if (_votesAgainst == 0 || totalSupply == 0) {
+            return 0;
+        }
         if (totalSupply < _votesAgainst)
             revert GovernancePool__TotalSupplyIsSmallerThanVotesAgainst(
                 totalSupply,
@@ -455,10 +454,9 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
         address _account
     ) public view returns (uint256) {
         uint256[] memory milestonesIds = getMilestonesIdsInWhichBalanceChanged(_account);
-        uint256 currentState = investmentPool.getProjectStateByteValue();
 
         // If no milestone is ongoing, always return 0
-        if (currentState & getAnyMilestoneOngoingStateValue() == 0) {
+        if (!investmentPool.isStateAnyMilestoneOngoing()) {
             return 0;
         }
 

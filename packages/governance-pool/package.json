@@ -16,7 +16,8 @@
     "deploy_verify:testing:goerli": "yarn hardhat run scripts/testnet-testing/deploy-and-verify-testing.ts --network goerli",
     "create_project:testing:goerli": "yarn hardhat run scripts/testnet-testing/create-project.ts --network goerli",
     "deploy_verify:time_control:goerli": "yarn hardhat run scripts/time-control/deploy-and-verify.ts --network goerli",
-    "create_project:time_control:goerli": "yarn hardhat run scripts/time-control/create-project.ts --network goerli"
+    "create_project:time_control:goerli": "yarn hardhat run scripts/time-control/create-project.ts --network goerli",
+    "deploy_and_create:time_control:goerli": "yarn hardhat run scripts/time-control/deploy-and-create.ts --network goerli"
   },
   "devDependencies": {
     "@ethersproject/abi": "^5.4.7",

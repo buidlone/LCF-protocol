@@ -50,7 +50,9 @@ async function main() {
         campaignEndDate,
         milestones,
         gelatoFeeAllocation,
-        tokenRewards
+        tokenRewards,
+        null,
+        null
     );
 }
 

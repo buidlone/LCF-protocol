@@ -1,10 +1,10 @@
 import {ethers, network} from "hardhat";
-import {availableTestnetChains} from "../../hardhat-helper-config";
 import {BigNumber} from "ethers";
+import {availableTestnetChains} from "../../hardhat-helper-config";
+import {deployFactory} from "../deployment-outlines/deploy-factory";
 import {deployPools} from "../deployment-outlines/deploy-pools";
 
 const percentageDivider: number = 10 ** 6;
-
 const percentToIpBigNumber = (percent: number): number => {
     return (percentageDivider * percent) / 100;
 };
@@ -14,6 +14,16 @@ async function main() {
         console.log("Network is not available for deployment.");
         return;
     }
+
+    // 1. Deploy logic and factory contracts
+    const investmentPoolFactoryAddress = await deployFactory(
+        true,
+        "InvestmentPoolFactory",
+        "InvestmentPool",
+        "GovernancePool",
+        "DistributionPool",
+        "VotingToken"
+    );
 
     const softCap: BigNumber = ethers.utils.parseEther("0.01");
     const hardCap: BigNumber = ethers.utils.parseEther("0.02");
@@ -36,9 +46,9 @@ async function main() {
     }
 
     await deployPools(
-        "InvestmentPoolFactoryMock",
-        "<address>",
-        "DistributionPoolMock",
+        "InvestmentPoolFactory",
+        investmentPoolFactoryAddress,
+        "DistributionPool",
         softCap,
         hardCap,
         campaignStartDate,
