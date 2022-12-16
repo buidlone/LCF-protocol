@@ -714,6 +714,38 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         return subt / getPercentageDivider();
     }
 
+    /**
+     * @notice Function calculates the amount that is used by the creator
+     */
+    function getFundsUsed() public view returns (uint256) {
+        uint256 milestoneId = getCurrentMilestoneId();
+        uint256 currentState = getProjectStateByteValue();
+
+        if (
+            currentState == getCanceledProjectStateValue() ||
+            currentState == getBeforeFundraiserStateValue() ||
+            currentState == getFundraiserOngoingStateValue() ||
+            currentState == getFailedFundraiserStateValue() ||
+            currentState == getFundraiserEndedNoMilestonesOngoingStateValue()
+        ) {
+            return 0;
+        } else if (
+            isStateAnyMilestoneOngoing() ||
+            currentState == getTerminatedByVotingStateValue() ||
+            currentState == getTerminatedByGelatoStateValue()
+        ) {
+            uint256 creatorFunds = 0;
+            for (uint256 i = 0; i <= milestoneId; i++) {
+                creatorFunds += getMilestone(i).paidAmount;
+            }
+            return creatorFunds;
+        } else if (currentState == getSuccessfullyEndedStateValue()) {
+            return getTotalInvestedAmount();
+        } else {
+            return 0;
+        }
+    }
+
     function getMilestoneDuration(uint256 _milestoneId) public view returns (uint256) {
         Milestone memory milestone = getMilestone(_milestoneId);
         return milestone.endDate - milestone.startDate;
@@ -739,7 +771,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      * @dev Function returns the amount of funds that were already streamed and the flow rate of current milestoness
      * @dev Will be used by frontend
      */
-    function getUsedInvestmentsData(address _investor) public view returns (uint256 alreadyAllocated, uint256 allocationFlowRate) {
+    function getUsedInvestmentsData(
+        address _investor
+    ) public view returns (uint256 alreadyAllocated, uint256 allocationFlowRate) {
         uint256 milestoneId = getCurrentMilestoneId();
         uint256 currentState = getProjectStateByteValue();
 
@@ -792,6 +826,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
                 totalInvestment += getInvestedAmount(_investor, milestone);
             }
             return (totalInvestment, 0);
+        } else {
+            return (0, 0);
         }
     }
 

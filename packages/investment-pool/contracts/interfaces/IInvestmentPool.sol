@@ -119,6 +119,8 @@ interface IInvestmentPool is ISuperApp {
         uint256 _milestoneId
     ) external view returns (uint256);
 
+    function getFundsUsed() external view returns (uint256);
+
     function getUsedInvestmentsData(address _investor) external view returns (uint256, uint256);
 
     function isStateAnyMilestoneOngoing() external view returns (bool);

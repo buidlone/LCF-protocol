@@ -5399,6 +5399,15 @@ describe("Investment Pool", async () => {
     });
 
     describe("15. Functionality used only by frontend", () => {
+        beforeEach(async () => {
+            let snapshot = await traveler.takeSnapshot();
+            snapshotId = snapshot["result"];
+        });
+
+        afterEach(async () => {
+            await traveler.revertToSnapshot(snapshotId);
+        });
+
         describe("15.1 Interactions", () => {
             describe("function -> getMilestonesInvestmentsListForFormula", () => {
                 it("[IP][15.1.1] Should return empty list if no investments were made", async () => {
@@ -5433,6 +5442,232 @@ describe("Investment Pool", async () => {
 
                     const votingTokensSupplyCap = await investment.getVotingTokensSupplyCap();
                     assert.equal(votingTokensSupplyCap.toString(), expectedSupplyCap.toString());
+                });
+            });
+
+            describe("function -> getFundsUsed", () => {
+                it("[IP][15.1.4] Should return 0 if project is canceled", async () => {
+                    await investment.connect(creator).cancelBeforeFundraiserStart();
+                    const usedFunds = await investment.getFundsUsed();
+                    const projectState = await investment.getProjectStateByteValue();
+
+                    assert.equal(usedFunds.toString(), "0");
+                    assert.equal(projectState.toString(), canceledProjectStateValue.toString());
+                });
+
+                it("[IP][15.1.5] Should return 0 if state is before fundraiser", async () => {
+                    const usedFunds = await investment.getFundsUsed();
+                    const projectState = await investment.getProjectStateByteValue();
+
+                    assert.equal(usedFunds.toString(), "0");
+                    assert.equal(projectState.toString(), beforeFundraiserStateValue.toString());
+                });
+
+                it("[IP][15.1.6] Should return 0 if fundraiser is ongoing", async () => {
+                    let timeStamp = dateToSeconds("2100/07/15");
+                    await investment.setTimestamp(timeStamp);
+
+                    const usedFunds = await investment.getFundsUsed();
+                    const projectState = await investment.getProjectStateByteValue();
+
+                    assert.equal(usedFunds.toString(), "0");
+                    assert.equal(projectState.toString(), fundraiserOngoingStateValue.toString());
+                });
+
+                it("[IP][15.1.7] Should return 0 if fundraiser failed", async () => {
+                    let timeStamp = dateToSeconds("2100/08/15");
+                    await investment.setTimestamp(timeStamp);
+
+                    const usedFunds = await investment.getFundsUsed();
+                    const projectState = await investment.getProjectStateByteValue();
+
+                    assert.equal(usedFunds.toString(), "0");
+                    assert.equal(projectState.toString(), failedFundraiserStateValue.toString());
+                });
+
+                it("[IP][15.1.8] Should return 0 if fundraiser ended and waiting for milestone start", async () => {
+                    const investedAmount: BigNumber = ethers.utils.parseEther("1500");
+
+                    let timeStamp = dateToSeconds("2100/07/15");
+                    await investment.setTimestamp(timeStamp);
+                    await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                    timeStamp = dateToSeconds("2100/08/15");
+                    await investment.setTimestamp(timeStamp);
+
+                    const usedFunds = await investment.getFundsUsed();
+                    const projectState = await investment.getProjectStateByteValue();
+
+                    assert.equal(usedFunds.toString(), "0");
+                    assert.equal(
+                        projectState.toString(),
+                        fundraiserEndedNoMilestonesOngoingStateValue.toString()
+                    );
+                });
+
+                it("[IP][15.1.9] Should return seed amount if milestone 0 is ongoing", async () => {
+                    const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                    let timeStamp = dateToSeconds("2100/07/15");
+                    await investment.setTimestamp(0);
+                    await timeTravelToDate(timeStamp);
+                    await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                    // Start first milestone (id = 0)
+                    timeStamp = dateToSeconds("2100/09/15");
+                    await timeTravelToDate(timeStamp);
+                    await investment.connect(creator).startFirstFundsStream();
+
+                    const usedFunds = await investment.getFundsUsed();
+                    const milestone0 = await investment.getMilestone(0);
+                    const projectState = await investment.getProjectStateByteValue();
+
+                    assert.equal(
+                        usedFunds.toString(),
+                        investedAmount
+                            .mul(milestone0.intervalSeedPortion)
+                            .div(percentageDivider)
+                            .toString()
+                    );
+                    assert.equal(
+                        projectState.toString(),
+                        milestonesOngoingBeforeLastStateValue.toString()
+                    );
+                });
+
+                it("[IP][15.1.10] Should return correct amount if milestone 1 is ongoing", async () => {
+                    const investedAmount: BigNumber = ethers.utils.parseEther("2000");
+
+                    let timeStamp = dateToSeconds("2100/07/15");
+                    await investment.setTimestamp(0);
+                    await timeTravelToDate(timeStamp);
+                    await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                    // Start first milestone (id = 0)
+                    timeStamp = dateToSeconds("2100/09/15");
+                    await timeTravelToDate(timeStamp);
+                    await investment.connect(creator).startFirstFundsStream();
+
+                    // Do milestone jump from milestone id 0 to 1
+                    let terminationWindow = await investment.getTerminationWindow();
+                    timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
+                    await timeTravelToDate(timeStamp);
+                    await investment.connect(creator).milestoneJumpOrFinalProjectTermination();
+
+                    timeStamp = dateToSeconds("2100/10/15");
+                    await timeTravelToDate(timeStamp);
+
+                    const usedFunds = await investment.getFundsUsed();
+                    const milestone0 = await investment.getMilestone(0);
+                    const milestone1 = await investment.getMilestone(1);
+                    const projectState = await investment.getProjectStateByteValue();
+
+                    assert.equal(
+                        usedFunds.toString(),
+                        investedAmount
+                            .mul(
+                                milestone0.intervalSeedPortion
+                                    .add(milestone0.intervalStreamingPortion)
+                                    .add(milestone1.intervalSeedPortion)
+                            )
+                            .div(percentageDivider)
+                            .toString()
+                    );
+                    assert.equal(
+                        projectState.toString(),
+                        lastMilestoneOngoingStateValue.toString()
+                    );
+                });
+
+                it("[IP][15.1.11] Should return correct amount if project was terminated by voting", async () => {
+                    const investedAmount: BigNumber = ethers.utils.parseEther("1500");
+
+                    let timeStamp = dateToSeconds("2100/07/15");
+                    await investment.setTimestamp(0);
+                    await timeTravelToDate(timeStamp);
+                    await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                    // Start first milestone (id = 0)
+                    timeStamp = dateToSeconds("2100/09/05");
+                    await timeTravelToDate(timeStamp);
+                    await investment.connect(creator).startFirstFundsStream();
+                    timeStamp = dateToSeconds("2100/09/25");
+                    await timeTravelToDate(timeStamp);
+                    await governancePool.cancelDuringMilestones(investment.address);
+
+                    const usedFunds = await investment.getFundsUsed();
+                    const milestone0 = await investment.getMilestone(0);
+                    const projectState = await investment.getProjectStateByteValue();
+
+                    assert.equal(usedFunds.toString(), milestone0.paidAmount.toString());
+                    assert.equal(projectState.toString(), terminatedByVotingStateValue.toString());
+                });
+
+                it("[IP][15.1.12] Should return correct amount if project was terminated by gelato", async () => {
+                    const investedAmount: BigNumber = ethers.utils.parseEther("1500");
+
+                    let timeStamp = dateToSeconds("2100/07/15");
+                    await investment.setTimestamp(0);
+                    await timeTravelToDate(timeStamp);
+                    await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                    timeStamp = dateToSeconds("2100/09/05");
+                    await timeTravelToDate(timeStamp);
+                    await investment.connect(creator).startFirstFundsStream();
+
+                    // Terminate milestone id 1 (by gelato)
+                    let terminationWindow = await investment.getAutomatedTerminationWindow();
+                    timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
+                    await timeTravelToDate(timeStamp);
+                    await gelatoOpsMock.gelatoTerminateMilestoneStream(0);
+
+                    const usedFunds = await investment.getFundsUsed();
+                    const milestone0 = await investment.getMilestone(0);
+                    const projectState = await investment.getProjectStateByteValue();
+
+                    assert.equal(usedFunds.toString(), milestone0.paidAmount.toString());
+                    assert.equal(projectState.toString(), terminatedByGelatoStateValue.toString());
+                });
+
+                it("[IP][15.1.13] Should return correct amount if project was terminated by gelato", async () => {
+                    const investedAmount: BigNumber = ethers.utils.parseEther("1500");
+
+                    let timeStamp = dateToSeconds("2100/07/15");
+                    await investment.setTimestamp(0);
+                    await timeTravelToDate(timeStamp);
+                    await investMoney(fUSDTx, investment, investorA, investedAmount);
+
+                    // Start first milestone (id = 0)
+                    timeStamp = dateToSeconds("2100/09/05");
+                    await timeTravelToDate(timeStamp);
+                    await investment.connect(creator).startFirstFundsStream();
+
+                    // Do milestone jump from milestone id 0 to 1
+                    let terminationWindow = await investment.getTerminationWindow();
+                    timeStamp = milestoneEndDate.toNumber() - terminationWindow / 2;
+                    await timeTravelToDate(timeStamp);
+                    await investment.connect(creator).milestoneJumpOrFinalProjectTermination();
+
+                    // Finish project
+                    terminationWindow = await investment.getTerminationWindow();
+                    timeStamp = milestoneEndDate2.toNumber() - terminationWindow / 2;
+                    await timeTravelToDate(timeStamp);
+                    await investment.connect(creator).milestoneJumpOrFinalProjectTermination();
+
+                    timeStamp = dateToSeconds("2100/12/05");
+                    await timeTravelToDate(timeStamp);
+
+                    const usedFunds = await investment.getFundsUsed();
+                    const milestone0 = await investment.getMilestone(0);
+                    const milestone1 = await investment.getMilestone(1);
+                    const projectState = await investment.getProjectStateByteValue();
+
+                    assert.equal(
+                        usedFunds.toString(),
+                        milestone0.paidAmount.add(milestone1.paidAmount).toString()
+                    );
+                    assert.equal(usedFunds.toString(), investedAmount.toString());
+                    assert.equal(projectState.toString(), successfullyEndedStateValue.toString());
                 });
             });
         });

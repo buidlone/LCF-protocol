@@ -228,6 +228,8 @@ contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
 
     function getMilestoneDuration(uint256 _milestoneId) external view returns (uint256) {}
 
+    function getFundsUsed() external view returns (uint256) {}
+
     function beforeAgreementCreated(
         ISuperToken superToken,
         address agreementClass,
