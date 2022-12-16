@@ -169,12 +169,10 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
     }
 
     function claimAllocation() external {
-        (
-            uint256 previousMilestonesAllocation,
-            uint256 flowRate,
-            uint256 milestone
-        ) = getAllocationData(_msgSender());
-        uint256 milestoneStartDate = investmentPool.getMilestone(milestone).startDate;
+        (uint256 previousMilestonesAllocation, uint256 flowRate) = getAllocationData(_msgSender());
+        uint256 milestoneStartDate = investmentPool
+            .getMilestone(investmentPool.getCurrentMilestoneId())
+            .startDate;
         uint256 claimedAmount = getClaimedTokens(_msgSender());
         uint256 allocation;
 
@@ -239,22 +237,63 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
     /**
      * @notice Function should be used by fronted to display user the available allocation to claim in real time
      * @notice Also this functionality is used when claiming allocation by investor
-     * @return Amount of tokens that is 100% allocated from previous milestones
-     * @return Flow rate of token allocation during the current milestone
-     * @return Current milestone id
+     * @return alreadyAllocated -> Amount of tokens that is 100% allocated from previous milestones
+     * @return allocationFlowRate -> Flow rate of token allocation during the current milestone
      */
-    function getAllocationData(address _investor) public view returns (uint256, uint256, uint256) {
+    function getAllocationData(
+        address _investor
+    ) public view returns (uint256 alreadyAllocated, uint256 allocationFlowRate) {
         uint256 currentMilestone = investmentPool.getCurrentMilestoneId();
-        uint256 previousMilestonesAllocation = 0;
+        uint256 currentState = investmentPool.getProjectStateByteValue();
 
-        for (uint256 i = 0; i < currentMilestone; i++) {
-            previousMilestonesAllocation += getAllocatedAmount(_investor, i);
+        // If no milestone is ongoing, always return 0
+        if (
+            currentState == investmentPool.getCanceledProjectStateValue() ||
+            currentState == investmentPool.getBeforeFundraiserStateValue() ||
+            currentState == investmentPool.getFundraiserOngoingStateValue() ||
+            currentState == investmentPool.getFailedFundraiserStateValue() ||
+            currentState == investmentPool.getFundraiserEndedNoMilestonesOngoingStateValue()
+        ) {
+            // Milestones haven't started, so return 0;
+            return (0, 0);
+        } else if (investmentPool.isStateAnyMilestoneOngoing()) {
+            uint256 previousMilestonesAllocation = 0;
+            for (uint256 i = 0; i < currentMilestone; i++) {
+                previousMilestonesAllocation += getAllocatedAmount(_investor, i);
+            }
+
+            uint256 allocationPerSecond = getAllocatedAmount(_investor, currentMilestone) /
+                investmentPool.getMilestoneDuration(currentMilestone);
+
+            return (previousMilestonesAllocation, allocationPerSecond);
+        } else if (
+            currentState == investmentPool.getTerminatedByVotingStateValue() ||
+            currentState == investmentPool.getTerminatedByGelatoStateValue()
+        ) {
+            uint48 milestoneStartDate = investmentPool.getMilestone(currentMilestone).startDate;
+            uint48 terminationTimestamp = investmentPool.getEmergencyTerminationTimestamp();
+            uint256 previousMilestonesAllocation = 0;
+            for (uint256 i = 0; i < currentMilestone; i++) {
+                previousMilestonesAllocation += getAllocatedAmount(_investor, i);
+            }
+
+            // There is and edge case, where project is terminated during the previous milestone period.
+            // Thats why we check if milestone started before emergency termination.
+            if (terminationTimestamp > milestoneStartDate) {
+                uint48 timePassed = terminationTimestamp - milestoneStartDate;
+                uint256 allocationPerSecond = getAllocatedAmount(_investor, currentMilestone) /
+                    investmentPool.getMilestoneDuration(currentMilestone);
+                previousMilestonesAllocation += uint256(timePassed) * allocationPerSecond;
+            }
+
+            return (previousMilestonesAllocation, 0);
+        } else if (currentState == investmentPool.getSuccessfullyEndedStateValue()) {
+            // Return full allocation
+            uint256 fullAllocation = getAllocatedTokens(_investor);
+            return (fullAllocation, 0);
+        } else {
+            return (0, 0);
         }
-
-        uint256 allocationPerSecond = getAllocatedAmount(_investor, currentMilestone) /
-            investmentPool.getMilestoneDuration(currentMilestone);
-
-        return (previousMilestonesAllocation, allocationPerSecond, currentMilestone);
     }
 
     function getAllocatedTokens(address _investor) public view returns (uint256) {
