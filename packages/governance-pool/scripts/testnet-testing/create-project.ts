@@ -2,6 +2,7 @@ import {ethers, network} from "hardhat";
 import {availableTestnetChains} from "../../hardhat-helper-config";
 import {BigNumber} from "ethers";
 import {deployPools} from "../deployment-outlines/deploy-pools";
+import {deployBuidl1Token} from "../deployment-outlines/deploy-token";
 
 const percentageDivider: number = 10 ** 6;
 
@@ -15,10 +16,13 @@ async function main() {
         return;
     }
 
+    // 1. Deploy Buidl1 token
+    const buidl1TokenAddress = await deployBuidl1Token(true);
+
     const softCap: BigNumber = ethers.utils.parseEther("0.001");
     const hardCap: BigNumber = ethers.utils.parseEther("0.002");
     const gelatoFeeAllocation: BigNumber = ethers.utils.parseEther("0.1");
-    const tokenRewards: BigNumber = ethers.utils.parseEther("0.001");
+    const tokenRewards: BigNumber = ethers.utils.parseEther("15000000");
     const campaignStartDate: number = Math.round(new Date().getTime() / 1000) + 5 * 60; // current time + 5 minutes
     const campaignEndDate: number = campaignStartDate + 15 * 60; // campaignStartDate + 15 minutes
     const milestone1StartDate: number = campaignEndDate; // = campaignStartDate
@@ -52,7 +56,7 @@ async function main() {
         gelatoFeeAllocation,
         tokenRewards,
         null,
-        null
+        buidl1TokenAddress
     );
 }
 

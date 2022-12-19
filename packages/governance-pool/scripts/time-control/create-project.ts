@@ -2,6 +2,7 @@ import {ethers, network} from "hardhat";
 import {availableTestnetChains} from "../../hardhat-helper-config";
 import {BigNumber} from "ethers";
 import {deployPools} from "../deployment-outlines/deploy-pools";
+import {deployBuidl1Token} from "../deployment-outlines/deploy-token";
 
 const percentageDivider: number = 10 ** 6;
 
@@ -15,23 +16,27 @@ async function main() {
         return;
     }
 
+    // 1. Deploy Buidl1 token
+    const buidl1TokenAddress = await deployBuidl1Token(true);
+
     const softCap: BigNumber = ethers.utils.parseEther("0.01");
     const hardCap: BigNumber = ethers.utils.parseEther("0.02");
     const gelatoFeeAllocation: BigNumber = ethers.utils.parseEther("0.1");
-    const tokenRewards: BigNumber = ethers.utils.parseEther("0.001");
+    const tokenRewards: BigNumber = ethers.utils.parseEther("15000000");
     const twoMonthsInSeconds: number = 60 * 60 * 24 * 30 * 2;
     const campaignStartDate: number = Math.round(new Date().getTime() / 1000) + 10 * 60; // current time + 5 minutes
     const campaignEndDate: number = campaignStartDate + twoMonthsInSeconds; // campaignStartDate + 2 months
-    const percentagePart1: number = percentToIpBigNumber(0.5);
-    const percentagePart2: number = percentToIpBigNumber(9.5);
+    const milestonesCount: number = 10;
+    const seedPercentage: number = percentToIpBigNumber(10) / milestonesCount;
+    const streamPercentage: number = percentToIpBigNumber(90) / milestonesCount;
 
     let milestones = [];
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < milestonesCount; i++) {
         milestones.push({
             startDate: campaignEndDate + i * twoMonthsInSeconds,
             endDate: campaignEndDate + twoMonthsInSeconds + i * twoMonthsInSeconds,
-            intervalSeedPortion: percentagePart1,
-            intervalStreamingPortion: percentagePart2,
+            intervalSeedPortion: seedPercentage,
+            intervalStreamingPortion: streamPercentage,
         });
     }
 
@@ -47,7 +52,7 @@ async function main() {
         gelatoFeeAllocation,
         tokenRewards,
         null,
-        null
+        buidl1TokenAddress
     );
 }
 

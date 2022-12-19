@@ -83,10 +83,11 @@ export const deployFactory = async (
     const grantTx = await votingToken
         .connect(deployer)
         .grantRole(adminRole, investmentPoolFactory.address);
-    grantTx.wait(blockConfirmations);
 
     // Verify
     if (verification) {
+        grantTx.wait(blockConfirmations);
+
         await verify(investmentPoolLogic.address, []);
         await verify(governancePoolLogic.address, []);
         await verify(distributionPoolLogic.address, []);

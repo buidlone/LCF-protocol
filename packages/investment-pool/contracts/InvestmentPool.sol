@@ -832,11 +832,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     }
 
     function isStateAnyMilestoneOngoing() public view returns (bool) {
-        if (getProjectStateByteValue() & getAnyMilestoneOngoingStateValue() == 0) {
-            return false;
-        } else {
-            return true;
-        }
+        return getProjectStateByteValue() & getAnyMilestoneOngoingStateValue() != 0;
     }
 
     function getCurrentMilestoneId() public view virtual returns (uint256) {

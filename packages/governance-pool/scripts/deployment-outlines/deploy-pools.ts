@@ -14,7 +14,7 @@ export const deployPools = async (
     gelatoFeeAllocation: BigNumber,
     tokenRewards: BigNumber,
     acceptedSuperTokenAddress: string | null,
-    projectTokenAddress: string | null
+    projectTokenAddress: string
 ) => {
     console.log("-----Creating project contracts-----");
     const accounts = await ethers.getSigners();
@@ -25,9 +25,6 @@ export const deployPools = async (
     acceptedSuperTokenAddress = !acceptedSuperTokenAddress
         ? networkConfig[chainId].nativeSuperToken
         : acceptedSuperTokenAddress;
-    projectTokenAddress = !projectTokenAddress
-        ? networkConfig[chainId].nativeProjectToken
-        : projectTokenAddress;
 
     const investmentPoolFactory = await ethers.getContractAt(
         investmentPoolFactoryType,
@@ -62,13 +59,16 @@ export const deployPools = async (
     console.log("Created Governance Pool at address: ", gpAddress);
     console.log("Created Distribution Pool at address: ", dpAddress);
 
+    /******************************************
+     * 2. Lock project tokens
+     *****************************************/
     const distributionPool = await ethers.getContractAt(distributionPoolType, dpAddress);
     const projectToken = await ethers.getContractAt("IERC20", projectTokenAddress);
     const approveTx = await projectToken.approve(dpAddress, tokenRewards, {
         from: deployer.address,
     });
     approveTx.wait(blockConfirmations);
-    await distributionPool.lockTokens();
+    await distributionPool.connect(deployer).lockTokens();
 
     console.log("---Timeline---");
     console.log("Fundraiser start date: ", new Date(campaignStartDate * 1000));
