@@ -4,8 +4,7 @@ import {deployFactory} from "../deployment-outlines/deploy-factory";
 
 async function main() {
     if (!availableTestnetChains.includes(network.name)) {
-        console.log("Network is not available for deployment.");
-        return;
+        throw "ERROR: Network is not available for deployment.";
     }
 
     await deployFactory(

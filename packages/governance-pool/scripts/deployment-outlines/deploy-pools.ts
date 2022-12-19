@@ -13,7 +13,7 @@ export const deployPools = async (
     milestones: any,
     gelatoFeeAllocation: BigNumber,
     tokenRewards: BigNumber,
-    acceptedSuperTokenAddress: string | null,
+    acceptedSuperTokenAddress: string,
     projectTokenAddress: string
 ) => {
     console.log("-----Creating project contracts-----");
@@ -21,10 +21,6 @@ export const deployPools = async (
     const deployer = accounts[0];
     const chainId = network.config.chainId as number;
     const blockConfirmations: number = networkConfig[chainId].blockConfirmations;
-
-    acceptedSuperTokenAddress = !acceptedSuperTokenAddress
-        ? networkConfig[chainId].nativeSuperToken
-        : acceptedSuperTokenAddress;
 
     const investmentPoolFactory = await ethers.getContractAt(
         investmentPoolFactoryType,
