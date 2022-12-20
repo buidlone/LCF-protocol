@@ -86,7 +86,7 @@ export const deployFactory = async (
 
     // Verify
     if (verification) {
-        grantTx.wait(blockConfirmations);
+        await grantTx.wait(blockConfirmations);
 
         await verify(investmentPoolLogic.address, []);
         await verify(governancePoolLogic.address, []);

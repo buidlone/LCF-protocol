@@ -63,7 +63,7 @@ export const deployPools = async (
     const approveTx = await projectToken.approve(dpAddress, tokenRewards, {
         from: deployer.address,
     });
-    approveTx.wait(blockConfirmations);
+    await approveTx.wait(blockConfirmations);
     await distributionPool.connect(deployer).lockTokens();
 
     console.log("---Timeline---");
