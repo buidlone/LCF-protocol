@@ -12,14 +12,15 @@ export const deployPools = async (
     campaignEndDate: number,
     milestones: any,
     gelatoFeeAllocation: BigNumber,
-    tokenRewards: BigNumber
+    tokenRewards: BigNumber,
+    acceptedSuperTokenAddress: string,
+    projectTokenAddress: string
 ) => {
     console.log("-----Creating project contracts-----");
     const accounts = await ethers.getSigners();
     const deployer = accounts[0];
     const chainId = network.config.chainId as number;
-    const nativeSuperToken = networkConfig[chainId].nativeSuperToken;
-    const nativeProjectToken = networkConfig[chainId].nativeProjectToken;
+    const blockConfirmations: number = networkConfig[chainId].blockConfirmations;
 
     const investmentPoolFactory = await ethers.getContractAt(
         investmentPoolFactoryType,
@@ -35,8 +36,8 @@ export const deployPools = async (
             hardCap: hardCap,
             fundraiserStartAt: campaignStartDate,
             fundraiserEndAt: campaignEndDate,
-            acceptedToken: nativeSuperToken,
-            projectToken: nativeProjectToken,
+            acceptedToken: acceptedSuperTokenAddress,
+            projectToken: projectTokenAddress,
             tokenRewards: tokenRewards,
         },
         0, // CLONE-PROXY
@@ -44,7 +45,7 @@ export const deployPools = async (
         {value: gelatoFeeAllocation}
     );
 
-    const receipt = await creationTx.wait(1);
+    const receipt = await creationTx.wait(blockConfirmations);
     const creationEvent = receipt.events?.find((e: any) => e.event === "Created");
     const ipAddress = creationEvent?.args?.ipContract;
     const gpAddress = creationEvent?.args?.gpContract;
@@ -54,10 +55,16 @@ export const deployPools = async (
     console.log("Created Governance Pool at address: ", gpAddress);
     console.log("Created Distribution Pool at address: ", dpAddress);
 
+    /******************************************
+     * 2. Lock project tokens
+     *****************************************/
     const distributionPool = await ethers.getContractAt(distributionPoolType, dpAddress);
-    const projectToken = await ethers.getContractAt("IERC20", nativeProjectToken);
-    await projectToken.approve(dpAddress, tokenRewards);
-    await distributionPool.lockTokens();
+    const projectToken = await ethers.getContractAt("IERC20", projectTokenAddress);
+    const approveTx = await projectToken.approve(dpAddress, tokenRewards, {
+        from: deployer.address,
+    });
+    approveTx.wait(blockConfirmations);
+    await distributionPool.connect(deployer).lockTokens();
 
     console.log("---Timeline---");
     console.log("Fundraiser start date: ", new Date(campaignStartDate * 1000));

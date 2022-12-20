@@ -21,8 +21,6 @@ const deploySuperToken = require("@superfluid-finance/ethereum-contracts/scripts
 
 const INVESTOR_INITIAL_FUNDS = ethers.utils.parseEther("50000000000");
 
-const UINT256_MAX = constants.MaxUint256;
-
 const provider = web3;
 
 let fUSDT: InstanceType<typeof fTokenAbi>;

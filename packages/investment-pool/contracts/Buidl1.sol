@@ -8,16 +8,10 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 
-contract DPatron is
-    ERC20,
-    ERC20Burnable,
-    Pausable,
-    Ownable,
-    ERC20Permit,
-    ERC20Votes
-{
-    // solhint-disable-next-line no-empty-blocks
-    constructor() ERC20("dPatron", "DPP") ERC20Permit("dPatron") {}
+contract Buidl1 is ERC20, ERC20Burnable, Pausable, Ownable, ERC20Permit, ERC20Votes {
+    constructor() ERC20("Buidl1", "BDL1") ERC20Permit("Buidl1") {
+        _mint(msg.sender, 150000000 * 10 ** decimals());
+    }
 
     function pause() public onlyOwner {
         _pause();
@@ -49,17 +43,11 @@ contract DPatron is
         super._afterTokenTransfer(from, to, amount);
     }
 
-    function _mint(address to, uint256 amount)
-        internal
-        override(ERC20, ERC20Votes)
-    {
+    function _mint(address to, uint256 amount) internal override(ERC20, ERC20Votes) {
         super._mint(to, amount);
     }
 
-    function _burn(address account, uint256 amount)
-        internal
-        override(ERC20, ERC20Votes)
-    {
+    function _burn(address account, uint256 amount) internal override(ERC20, ERC20Votes) {
         super._burn(account, amount);
     }
 }

@@ -9,16 +9,49 @@ import {IDistributionPool} from "@buidlone/investment-pool/contracts/interfaces/
 import {IInitializableInvestmentPool, IInvestmentPool} from "@buidlone/investment-pool/contracts/interfaces/IInvestmentPool.sol";
 
 contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
-    IGovernancePool public governancePool;
+    IDistributionPool public distributionPool;
+    uint48 internal emergencyTerminationTimestamp;
+    address internal creator;
     uint256 internal currentMilestone = 0;
     uint256 internal investmentPoolStateValue;
+    uint256 internal constant CANCELED_PROJECT_STATE_VALUE = 1;
+    uint256 internal constant BEFORE_FUNDRAISER_STATE_VALUE = 2;
+    uint256 internal constant FUNDRAISER_ONGOING_STATE_VALUE = 4;
+    uint256 internal constant FAILED_FUNDRAISER_STATE_VALUE = 8;
+    uint256 internal constant FUNDRAISER_ENDED_NO_MILESTONES_ONGOING_STATE_VALUE = 16;
     uint256 internal constant MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE = 32;
     uint256 internal constant LAST_MILESTONE_ONGOING_STATE_VALUE = 64;
+    uint256 internal constant TERMINATED_BY_VOTING_STATE_VALUE = 128;
+    uint256 internal constant TERMINATED_BY_GELATO_STATE_VALUE = 256;
+    uint256 internal constant SUCCESSFULLY_ENDED_STATE_VALUE = 512;
+    uint256 internal constant UNKNOWN_STATE_VALUE = 1024;
     uint256 internal constant ANY_MILESTONE_ONGOING_STATE_VALUE =
         MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE | LAST_MILESTONE_ONGOING_STATE_VALUE;
 
-    constructor(IGovernancePool _governancePool) {
-        governancePool = _governancePool;
+    mapping(uint256 => IInvestmentPool.Milestone) internal milestones;
+
+    constructor(
+        IDistributionPool _distributionPool,
+        address _creator,
+        IInvestmentPool.MilestoneInterval[] memory _milestones
+    ) {
+        distributionPool = _distributionPool;
+        creator = _creator;
+
+        MilestoneInterval memory interval;
+        for (uint32 i = 0; i < _milestones.length; ++i) {
+            interval = _milestones[i];
+            milestones[i] = Milestone({
+                startDate: interval.startDate,
+                endDate: interval.endDate,
+                paid: false,
+                seedAmountPaid: false,
+                streamOngoing: false,
+                paidAmount: 0,
+                intervalSeedPortion: interval.intervalSeedPortion,
+                intervalStreamingPortion: interval.intervalStreamingPortion
+            });
+        }
     }
 
     function initialize(
@@ -32,12 +65,32 @@ contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
         IDistributionPool _distributionPool
     ) external payable {}
 
-    function mintVotingTokens(uint256 _milestoneId, address _investor, uint256 _amount) public {
-        governancePool.mintVotingTokens(_milestoneId, _investor, _amount);
+    function allocateTokens(
+        uint256 _milestoneId,
+        address _investor,
+        uint256 _investmentWeight,
+        uint256 _weightDivisor,
+        uint256 _allocationCoefficient
+    ) external {
+        distributionPool.allocateTokens(
+            _milestoneId,
+            _investor,
+            _investmentWeight,
+            _weightDivisor,
+            _allocationCoefficient
+        );
     }
 
-    function burnVotes(uint256 _milestoneId, address _investor) public {
-        governancePool.burnVotes(_milestoneId, _investor);
+    function getCreator() external view returns (address) {
+        return creator;
+    }
+
+    function calculateInvestmentWeight(uint256 _amount) external view returns (uint256) {
+        return _amount * 10;
+    }
+
+    function getMaximumWeightDivisor() external view returns (uint256) {
+        return 100000 ether;
     }
 
     function getCurrentMilestoneId() external view returns (uint256) {
@@ -60,17 +113,80 @@ contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
         return investmentPoolStateValue;
     }
 
-    function getGovernancePool() public view returns (address) {
-        return address(governancePool);
+    function getMilestoneDuration(uint256 _milestoneId) public view returns (uint256) {
+        Milestone memory milestone = getMilestone(_milestoneId);
+        return milestone.endDate - milestone.startDate;
+    }
+
+    function getMilestone(uint256 _milestoneId) public view returns (Milestone memory) {
+        return milestones[_milestoneId];
     }
 
     function isStateAnyMilestoneOngoing() external view returns (bool) {
-        if (investmentPoolStateValue & ANY_MILESTONE_ONGOING_STATE_VALUE == 0) {
+        if (investmentPoolStateValue & getAnyMilestoneOngoingStateValue() == 0) {
             return false;
         } else {
             return true;
         }
     }
+
+    function getEmergencyTerminationTimestamp() external view returns (uint48) {
+        return emergencyTerminationTimestamp;
+    }
+
+    function setEmergencyTerminationTimestamp(uint48 _timestamp) external returns (uint48) {
+        emergencyTerminationTimestamp = _timestamp;
+    }
+
+    function getCanceledProjectStateValue() public pure returns (uint256) {
+        return CANCELED_PROJECT_STATE_VALUE;
+    }
+
+    function getBeforeFundraiserStateValue() public pure returns (uint256) {
+        return BEFORE_FUNDRAISER_STATE_VALUE;
+    }
+
+    function getFundraiserOngoingStateValue() public pure returns (uint256) {
+        return FUNDRAISER_ONGOING_STATE_VALUE;
+    }
+
+    function getFailedFundraiserStateValue() public pure returns (uint256) {
+        return FAILED_FUNDRAISER_STATE_VALUE;
+    }
+
+    function getFundraiserEndedNoMilestonesOngoingStateValue() public pure returns (uint256) {
+        return FUNDRAISER_ENDED_NO_MILESTONES_ONGOING_STATE_VALUE;
+    }
+
+    function getMilestonesOngoingBeforeLastStateValue() public pure returns (uint256) {
+        return MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE;
+    }
+
+    function getLastMilestoneOngoingStateValue() public pure returns (uint256) {
+        return LAST_MILESTONE_ONGOING_STATE_VALUE;
+    }
+
+    function getTerminatedByVotingStateValue() public pure returns (uint256) {
+        return TERMINATED_BY_VOTING_STATE_VALUE;
+    }
+
+    function getTerminatedByGelatoStateValue() public pure returns (uint256) {
+        return TERMINATED_BY_GELATO_STATE_VALUE;
+    }
+
+    function getSuccessfullyEndedStateValue() public pure returns (uint256) {
+        return SUCCESSFULLY_ENDED_STATE_VALUE;
+    }
+
+    function getUnknownStateValue() public pure returns (uint256) {
+        return UNKNOWN_STATE_VALUE;
+    }
+
+    function getAnyMilestoneOngoingStateValue() public pure returns (uint256) {
+        return ANY_MILESTONE_ONGOING_STATE_VALUE;
+    }
+
+    function getGovernancePool() public view returns (address) {}
 
     function invest(uint256 _amount, bool _strict) external {}
 
@@ -145,35 +261,9 @@ contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
 
     function getPercentageDivider() external pure returns (uint256) {}
 
-    function getCanceledProjectStateValue() external pure returns (uint256) {}
-
-    function getBeforeFundraiserStateValue() external pure returns (uint256) {}
-
-    function getFundraiserOngoingStateValue() external pure returns (uint256) {}
-
-    function getFailedFundraiserStateValue() external pure returns (uint256) {}
-
-    function getFundraiserEndedNoMilestonesOngoingStateValue() external pure returns (uint256) {}
-
-    function getMilestonesOngoingBeforeLastStateValue() external pure returns (uint256) {}
-
-    function getLastMilestoneOngoingStateValue() external pure returns (uint256) {}
-
-    function getTerminatedByVotingStateValue() external pure returns (uint256) {}
-
-    function getTerminatedByGelatoStateValue() external pure returns (uint256) {}
-
-    function getSuccessfullyEndedStateValue() external pure returns (uint256) {}
-
-    function getUnknownStateValue() external pure returns (uint256) {}
-
-    function getAnyMilestoneOngoingStateValue() external pure returns (uint256) {}
-
     function getEthAddress() external pure returns (address) {}
 
     function getAcceptedToken() external view returns (address) {}
-
-    function getCreator() external view returns (address) {}
 
     function getGelatoTaskCreated() external view returns (bool) {}
 
@@ -197,8 +287,6 @@ contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
 
     function getAutomatedTerminationWindow() external view returns (uint48) {}
 
-    function getEmergencyTerminationTimestamp() external view returns (uint48) {}
-
     function getTotalInvestedAmount() external view returns (uint256) {}
 
     function getInvestedAmount(
@@ -208,8 +296,6 @@ contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
 
     function getMilestonesCount() external view returns (uint256) {}
 
-    function getMilestone(uint256 _milestoneId) external view returns (Milestone memory) {}
-
     function getInvestmentWithdrawPercentageFee() external view returns (uint256) {}
 
     function getSoftCapMultiplier() external view returns (uint256) {}
@@ -218,15 +304,9 @@ contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
 
     function getVotingTokensAmountToMint(uint256 _amount) external view returns (uint256) {}
 
-    function calculateInvestmentWeight(uint256 _amount) external view returns (uint256) {}
-
     function getVotingTokensSupplyCap() external view returns (uint256) {}
 
-    function getMaximumWeightDivisor() external view returns (uint256) {}
-
     function getMilestonesPortionLeft(uint256 _milestoneId) external view returns (uint256) {}
-
-    function getMilestoneDuration(uint256 _milestoneId) external view returns (uint256) {}
 
     function getFundsUsed() external view returns (uint256) {}
 

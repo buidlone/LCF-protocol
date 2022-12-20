@@ -262,6 +262,18 @@ describe("Governance Pool", async () => {
 
                     assert.equal(activeTokensForVoting.toString(), tokensToMintA.toString());
                 });
+
+                it("[GP][3.2.9] Should return 0 if milestones aren't active", async () => {
+                    const tokensToMintA: BigNumber = ethers.utils.parseEther("1");
+
+                    await investmentPoolMock.setProjectState(fundraiserOngoingStateValue);
+                    await investmentPoolMock.mintVotingTokens(0, investorA.address, tokensToMintA);
+
+                    const activeTokensForVoting =
+                        await governancePool.getActiveVotingTokensBalance(0, investorA.address);
+
+                    assert.equal(activeTokensForVoting.toString(), "0");
+                });
             });
         });
     });
@@ -494,13 +506,9 @@ describe("Governance Pool", async () => {
         describe("5.1 Interactions", () => {
             it("[GP][5.1.1] Initial calculation with zeros should revert", async () => {
                 const tokensToMint = ethers.utils.parseEther("0");
+                const percentage = await governancePool.votesAgainstPercentageCount(tokensToMint);
 
-                await expect(
-                    governancePool.votesAgainstPercentageCount(tokensToMint)
-                ).to.be.revertedWithCustomError(
-                    governancePool,
-                    "GovernancePool__TotalSupplyIsZero"
-                );
+                assert.equal(percentage, 0);
             });
 
             it("[GP][5.1.2] Should revert if amount for votes against are higher than total supply", async () => {
