@@ -152,7 +152,8 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
             // If array is not zero, it means investor has made investments before.
             // Now we should add the voting tokens amount from previous investments and add the current amount.
             // This allows us to know the specific amount that investor started owning from the provided milestone start.
-            uint256 activeTokensBeforeUpdate = getActiveVotingTokensBalance(
+            // Special case for fundraiser edge-case
+            uint256 activeTokensBeforeUpdate = _getActiveVotingTokensBalance(
                 _milestoneId,
                 _investor
             );
@@ -310,11 +311,11 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
 
         if (_amount > votesLeft) revert GovernancePool__CannotTransferMoreThanUnlockedTokens();
 
-        uint256 senderActiveVotingTokensBalance = getActiveVotingTokensBalance(
+        uint256 senderActiveVotingTokensBalance = _getActiveVotingTokensBalance(
             currentMilestoneId,
             _msgSender()
         );
-        uint256 recipientActiveVotingTokensBalance = getActiveVotingTokensBalance(
+        uint256 recipientActiveVotingTokensBalance = _getActiveVotingTokensBalance(
             currentMilestoneId,
             _recipient
         );
@@ -352,7 +353,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
 
         if (_votes > votesLeft) revert GovernancePool__CannotTransferMoreThanUnlockedTokens();
 
-        uint256 senderActiveVotingTokensBalance = getActiveVotingTokensBalance(
+        uint256 senderActiveVotingTokensBalance = _getActiveVotingTokensBalance(
             currentMilestoneId,
             _msgSender()
         );
@@ -389,7 +390,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
         uint256 currentMilestoneId = investmentPool.getCurrentMilestoneId();
 
         // Get the voting tokens that are active and can be used for voting
-        uint256 activeVotingTokensBalance = getActiveVotingTokensBalance(
+        uint256 activeVotingTokensBalance = _getActiveVotingTokensBalance(
             currentMilestoneId,
             _msgSender()
         );
@@ -453,12 +454,28 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
         uint256 _milestoneId,
         address _account
     ) public view returns (uint256) {
-        uint256[] memory milestonesIds = getMilestonesIdsInWhichBalanceChanged(_account);
-
         // If no milestone is ongoing, always return 0
         if (!investmentPool.isStateAnyMilestoneOngoing()) {
             return 0;
         }
+
+        return _getActiveVotingTokensBalance(_milestoneId, _account);
+    }
+
+    /** @notice Get balance of active voting tokens for specified milestone.
+     *  @notice The balance is retrieve by checking if in milestone id investor invested.
+     *  @notice If amount is zero that means investment was not made in given milestone.
+     *  @notice That's why it finds the nearest milestone that is smaller than given one
+     *  @notice and returns its balance or if no investments were made at all - zero.
+     *  @param _milestoneId milestone id in which tokens should be active
+     *  @param _account address of the account to check
+     *  @return uint256 -> balance of tokens owned in milestone
+     */
+    function _getActiveVotingTokensBalance(
+        uint256 _milestoneId,
+        address _account
+    ) internal view returns (uint256) {
+        uint256[] memory milestonesIds = getMilestonesIdsInWhichBalanceChanged(_account);
 
         // Calculate the real balance
         if (milestonesIds.length == 0) {

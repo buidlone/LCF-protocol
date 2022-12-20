@@ -12,6 +12,7 @@ import {
     GovernancePoolMock,
     DistributionPoolMock,
 } from "../../typechain-types";
+import { parseEther } from "ethers/lib/utils";
 
 const fTokenAbi = require("../abis/fTokenAbi");
 
@@ -367,6 +368,28 @@ describe("Governance Pool integration with Investment Pool Factory and Investmen
                 .div(maximumWeightDivisor);
 
             assert.equal(allocatedTokens.toString(), predictedAllocation.toString());
+        });
+
+        it("[IP-GP][3.3] Governance pool should mint voting tokens several times on investment into same milestone.", async () => {
+            investmentPoolFactory = await deployInvestmentPoolFactory();
+            await createInvestmentWithTwoMilestones();
+
+            const investedAmount: BigNumber = ethers.utils.parseEther("100");
+            const timeStamp = dateToSeconds("2100/07/15");
+            await investment.setTimestamp(timeStamp);
+
+            // Approve and invest money
+            await investMoney(fUSDTx, investment, investorA, parseEther("750"));
+            await investMoney(fUSDTx, investment, investorA, parseEther("750"));
+            const softCapMultiplier = await investment.getSoftCapMultiplier();
+            const totalSupply = await governancePool.getVotingTokensSupply();
+            const newTimeStamp = dateToSeconds("2100/09/15");
+            await investment.setTimestamp(newTimeStamp);
+
+            const activeVotingTokens = await governancePool.getActiveVotingTokensBalance(0, investorA.address);
+
+            assert.equal(totalSupply.toString(), parseEther("1500").mul(softCapMultiplier).toString());
+            assert.equal(activeVotingTokens.toString(), parseEther("1500").mul(softCapMultiplier).toString());
         });
     });
 
