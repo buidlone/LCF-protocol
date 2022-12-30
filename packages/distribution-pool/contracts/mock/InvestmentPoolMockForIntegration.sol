@@ -85,11 +85,11 @@ contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
         return creator;
     }
 
-    function calculateInvestmentWeight(uint256 _amount) external view returns (uint256) {
+    function calculateInvestmentWeight(uint256 _amount) external pure returns (uint256) {
         return _amount * 10;
     }
 
-    function getMaximumWeightDivisor() external view returns (uint256) {
+    function getMaximumWeightDivisor() external pure returns (uint256) {
         return 100000 ether;
     }
 
@@ -134,7 +134,7 @@ contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
         return emergencyTerminationTimestamp;
     }
 
-    function setEmergencyTerminationTimestamp(uint48 _timestamp) external returns (uint48) {
+    function setEmergencyTerminationTimestamp(uint48 _timestamp) external {
         emergencyTerminationTimestamp = _timestamp;
     }
 

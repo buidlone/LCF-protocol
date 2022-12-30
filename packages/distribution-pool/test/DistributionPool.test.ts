@@ -1,13 +1,13 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {Framework, WrapperSuperToken} from "@superfluid-finance/sdk-core";
-import {BigNumber, ContractTransaction, constants} from "ethers";
+import {BigNumber, BigNumberish, ContractTransaction, constants} from "ethers";
 import {ethers, web3} from "hardhat";
 import {assert, expect} from "chai";
 import {InvestmentPoolMockForIntegration, DistributionPoolMock, Buidl1} from "../typechain-types";
 import traveler from "ganache-time-traveler";
 
 let accounts: SignerWithAddress[];
-let admin: SignerWithAddress;
+let buidl1Admin: SignerWithAddress;
 let creator: SignerWithAddress;
 let investorA: SignerWithAddress;
 let investorB: SignerWithAddress;
@@ -19,16 +19,16 @@ let distributionPool: DistributionPoolMock;
 let buidl1Token: Buidl1;
 let snapshotId: string;
 
-let milestoneStartDate: BigNumber;
-let milestoneEndDate: BigNumber;
-let milestoneStartDate2: BigNumber;
-let milestoneEndDate2: BigNumber;
+let milestoneStartDate0: number;
+let milestoneEndDate0: number;
+let milestoneStartDate1: number;
+let milestoneEndDate1: number;
 
 // Percentages (in divider format)
 let percentageDivider: BigNumber = BigNumber.from(0);
-let percent5InIpBigNumber: BigNumber;
-let percent20InIpBigNumber: BigNumber;
-let percent70InIpBigNumber: BigNumber;
+let formated5Percent: BigNumber;
+let formated20Percent: BigNumber;
+let formated70Percent: BigNumber;
 
 // Project state values
 let canceledProjectStateValue: BigNumber;
@@ -43,31 +43,26 @@ let terminatedByGelatoStateValue: BigNumber;
 let successfullyEndedStateValue: BigNumber;
 let unknownStateValue: BigNumber;
 
-const percentToIpBigNumber = (percent: number): BigNumber => {
+const formatPercentage = (percent: BigNumberish): BigNumber => {
     return percentageDivider.mul(percent).div(100);
 };
 
-const dateToSeconds = (date: string, isBigNumber: boolean = true): BigNumber | number => {
-    const convertedDate = new Date(date).getTime() / 1000;
-    if (isBigNumber) {
-        return BigNumber.from(convertedDate) as BigNumber;
-    } else {
-        return convertedDate as number;
-    }
+const dateToSeconds = (date: string): number => {
+    return new Date(date).getTime() / 1000;
 };
 
 const getConstantVariablesFromContract = async () => {
-    const distributionPoolDep = await ethers.getContractFactory("DistributionPoolMock", admin);
-    distributionPool = await distributionPoolDep.deploy();
-    await distributionPool.deployed();
+    await createProject();
 
     percentageDivider = await distributionPool.getPercentageDivider();
-    await createProject();
     await defineProjectStateByteValues(investmentPool);
 };
 
 const createProject = async () => {
-    const distributionPoolDep = await ethers.getContractFactory("DistributionPoolMock", admin);
+    const distributionPoolDep = await ethers.getContractFactory(
+        "DistributionPoolMock",
+        buidl1Admin
+    );
     distributionPool = await distributionPoolDep.deploy();
     await distributionPool.deployed();
 
@@ -75,30 +70,30 @@ const createProject = async () => {
     buidl1Token = await buidl1TokenDep.deploy();
     await buidl1Token.deployed();
 
-    milestoneStartDate = dateToSeconds("2100/09/01") as BigNumber;
-    milestoneEndDate = dateToSeconds("2100/10/01") as BigNumber;
-    milestoneStartDate2 = dateToSeconds("2100/10/01") as BigNumber;
-    milestoneEndDate2 = dateToSeconds("2100/12/01") as BigNumber;
-    percent5InIpBigNumber = percentToIpBigNumber(5);
-    percent20InIpBigNumber = percentToIpBigNumber(20);
-    percent70InIpBigNumber = percentToIpBigNumber(70);
+    milestoneStartDate0 = dateToSeconds("2100/09/01");
+    milestoneEndDate0 = dateToSeconds("2100/10/01");
+    milestoneStartDate1 = dateToSeconds("2100/10/01");
+    milestoneEndDate1 = dateToSeconds("2100/12/01");
+    formated5Percent = formatPercentage(5);
+    formated20Percent = formatPercentage(20);
+    formated70Percent = formatPercentage(70);
 
     const investmentPoolDep = await ethers.getContractFactory(
         "InvestmentPoolMockForIntegration",
-        admin
+        buidl1Admin
     );
     investmentPool = await investmentPoolDep.deploy(distributionPool.address, creator.address, [
         {
-            startDate: milestoneStartDate,
-            endDate: milestoneEndDate,
-            intervalSeedPortion: percent5InIpBigNumber,
-            intervalStreamingPortion: percent70InIpBigNumber,
+            startDate: milestoneStartDate0,
+            endDate: milestoneEndDate0,
+            intervalSeedPortion: formated5Percent,
+            intervalStreamingPortion: formated70Percent,
         },
         {
-            startDate: milestoneStartDate2,
-            endDate: milestoneEndDate2,
-            intervalSeedPortion: percent5InIpBigNumber,
-            intervalStreamingPortion: percent20InIpBigNumber,
+            startDate: milestoneStartDate1,
+            endDate: milestoneEndDate1,
+            intervalSeedPortion: formated5Percent,
+            intervalStreamingPortion: formated20Percent,
         },
     ]);
     await investmentPool.deployed();
@@ -131,13 +126,12 @@ const defineProjectStateByteValues = async (investment: InvestmentPoolMockForInt
 
 describe("Distribution Pool", async () => {
     before(async () => {
-        // get accounts from hardhat
         accounts = await ethers.getSigners();
-        admin = accounts[0];
-        creator = accounts[2];
-        investorA = accounts[3];
-        investorB = accounts[4];
-        foreignActor = accounts[5];
+        buidl1Admin = accounts[0];
+        creator = accounts[1];
+        investorA = accounts[2];
+        investorB = accounts[3];
+        foreignActor = accounts[4];
         investors = [investorA, investorB];
 
         await getConstantVariablesFromContract();
@@ -147,39 +141,43 @@ describe("Distribution Pool", async () => {
         await createProject();
     });
 
-    describe("1. Allocate tokens", () => {
-        describe("1.1 Interactions", () => {
-            it("[IP][1.1.1] Foreign actor shouldn't be able to lock tokens", async () => {
-                await expect(
-                    distributionPool.connect(foreignActor).lockTokens()
-                ).to.be.revertedWithCustomError(
-                    distributionPool,
-                    "DistributionPool__ProjectTokensAlreadyLocked"
-                );
+    describe("Functions", () => {
+        describe("1. lockTokens() function", () => {
+            describe("1.1 Interactions", () => {
+                it("[DP][1.1.1] Foreign actor shouldn't be able to lock tokens", async () => {
+                    await expect(
+                        distributionPool.connect(foreignActor).lockTokens()
+                    ).to.be.revertedWithCustomError(
+                        distributionPool,
+                        "DistributionPool__NotProjectCreator"
+                    );
+                });
+
+                it("[DP][1.1.2] Creator should be able to lock tokens", async () => {
+                    await expect(distributionPool.connect(creator).lockTokens()).to.emit(
+                        distributionPool,
+                        "LockedTokens"
+                    );
+                });
+
+                it("[DP][1.1.3] After locking tokens, creatorLockedTokens should be true", async () => {
+                    await distributionPool.connect(creator).lockTokens();
+                    const areTokensLocked = await distributionPool.didCreatorLockTokens();
+
+                    assert.isTrue(areTokensLocked);
+                });
+
+                it("[DP][1.1.4] By default, creatorLockedTokens should be false", async () => {
+                    const areTokensLocked = await distributionPool.didCreatorLockTokens();
+
+                    assert.isFalse(areTokensLocked);
+                });
             });
+        });
 
-            it("[IP][1.1.2] Creator should be able to lock tokens", async () => {
-                await expect(distributionPool.connect(creator).lockTokens()).to.emit(
-                    distributionPool,
-                    "LockedTokens"
-                );
-            });
-
-            it("[IP][1.1.3] After locking tokens, creatorLockedTokens should be true", async () => {
-                await distributionPool.connect(creator).lockTokens();
-                const areTokensLocked = await distributionPool.didCreatorLockTokens();
-
-                assert.isTrue(areTokensLocked);
-            });
-
-            it("[IP][1.1.4] By default, creatorLockedTokens should be false", async () => {
-                const areTokensLocked = await distributionPool.didCreatorLockTokens();
-
-                assert.isFalse(areTokensLocked);
-            });
-
-            describe("function -> getAllocationData", () => {
-                it("[IP][1.1.1] Should return 0 if project is canceled", async () => {
+        describe("2. getAllocationData() function", () => {
+            describe("1.1 Interactions", () => {
+                it("[DP][2.1.1] Should return 0 if project is canceled", async () => {
                     await investmentPool.setProjectState(canceledProjectStateValue);
                     const allocationData = await distributionPool.getAllocationData(
                         investorA.address
@@ -188,7 +186,7 @@ describe("Distribution Pool", async () => {
                     assert.equal(allocationData.allocationFlowRate.toString(), "0");
                 });
 
-                it("[IP][1.1.2] Should return 0 if project state is before fundraiser", async () => {
+                it("[DP][2.1.2] Should return 0 if project state is before fundraiser", async () => {
                     await investmentPool.setProjectState(beforeFundraiserStateValue);
                     const allocationData = await distributionPool.getAllocationData(
                         investorA.address
@@ -197,7 +195,7 @@ describe("Distribution Pool", async () => {
                     assert.equal(allocationData.allocationFlowRate.toString(), "0");
                 });
 
-                it("[IP][1.1.3] Should return 0 if fundraiser is ongoing", async () => {
+                it("[DP][2.1.3] Should return 0 if fundraiser is ongoing", async () => {
                     await investmentPool.setProjectState(fundraiserOngoingStateValue);
                     const allocationData = await distributionPool.getAllocationData(
                         investorA.address
@@ -206,7 +204,7 @@ describe("Distribution Pool", async () => {
                     assert.equal(allocationData.allocationFlowRate.toString(), "0");
                 });
 
-                it("[IP][1.1.4] Should return 0 if fundraiser failed", async () => {
+                it("[DP][2.1.4] Should return 0 if fundraiser failed", async () => {
                     await investmentPool.setProjectState(failedFundraiserStateValue);
                     const allocationData = await distributionPool.getAllocationData(
                         investorA.address
@@ -215,7 +213,7 @@ describe("Distribution Pool", async () => {
                     assert.equal(allocationData.allocationFlowRate.toString(), "0");
                 });
 
-                it("[IP][1.1.5] Should return 0 if fundraiser ended and no milestone is ongoing", async () => {
+                it("[DP][2.1.5] Should return 0 if fundraiser ended and no milestone is ongoing", async () => {
                     await investmentPool.setProjectState(
                         fundraiserEndedNoMilestonesOngoingStateValue
                     );
@@ -226,7 +224,7 @@ describe("Distribution Pool", async () => {
                     assert.equal(allocationData.allocationFlowRate.toString(), "0");
                 });
 
-                it("[IP][1.1.6] Should return correct amount if milestone 0 is ongoing", async () => {
+                it("[DP][2.1.6] Should return correct amount if milestone 0 is ongoing", async () => {
                     const weightDivisor = await investmentPool.getMaximumWeightDivisor();
 
                     await distributionPool.connect(creator).lockTokens();
@@ -248,7 +246,6 @@ describe("Distribution Pool", async () => {
                     );
                     const milestoneDuration = await investmentPool.getMilestoneDuration(0);
 
-                    console.log(milestoneAllocation);
                     assert.equal(allocationData.alreadyAllocated.toString(), "0");
                     assert.equal(
                         allocationData.allocationFlowRate.toString(),
@@ -256,7 +253,7 @@ describe("Distribution Pool", async () => {
                     );
                 });
 
-                it("[IP][1.1.7] Should return correct amount if milestone 1 is ongoing", async () => {
+                it("[DP][2.1.7] Should return correct amount if milestone 1 is ongoing", async () => {
                     const weightDivisor = await investmentPool.getMaximumWeightDivisor();
 
                     await distributionPool.connect(creator).lockTokens();
@@ -293,10 +290,10 @@ describe("Distribution Pool", async () => {
                     );
                 });
 
-                it("[IP][1.1.8] Should return correct amount if project was terminated by voting", async () => {
+                it("[DP][2.1.8] Should return correct amount if project was terminated by voting", async () => {
                     const weightDivisor = await investmentPool.getMaximumWeightDivisor();
-                    const terminationTimestamp = dateToSeconds("2100/11/01") as BigNumber;
-                    const timePassed = terminationTimestamp.sub(milestoneStartDate2);
+                    const terminationTimestamp = dateToSeconds("2100/11/01");
+                    const timePassed = terminationTimestamp - milestoneStartDate1;
 
                     await distributionPool.connect(creator).lockTokens();
                     await investmentPool.allocateTokens(
@@ -334,10 +331,10 @@ describe("Distribution Pool", async () => {
                     assert.equal(allocationData.allocationFlowRate.toString(), "0");
                 });
 
-                it("[IP][1.1.9] Should return correct amount if project was terminated by gelato", async () => {
+                it("[DP][2.1.9] Should return correct amount if project was terminated by gelato", async () => {
                     const weightDivisor = await investmentPool.getMaximumWeightDivisor();
-                    const terminationTimestamp = dateToSeconds("2100/11/01") as BigNumber;
-                    const timePassed = terminationTimestamp.sub(milestoneStartDate2);
+                    const terminationTimestamp = dateToSeconds("2100/11/01");
+                    const timePassed = terminationTimestamp - milestoneStartDate1;
 
                     await distributionPool.connect(creator).lockTokens();
                     await investmentPool.allocateTokens(
@@ -375,7 +372,7 @@ describe("Distribution Pool", async () => {
                     assert.equal(allocationData.allocationFlowRate.toString(), "0");
                 });
 
-                it("[IP][1.1.10] Should return correct amount if project ended successfully", async () => {
+                it("[DP][2.1.10] Should return correct amount if project ended successfully", async () => {
                     const weightDivisor = await investmentPool.getMaximumWeightDivisor();
                     await distributionPool.connect(creator).lockTokens();
                     await investmentPool.allocateTokens(
