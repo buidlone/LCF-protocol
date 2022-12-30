@@ -41,16 +41,13 @@ const getConstantVariablesFromContract = async () => {
 
 const deployContracts = async () => {
     // Voting Token deployment
-    const votingTokensFactory = await ethers.getContractFactory("VotingToken", buidl1Admin);
-    votingToken = await votingTokensFactory.deploy();
+    const votingTokenDep = await ethers.getContractFactory("VotingToken", buidl1Admin);
+    votingToken = await votingTokenDep.deploy();
     await votingToken.deployed();
 
     // Governance Pool deployment
-    const governancePoolFactory = await ethers.getContractFactory(
-        "GovernancePoolMock",
-        buidl1Admin
-    );
-    governancePool = await governancePoolFactory.deploy();
+    const governancePoolDep = await ethers.getContractFactory("GovernancePoolMock", buidl1Admin);
+    governancePool = await governancePoolDep.deploy();
     await governancePool.deployed();
 
     // Assigning governance pool role manually because we create governace pool not from investment pool factory
@@ -58,11 +55,11 @@ const deployContracts = async () => {
     await votingToken.connect(buidl1Admin).grantRole(governancePoolRole, governancePool.address);
 
     // Deploy Fake governance pool mock which can mint tokens
-    const investmentPoolMockDep = await ethers.getContractFactory(
+    const investmentPoolDep = await ethers.getContractFactory(
         "InvestmentPoolMockForIntegration",
         buidl1Admin
     );
-    investmentPool = await investmentPoolMockDep.deploy(governancePool.address);
+    investmentPool = await investmentPoolDep.deploy(governancePool.address);
     await investmentPool.deployed();
 
     // Initializer

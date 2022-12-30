@@ -125,16 +125,19 @@ const deployLogicContracts = async (): Promise<
     [InvestmentPoolMock, GovernancePoolMockForIntegration, DistributionPoolMockForIntegration]
 > => {
     // Create investment pool implementation contract
-    const investmentPoolDep = await ethers.getContractFactory("InvestmentPoolMock", buidl1Admin);
-    const investmentPoolLogic = await investmentPoolDep.deploy();
+    const investmentPoolLogicDep = await ethers.getContractFactory(
+        "InvestmentPoolMock",
+        buidl1Admin
+    );
+    const investmentPoolLogic = await investmentPoolLogicDep.deploy();
     await investmentPoolLogic.deployed();
 
     // Create governance pool implementation contract
-    const governancePoolFactory = await ethers.getContractFactory(
+    const governancePoolLogicDep = await ethers.getContractFactory(
         "GovernancePoolMockForIntegration",
         buidl1Admin
     );
-    const governancePoolLogic = await governancePoolFactory.deploy();
+    const governancePoolLogic = await governancePoolLogicDep.deploy();
     await governancePoolLogic.deployed();
 
     const distributionPoolLogicDep = await ethers.getContractFactory(
@@ -148,7 +151,7 @@ const deployLogicContracts = async (): Promise<
 };
 
 const deployBuidl1Token = async (): Promise<Buidl1> => {
-    const buidl1TokenDep = await ethers.getContractFactory("Buidl1", buidl1Admin);
+    const buidl1TokenDep = await ethers.getContractFactory("Buidl1", creator);
     const buidl1Token = await buidl1TokenDep.deploy();
     await buidl1Token.deployed();
 
@@ -160,8 +163,8 @@ const deployInvestmentPoolFactory = async () => {
         await deployLogicContracts();
 
     // Create and deploy Gelato Ops contract mock
-    const GelatoOpsMock = await ethers.getContractFactory("GelatoOpsMock", buidl1Admin);
-    gelatoOpsMock = await GelatoOpsMock.deploy();
+    const gelatoOpsMockDep = await ethers.getContractFactory("GelatoOpsMock", buidl1Admin);
+    gelatoOpsMock = await gelatoOpsMockDep.deploy();
     await gelatoOpsMock.deployed();
 
     // Create voting token
@@ -169,11 +172,11 @@ const deployInvestmentPoolFactory = async () => {
     votingToken = await votingTokenDep.deploy();
     await votingToken.deployed();
 
-    const investmentPoolDepFactory = await ethers.getContractFactory(
+    const investmentPoolFactoryDep = await ethers.getContractFactory(
         "InvestmentPoolFactoryMock",
         buidl1Admin
     );
-    investmentPoolFactory = await investmentPoolDepFactory.deploy(
+    investmentPoolFactory = await investmentPoolFactoryDep.deploy(
         sf.settings.config.hostAddress,
         gelatoOpsMock.address,
         investmentPoolLogic.address,
@@ -190,6 +193,7 @@ const deployInvestmentPoolFactory = async () => {
 
 const getConstantVariablesFromContract = async () => {
     const [investmentPoolLogic, ,] = await deployLogicContracts();
+    await deployInvestmentPoolFactory();
 
     percentageDivider = await investmentPoolFactory.getPercentageDivider();
     formated5Percent = formatPercentage(5);
@@ -260,35 +264,33 @@ const createInvestmentWithTwoMilestones = async (feeAmount: BigNumber = gelatoFe
 
     const buidl1Token = await deployBuidl1Token();
 
-    const creationRes: ContractTransaction = await investmentPoolFactory
-        .connect(creator)
-        .createProjectPools(
+    const creationRes = await investmentPoolFactory.connect(creator).createProjectPools(
+        {
+            softCap: softCap,
+            hardCap: hardCap,
+            fundraiserStartAt: fundraiserStartDate,
+            fundraiserEndAt: fundraiserEndDate,
+            acceptedToken: fUSDTx.address,
+            projectToken: buidl1Token.address,
+            tokenRewards: tokenRewards,
+        },
+        0, // CLONE-PROXY
+        [
             {
-                softCap: softCap,
-                hardCap: hardCap,
-                fundraiserStartAt: fundraiserStartDate,
-                fundraiserEndAt: fundraiserEndDate,
-                acceptedToken: fUSDTx.address,
-                projectToken: buidl1Token.address,
-                tokenRewards: tokenRewards,
+                startDate: milestone0StartDate,
+                endDate: milestone0EndDate,
+                intervalSeedPortion: formated5Percent,
+                intervalStreamingPortion: formated70Percent,
             },
-            0, // CLONE-PROXY
-            [
-                {
-                    startDate: milestone0StartDate,
-                    endDate: milestone0EndDate,
-                    intervalSeedPortion: formated5Percent,
-                    intervalStreamingPortion: formated70Percent,
-                },
-                {
-                    startDate: milestone1StartDate,
-                    endDate: milestone1EndDate,
-                    intervalSeedPortion: formated5Percent,
-                    intervalStreamingPortion: formated20Percent,
-                },
-            ],
-            {value: feeAmount}
-        );
+            {
+                startDate: milestone1StartDate,
+                endDate: milestone1EndDate,
+                intervalSeedPortion: formated5Percent,
+                intervalStreamingPortion: formated20Percent,
+            },
+        ],
+        {value: feeAmount}
+    );
 
     [investmentPool, governancePool, distributionPool] = await getContractsFromTx(creationRes);
 };
@@ -382,8 +384,6 @@ describe("Investment Pool", async () => {
 
         await deploySuperfluidToken();
         await transferSuperTokens();
-
-        await deployInvestmentPoolFactory();
         await getConstantVariablesFromContract();
     });
 

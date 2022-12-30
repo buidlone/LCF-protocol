@@ -123,11 +123,11 @@ const deployInvestmentPoolFactory = async () => {
     await votingToken.deployed();
 
     // Deploy Investment Pool Factory contract
-    const investmentPoolDepFactory = await ethers.getContractFactory(
+    const investmentPoolFactoryDep = await ethers.getContractFactory(
         "InvestmentPoolFactoryMock",
         buidl1Admin
     );
-    investmentPoolFactory = await investmentPoolDepFactory.deploy(
+    investmentPoolFactory = await investmentPoolFactoryDep.deploy(
         sf.settings.config.hostAddress,
         gelatoOpsMock.address,
         investmentPoolLogic.address,
@@ -207,11 +207,11 @@ describe("Investment Pool Factory", async () => {
 
         describe("1.1 State variables", () => {
             it("[IPF][1.1.1] Constructor should set state variables correctly", async () => {
-                const investmentPoolDepFactory = await ethers.getContractFactory(
+                const investmentPoolFactoryDep = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
                     buidl1Admin
                 );
-                investmentPoolFactory = await investmentPoolDepFactory.deploy(
+                investmentPoolFactory = await investmentPoolFactoryDep.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
                     investmentPoolLogic.address,
@@ -239,13 +239,13 @@ describe("Investment Pool Factory", async () => {
 
         describe("1.2 Interactions", () => {
             it("[IPF][1.2.1] Should revert if host address is zero", async () => {
-                const investmentPoolDepFactory = await ethers.getContractFactory(
+                const investmentPoolFactoryDep = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
                     buidl1Admin
                 );
 
                 await expect(
-                    investmentPoolDepFactory.deploy(
+                    investmentPoolFactoryDep.deploy(
                         constants.AddressZero,
                         gelatoOpsMock.address,
                         investmentPoolLogic.address,
@@ -254,19 +254,19 @@ describe("Investment Pool Factory", async () => {
                         votingToken.address
                     )
                 ).to.be.revertedWithCustomError(
-                    investmentPoolDepFactory,
+                    investmentPoolFactoryDep,
                     "InvestmentPoolFactory__HostAddressIsZero"
                 );
             });
 
             it("[IPF][1.2.2] Should revert if gelato ops address is zero", async () => {
-                const investmentPoolDepFactory = await ethers.getContractFactory(
+                const investmentPoolFactoryDep = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
                     buidl1Admin
                 );
 
                 await expect(
-                    investmentPoolDepFactory.deploy(
+                    investmentPoolFactoryDep.deploy(
                         sf.settings.config.hostAddress,
                         constants.AddressZero,
                         investmentPoolLogic.address,
@@ -275,19 +275,19 @@ describe("Investment Pool Factory", async () => {
                         votingToken.address
                     )
                 ).to.be.revertedWithCustomError(
-                    investmentPoolDepFactory,
+                    investmentPoolFactoryDep,
                     "InvestmentPoolFactory__GelatoOpsAddressIsZero"
                 );
             });
 
             it("[IPF][1.2.3] Should revert if implementation contract address is zero", async () => {
-                const investmentPoolDepFactory = await ethers.getContractFactory(
+                const investmentPoolFactoryDep = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
                     buidl1Admin
                 );
 
                 await expect(
-                    investmentPoolDepFactory.deploy(
+                    investmentPoolFactoryDep.deploy(
                         sf.settings.config.hostAddress,
                         gelatoOpsMock.address,
                         constants.AddressZero,
@@ -296,17 +296,17 @@ describe("Investment Pool Factory", async () => {
                         votingToken.address
                     )
                 ).to.be.revertedWithCustomError(
-                    investmentPoolDepFactory,
+                    investmentPoolFactoryDep,
                     "InvestmentPoolFactory__ImplementationContractAddressIsZero"
                 );
             });
 
             it("[IPF][1.2.4] Should successfully create a clone contract", async () => {
-                const investmentPoolDepFactory = await ethers.getContractFactory(
+                const investmentPoolFactoryDep = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
                     buidl1Admin
                 );
-                investmentPoolFactory = await investmentPoolDepFactory.deploy(
+                investmentPoolFactory = await investmentPoolFactoryDep.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
                     investmentPoolLogic.address,
@@ -326,11 +326,11 @@ describe("Investment Pool Factory", async () => {
             it("[IPF][1.2.5] Should be able to receive ETH", async () => {
                 const ethAmountToReceive = ethers.utils.parseEther("1");
 
-                const investmentPoolDepFactory = await ethers.getContractFactory(
+                const investmentPoolFactoryDep = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
                     buidl1Admin
                 );
-                investmentPoolFactory = await investmentPoolDepFactory.deploy(
+                investmentPoolFactory = await investmentPoolFactoryDep.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
                     investmentPoolLogic.address,
@@ -354,11 +354,11 @@ describe("Investment Pool Factory", async () => {
             it("[IPF][1.2.6] Deployer should be able to update gelato fee allocation value", async () => {
                 const newEthFee = ethers.utils.parseEther("0.321");
 
-                const investmentPoolDepFactory = await ethers.getContractFactory(
+                const investmentPoolFactoryDep = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
                     buidl1Admin
                 );
-                investmentPoolFactory = await investmentPoolDepFactory.deploy(
+                investmentPoolFactory = await investmentPoolFactoryDep.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
                     investmentPoolLogic.address,
@@ -379,11 +379,11 @@ describe("Investment Pool Factory", async () => {
             it("[IPF][1.2.7] Bad actor shouldn't be able to update gelato fee allocation value", async () => {
                 const newEthFee = ethers.utils.parseEther("0.321");
 
-                const investmentPoolDepFactory = await ethers.getContractFactory(
+                const investmentPoolFactoryDep = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
                     buidl1Admin
                 );
-                investmentPoolFactory = await investmentPoolDepFactory.deploy(
+                investmentPoolFactory = await investmentPoolFactoryDep.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
                     investmentPoolLogic.address,

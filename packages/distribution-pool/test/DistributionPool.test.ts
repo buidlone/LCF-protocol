@@ -19,10 +19,10 @@ let distributionPool: DistributionPoolMock;
 let buidl1Token: Buidl1;
 let snapshotId: string;
 
-let milestoneStartDate0: number;
-let milestoneEndDate0: number;
-let milestoneStartDate1: number;
-let milestoneEndDate1: number;
+let milestone0StartDate: number;
+let milestone0EndDate: number;
+let milestone1StartDate: number;
+let milestone1EndDate: number;
 
 // Percentages (in divider format)
 let percentageDivider: BigNumber = BigNumber.from(0);
@@ -70,10 +70,10 @@ const createProject = async () => {
     buidl1Token = await buidl1TokenDep.deploy();
     await buidl1Token.deployed();
 
-    milestoneStartDate0 = dateToSeconds("2100/09/01");
-    milestoneEndDate0 = dateToSeconds("2100/10/01");
-    milestoneStartDate1 = dateToSeconds("2100/10/01");
-    milestoneEndDate1 = dateToSeconds("2100/12/01");
+    milestone0StartDate = dateToSeconds("2100/09/01");
+    milestone0EndDate = dateToSeconds("2100/10/01");
+    milestone1StartDate = dateToSeconds("2100/10/01");
+    milestone1EndDate = dateToSeconds("2100/12/01");
     formated5Percent = formatPercentage(5);
     formated20Percent = formatPercentage(20);
     formated70Percent = formatPercentage(70);
@@ -84,14 +84,14 @@ const createProject = async () => {
     );
     investmentPool = await investmentPoolDep.deploy(distributionPool.address, creator.address, [
         {
-            startDate: milestoneStartDate0,
-            endDate: milestoneEndDate0,
+            startDate: milestone0StartDate,
+            endDate: milestone0EndDate,
             intervalSeedPortion: formated5Percent,
             intervalStreamingPortion: formated70Percent,
         },
         {
-            startDate: milestoneStartDate1,
-            endDate: milestoneEndDate1,
+            startDate: milestone1StartDate,
+            endDate: milestone1EndDate,
             intervalSeedPortion: formated5Percent,
             intervalStreamingPortion: formated20Percent,
         },
@@ -293,7 +293,7 @@ describe("Distribution Pool", async () => {
                 it("[DP][2.1.8] Should return correct amount if project was terminated by voting", async () => {
                     const weightDivisor = await investmentPool.getMaximumWeightDivisor();
                     const terminationTimestamp = dateToSeconds("2100/11/01");
-                    const timePassed = terminationTimestamp - milestoneStartDate1;
+                    const timePassed = terminationTimestamp - milestone1StartDate;
 
                     await distributionPool.connect(creator).lockTokens();
                     await investmentPool.allocateTokens(
@@ -334,7 +334,7 @@ describe("Distribution Pool", async () => {
                 it("[DP][2.1.9] Should return correct amount if project was terminated by gelato", async () => {
                     const weightDivisor = await investmentPool.getMaximumWeightDivisor();
                     const terminationTimestamp = dateToSeconds("2100/11/01");
-                    const timePassed = terminationTimestamp - milestoneStartDate1;
+                    const timePassed = terminationTimestamp - milestone1StartDate;
 
                     await distributionPool.connect(creator).lockTokens();
                     await investmentPool.allocateTokens(
