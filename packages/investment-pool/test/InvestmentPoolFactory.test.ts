@@ -1,6 +1,6 @@
 import {SignerWithAddress} from "@nomiclabs/hardhat-ethers/signers";
 import {Framework, WrapperSuperToken} from "@superfluid-finance/sdk-core";
-import {BigNumber, constants} from "ethers";
+import {BigNumber, BigNumberish, constants} from "ethers";
 import {ethers, web3} from "hardhat";
 import {assert, expect} from "chai";
 import {
@@ -10,6 +10,7 @@ import {
     DistributionPoolMockForIntegration,
     GelatoOpsMock,
     VotingTokenMock,
+    Buidl1,
 } from "../typechain-types";
 
 const fTokenAbi = require("./abis/fTokenAbi");
@@ -24,7 +25,8 @@ let fUSDT: InstanceType<typeof fTokenAbi>;
 let fUSDTx: WrapperSuperToken;
 
 let accounts: SignerWithAddress[];
-let admin: SignerWithAddress;
+let superfluidAdmin: SignerWithAddress;
+let buidl1Admin: SignerWithAddress;
 let creator: SignerWithAddress;
 let foreignActor: SignerWithAddress;
 
@@ -38,23 +40,23 @@ let votingToken: VotingTokenMock;
 
 let gelatoFeeAllocation: BigNumber;
 let percentageDivider = BigNumber.from(0);
-let percent5InIpBigNumber: BigNumber;
-let percent6InIpBigNumber: BigNumber;
-let percent10InIpBigNumber: BigNumber;
-let percent40InIpBigNumber: BigNumber;
-let percent44InIpBigNumber: BigNumber;
-let percent49InIpBigNumber: BigNumber;
-let percent51InIpBigNumber: BigNumber;
-let percent90InIpBigNumber: BigNumber;
-let percent95InIpBigNumber: BigNumber;
+let formated5Percent: BigNumber;
+let formated6Percent: BigNumber;
+let formated10Percent: BigNumber;
+let formated40Percent: BigNumber;
+let formated44Percent: BigNumber;
+let formated49Percent: BigNumber;
+let formated51Percent: BigNumber;
+let formated90Percent: BigNumber;
+let formated95Percent: BigNumber;
 
 const generateGaplessMilestones = (
-    startTimeStamp: BigNumber,
-    duration: BigNumber,
+    startTimeStamp: number,
+    duration: number,
     amount: number
 ): {
-    startDate: BigNumber;
-    endDate: BigNumber;
+    startDate: number;
+    endDate: number;
     intervalSeedPortion: BigNumber;
     intervalStreamingPortion: BigNumber;
 }[] => {
@@ -62,26 +64,24 @@ const generateGaplessMilestones = (
     let prevTimestamp = startTimeStamp;
 
     for (let i = 0; i < amount; i++) {
-        const endDate = prevTimestamp.add(duration);
         arr.push({
             startDate: prevTimestamp,
-            endDate: endDate,
-            intervalSeedPortion: percent10InIpBigNumber.div(amount),
-            intervalStreamingPortion: percent90InIpBigNumber.div(amount),
+            endDate: prevTimestamp + duration,
+            intervalSeedPortion: formated10Percent.div(amount),
+            intervalStreamingPortion: formated90Percent.div(amount),
         });
-        prevTimestamp = endDate;
+        prevTimestamp += duration;
     }
 
     return arr;
 };
 
-const percentToIpBigNumber = (percent: number): BigNumber => {
+const formatPercentage = (percent: BigNumberish): BigNumber => {
     return percentageDivider.mul(percent).div(100);
 };
 
-const dateToSeconds = (date: string): BigNumber => {
-    const convertedDate = new Date(date).getTime() / 1000;
-    return BigNumber.from(convertedDate);
+const dateToSeconds = (date: string): number => {
+    return new Date(date).getTime() / 1000;
 };
 
 const errorHandler = (err: any) => {
@@ -89,33 +89,45 @@ const errorHandler = (err: any) => {
 };
 
 const deployLogicContracts = async () => {
-    const investmentPoolLogicDep = await ethers.getContractFactory("InvestmentPoolMock", admin);
+    const investmentPoolLogicDep = await ethers.getContractFactory(
+        "InvestmentPoolMock",
+        buidl1Admin
+    );
     investmentPoolLogic = await investmentPoolLogicDep.deploy();
     await investmentPoolLogic.deployed();
 
     const governancePoolLogicDep = await ethers.getContractFactory(
         "GovernancePoolMockForIntegration",
-        admin
+        buidl1Admin
     );
     governancePoolLogic = await governancePoolLogicDep.deploy();
     await governancePoolLogic.deployed();
 
     const distributionPoolLogicDep = await ethers.getContractFactory(
         "DistributionPoolMockForIntegration",
-        admin
+        buidl1Admin
     );
     distributionPoolLogic = await distributionPoolLogicDep.deploy();
     await distributionPoolLogic.deployed();
 };
 
-const getConstantVariablesFromContract = async () => {
-    await deployLogicContracts();
+const deployInvestmentPoolFactory = async () => {
+    // Deploy Gelato Ops contract mock
+    const gelatoOpsMockDep = await ethers.getContractFactory("GelatoOpsMock", buidl1Admin);
+    gelatoOpsMock = await gelatoOpsMockDep.deploy();
+    await gelatoOpsMock.deployed();
 
-    const investmentPoolDepFactory = await ethers.getContractFactory(
+    // Deploy Voting Token
+    const votingTokenDep = await ethers.getContractFactory("VotingTokenMock", buidl1Admin);
+    votingToken = await votingTokenDep.deploy();
+    await votingToken.deployed();
+
+    // Deploy Investment Pool Factory contract
+    const investmentPoolFactoryDep = await ethers.getContractFactory(
         "InvestmentPoolFactoryMock",
-        admin
+        buidl1Admin
     );
-    investmentPoolFactory = await investmentPoolDepFactory.deploy(
+    investmentPoolFactory = await investmentPoolFactoryDep.deploy(
         sf.settings.config.hostAddress,
         gelatoOpsMock.address,
         investmentPoolLogic.address,
@@ -124,17 +136,22 @@ const getConstantVariablesFromContract = async () => {
         votingToken.address
     );
     await investmentPoolFactory.deployed();
+};
+
+const getConstantVariablesFromContract = async () => {
+    await deployLogicContracts();
+    await deployInvestmentPoolFactory();
 
     percentageDivider = await investmentPoolFactory.getPercentageDivider();
-    percent5InIpBigNumber = percentToIpBigNumber(5);
-    percent6InIpBigNumber = percentToIpBigNumber(6);
-    percent10InIpBigNumber = percentToIpBigNumber(10);
-    percent40InIpBigNumber = percentToIpBigNumber(40);
-    percent44InIpBigNumber = percentToIpBigNumber(44);
-    percent49InIpBigNumber = percentToIpBigNumber(49);
-    percent51InIpBigNumber = percentToIpBigNumber(51);
-    percent90InIpBigNumber = percentToIpBigNumber(90);
-    percent95InIpBigNumber = percentToIpBigNumber(95);
+    formated5Percent = formatPercentage(5);
+    formated6Percent = formatPercentage(6);
+    formated10Percent = formatPercentage(10);
+    formated40Percent = formatPercentage(40);
+    formated44Percent = formatPercentage(44);
+    formated49Percent = formatPercentage(49);
+    formated51Percent = formatPercentage(51);
+    formated90Percent = formatPercentage(90);
+    formated95Percent = formatPercentage(95);
 
     gelatoFeeAllocation = await investmentPoolFactory.getGelatoFeeAllocationForProject();
 };
@@ -143,23 +160,20 @@ const deploySuperfluidToken = async () => {
     // deploy the framework
     await deployFramework(errorHandler, {
         web3,
-        from: admin.address,
+        from: superfluidAdmin.address,
     });
 
     // deploy a fake erc20 token
-    const fUSDTAddress = await deployTestToken(errorHandler, [":", "fUSDT"], {
+    await deployTestToken(errorHandler, [":", "fUSDT"], {
         web3,
-        from: admin.address,
+        from: superfluidAdmin.address,
     });
 
     // deploy a fake erc20 wrapper super token around the fUSDT token
-    const fUSDTxAddress = await deploySuperToken(errorHandler, [":", "fUSDT"], {
+    await deploySuperToken(errorHandler, [":", "fUSDT"], {
         web3,
-        from: admin.address,
+        from: superfluidAdmin.address,
     });
-
-    console.log("fUSDT  Address: ", fUSDTAddress);
-    console.log("fUSDTx Address: ", fUSDTxAddress);
 
     // initialize the superfluid framework...put custom and web3 only bc we are using hardhat locally
     sf = await Framework.create({
@@ -170,31 +184,19 @@ const deploySuperfluidToken = async () => {
     });
 
     fUSDTx = await sf.loadWrapperSuperToken("fUSDTx");
-    fUSDT = new ethers.Contract(fUSDTx.underlyingToken.address, fTokenAbi, admin);
-
-    await fUSDT.connect(admin).mint(creator.address, ethers.utils.parseEther("10000000"));
+    fUSDT = new ethers.Contract(fUSDTx.underlyingToken.address, fTokenAbi, superfluidAdmin);
 };
 
 describe("Investment Pool Factory", async () => {
     before(async () => {
         // get accounts from hardhat
         accounts = await ethers.getSigners();
-        admin = accounts[0];
-        creator = accounts[1];
-        foreignActor = accounts[2];
+        superfluidAdmin = accounts[0];
+        buidl1Admin = accounts[1];
+        creator = accounts[2];
+        foreignActor = accounts[3];
 
         await deploySuperfluidToken();
-
-        // Create and deploy Gelato Ops contract mock
-        const GelatoOpsMock = await ethers.getContractFactory("GelatoOpsMock", admin);
-        gelatoOpsMock = await GelatoOpsMock.deploy();
-        await gelatoOpsMock.deployed();
-
-        // Create voting token
-        const votingTokenDep = await ethers.getContractFactory("VotingTokenMock", admin);
-        votingToken = await votingTokenDep.deploy();
-        await votingToken.deployed();
-
         await getConstantVariablesFromContract();
     });
 
@@ -205,12 +207,11 @@ describe("Investment Pool Factory", async () => {
 
         describe("1.1 State variables", () => {
             it("[IPF][1.1.1] Constructor should set state variables correctly", async () => {
-                // Create investment pool factory contract
-                const investmentPoolDepFactory = await ethers.getContractFactory(
+                const investmentPoolFactoryDep = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
-                    admin
+                    buidl1Admin
                 );
-                investmentPoolFactory = await investmentPoolDepFactory.deploy(
+                investmentPoolFactory = await investmentPoolFactoryDep.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
                     investmentPoolLogic.address,
@@ -238,14 +239,13 @@ describe("Investment Pool Factory", async () => {
 
         describe("1.2 Interactions", () => {
             it("[IPF][1.2.1] Should revert if host address is zero", async () => {
-                // Create investment pool factory contract
-                const investmentPoolDepFactory = await ethers.getContractFactory(
+                const investmentPoolFactoryDep = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
-                    admin
+                    buidl1Admin
                 );
 
                 await expect(
-                    investmentPoolDepFactory.deploy(
+                    investmentPoolFactoryDep.deploy(
                         constants.AddressZero,
                         gelatoOpsMock.address,
                         investmentPoolLogic.address,
@@ -254,20 +254,19 @@ describe("Investment Pool Factory", async () => {
                         votingToken.address
                     )
                 ).to.be.revertedWithCustomError(
-                    investmentPoolDepFactory,
+                    investmentPoolFactoryDep,
                     "InvestmentPoolFactory__HostAddressIsZero"
                 );
             });
 
             it("[IPF][1.2.2] Should revert if gelato ops address is zero", async () => {
-                // Create investment pool factory contract
-                const investmentPoolDepFactory = await ethers.getContractFactory(
+                const investmentPoolFactoryDep = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
-                    admin
+                    buidl1Admin
                 );
 
                 await expect(
-                    investmentPoolDepFactory.deploy(
+                    investmentPoolFactoryDep.deploy(
                         sf.settings.config.hostAddress,
                         constants.AddressZero,
                         investmentPoolLogic.address,
@@ -276,20 +275,19 @@ describe("Investment Pool Factory", async () => {
                         votingToken.address
                     )
                 ).to.be.revertedWithCustomError(
-                    investmentPoolDepFactory,
+                    investmentPoolFactoryDep,
                     "InvestmentPoolFactory__GelatoOpsAddressIsZero"
                 );
             });
 
             it("[IPF][1.2.3] Should revert if implementation contract address is zero", async () => {
-                // Create investment pool factory contract
-                const investmentPoolDepFactory = await ethers.getContractFactory(
+                const investmentPoolFactoryDep = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
-                    admin
+                    buidl1Admin
                 );
 
                 await expect(
-                    investmentPoolDepFactory.deploy(
+                    investmentPoolFactoryDep.deploy(
                         sf.settings.config.hostAddress,
                         gelatoOpsMock.address,
                         constants.AddressZero,
@@ -298,18 +296,17 @@ describe("Investment Pool Factory", async () => {
                         votingToken.address
                     )
                 ).to.be.revertedWithCustomError(
-                    investmentPoolDepFactory,
+                    investmentPoolFactoryDep,
                     "InvestmentPoolFactory__ImplementationContractAddressIsZero"
                 );
             });
 
             it("[IPF][1.2.4] Should successfully create a clone contract", async () => {
-                // Create investment pool factory contract
-                const investmentPoolDepFactory = await ethers.getContractFactory(
+                const investmentPoolFactoryDep = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
-                    admin
+                    buidl1Admin
                 );
-                investmentPoolFactory = await investmentPoolDepFactory.deploy(
+                investmentPoolFactory = await investmentPoolFactoryDep.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
                     investmentPoolLogic.address,
@@ -329,12 +326,11 @@ describe("Investment Pool Factory", async () => {
             it("[IPF][1.2.5] Should be able to receive ETH", async () => {
                 const ethAmountToReceive = ethers.utils.parseEther("1");
 
-                // Create investment pool factory contract
-                const investmentPoolDepFactory = await ethers.getContractFactory(
+                const investmentPoolFactoryDep = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
-                    admin
+                    buidl1Admin
                 );
-                investmentPoolFactory = await investmentPoolDepFactory.deploy(
+                investmentPoolFactory = await investmentPoolFactoryDep.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
                     investmentPoolLogic.address,
@@ -344,7 +340,7 @@ describe("Investment Pool Factory", async () => {
                 );
                 await investmentPoolFactory.deployed();
 
-                await admin.sendTransaction({
+                await buidl1Admin.sendTransaction({
                     to: investmentPoolFactory.address,
                     value: ethAmountToReceive,
                 });
@@ -352,19 +348,17 @@ describe("Investment Pool Factory", async () => {
                 const contractBalance = await ethers.provider.getBalance(
                     investmentPoolFactory.address
                 );
-
-                assert.deepEqual(ethAmountToReceive, contractBalance);
+                assert.equal(ethAmountToReceive.toString(), contractBalance.toString());
             });
 
             it("[IPF][1.2.6] Deployer should be able to update gelato fee allocation value", async () => {
                 const newEthFee = ethers.utils.parseEther("0.321");
 
-                // Create investment pool factory contract
-                const investmentPoolDepFactory = await ethers.getContractFactory(
+                const investmentPoolFactoryDep = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
-                    admin
+                    buidl1Admin
                 );
-                investmentPoolFactory = await investmentPoolDepFactory.deploy(
+                investmentPoolFactory = await investmentPoolFactoryDep.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
                     investmentPoolLogic.address,
@@ -375,22 +369,21 @@ describe("Investment Pool Factory", async () => {
                 await investmentPoolFactory.deployed();
 
                 await expect(
-                    investmentPoolFactory.connect(admin).setGelatoFeeAllocation(newEthFee)
+                    investmentPoolFactory.connect(buidl1Admin).setGelatoFeeAllocation(newEthFee)
                 ).not.to.be.reverted;
 
                 const gelatoFee = await investmentPoolFactory.getGelatoFeeAllocationForProject();
-                assert.deepEqual(newEthFee, gelatoFee);
+                assert.equal(gelatoFee.toString(), newEthFee.toString());
             });
 
             it("[IPF][1.2.7] Bad actor shouldn't be able to update gelato fee allocation value", async () => {
                 const newEthFee = ethers.utils.parseEther("0.321");
 
-                // Create investment pool factory contract
-                const investmentPoolDepFactory = await ethers.getContractFactory(
+                const investmentPoolFactoryDep = await ethers.getContractFactory(
                     "InvestmentPoolFactoryMock",
-                    admin
+                    buidl1Admin
                 );
-                investmentPoolFactory = await investmentPoolDepFactory.deploy(
+                investmentPoolFactory = await investmentPoolFactoryDep.deploy(
                     sf.settings.config.hostAddress,
                     gelatoOpsMock.address,
                     investmentPoolLogic.address,
@@ -405,47 +398,17 @@ describe("Investment Pool Factory", async () => {
                 ).to.be.revertedWith("Ownable: caller is not the owner");
 
                 const gelatoFee = await investmentPoolFactory.getGelatoFeeAllocationForProject();
-                assert.deepEqual(gelatoFee, gelatoFeeAllocation);
+                assert.equal(gelatoFee.toString(), gelatoFeeAllocation.toString());
             });
         });
     });
 
-    describe("2. Investment creation", () => {
+    describe("2. createProjectPools() function", () => {
         beforeEach(async () => {
-            // Create investment pool implementation contract
-            const investmentPoolLogicDep = await ethers.getContractFactory(
-                "InvestmentPoolMock",
-                admin
-            );
-            investmentPoolLogic = await investmentPoolLogicDep.deploy();
-            await investmentPoolLogic.deployed();
+            await deployLogicContracts();
+            await deployInvestmentPoolFactory();
 
-            // Create governance pool mock
-            const governancePoolLogicDep = await ethers.getContractFactory(
-                "GovernancePoolMockForIntegration",
-                admin
-            );
-            governancePoolLogic = await governancePoolLogicDep.deploy();
-            await governancePoolLogic.deployed();
-
-            // Create investment pool factory contract
-            const investmentPoolDepFactory = await ethers.getContractFactory(
-                "InvestmentPoolFactoryMock",
-                admin
-            );
-            investmentPoolFactory = await investmentPoolDepFactory.deploy(
-                sf.settings.config.hostAddress,
-                gelatoOpsMock.address,
-                investmentPoolLogic.address,
-                governancePoolLogic.address,
-                distributionPoolLogic.address,
-                votingToken.address
-            );
-            await investmentPoolFactory.deployed();
-
-            // Enforce a starting timestamp to avoid time based bugs
-            const time = dateToSeconds("2100/06/01");
-            await investmentPoolFactory.connect(admin).setTimestamp(time);
+            await investmentPoolFactory.setTimestamp(dateToSeconds("2100/06/01"));
         });
 
         describe("2.1 Interactions", () => {
@@ -455,8 +418,8 @@ describe("Investment Pool Factory", async () => {
 
                 const milestoneStartDate = dateToSeconds("2100/09/01");
                 const milestoneEndDate = dateToSeconds("2100/10/01");
-                const campaignStartDate = dateToSeconds("2100/07/01");
-                const campaignEndDate = dateToSeconds("2100/08/01");
+                const fundraiserStartDate = dateToSeconds("2100/07/01");
+                const fundraiserEndDate = dateToSeconds("2100/08/01");
 
                 const creationRes = await investmentPoolFactory
                     .connect(creator)
@@ -464,8 +427,8 @@ describe("Investment Pool Factory", async () => {
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -475,8 +438,8 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percent10InIpBigNumber,
-                                intervalStreamingPortion: percent90InIpBigNumber,
+                                intervalSeedPortion: formated10Percent,
+                                intervalStreamingPortion: formated90Percent,
                             },
                         ],
                         {value: gelatoFeeAllocation}
@@ -496,8 +459,8 @@ describe("Investment Pool Factory", async () => {
 
                 const milestoneStartDate = dateToSeconds("2100/09/01");
                 const milestoneEndDate = dateToSeconds("2100/10/01");
-                const campaignStartDate = dateToSeconds("2100/07/01");
-                const campaignEndDate = dateToSeconds("2100/08/01");
+                const fundraiserStartDate = dateToSeconds("2100/07/01");
+                const fundraiserEndDate = dateToSeconds("2100/08/01");
 
                 const creationRes = await investmentPoolFactory
                     .connect(creator)
@@ -505,8 +468,8 @@ describe("Investment Pool Factory", async () => {
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -516,8 +479,8 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percent10InIpBigNumber,
-                                intervalStreamingPortion: percent90InIpBigNumber,
+                                intervalSeedPortion: formated10Percent,
+                                intervalStreamingPortion: formated90Percent,
                             },
                         ],
                         {value: gelatoFeeAllocation}
@@ -529,7 +492,7 @@ describe("Investment Pool Factory", async () => {
 
                 const contractFactory = await ethers.getContractFactory(
                     "InvestmentPoolMock",
-                    admin
+                    buidl1Admin
                 );
 
                 const pool = contractFactory.attach(poolAddress);
@@ -544,57 +507,29 @@ describe("Investment Pool Factory", async () => {
                 const milestone = await pool.getMilestone(0);
                 const gelatoOpsAddress = await pool.getGelatoOps();
 
-                // Verify the campaign variables
-                assert.deepEqual(poolSoftCap, softCap, "Wrong soft cap");
-                assert.deepEqual(poolHardCap, hardCap, "Wrong hard cap");
+                // Verify the fundraiser variables
+                assert.equal(poolSoftCap.toString(), softCap.toString(), "Wrong soft cap");
+                assert.equal(poolHardCap.toString(), hardCap.toString(), "Wrong hard cap");
                 assert.equal(creatorAddress, creator.address, "Wrong creator address");
-                assert.equal(gelatoOpsAddress, gelatoOpsMock.address);
-                assert.deepEqual(
-                    invested,
-                    BigNumber.from(0),
-                    "Should not have any investments yet"
+                assert.equal(gelatoOpsAddress, gelatoOpsMock.address, "Wrong gelato ops address");
+                assert.equal(invested.toString(), "0", "Wrong invested amount");
+                assert.equal(
+                    fundraiserStartAt,
+                    fundraiserStartDate,
+                    "Wrong fundraiser start date"
                 );
-                assert.deepEqual(
-                    BigNumber.from(fundraiserStartAt),
-                    campaignStartDate,
-                    "Wrong campaign start date"
-                );
-                assert.deepEqual(
-                    BigNumber.from(fundraiserEndAt),
-                    campaignEndDate,
-                    "Wrong campaign end date"
-                );
-                assert.deepEqual(
-                    milestoneCount,
-                    BigNumber.from(1),
-                    "Should have a single milestone"
-                );
-                assert.deepEqual(
-                    BigNumber.from(milestone.startDate),
+                assert.equal(fundraiserEndAt, fundraiserEndDate, "Wrong fundraiser end date");
+                assert.equal(milestoneCount.toString(), "1", "Wrong milestones amount");
+                assert.equal(
+                    milestone.startDate,
                     milestoneStartDate,
                     "Wrong milestone start date"
                 );
-                assert.deepEqual(
-                    BigNumber.from(milestone.endDate),
-                    milestoneEndDate,
-                    "Wrong milestone end date"
-                );
-                assert.equal(milestone.paid, false, "Milestone should not be paid initially");
-                assert.equal(
-                    milestone.seedAmountPaid,
-                    false,
-                    "Seed funds should not be paid initially"
-                );
-                assert.equal(
-                    milestone.streamOngoing,
-                    false,
-                    "Stream should not be ongoing from the start"
-                );
-                assert.deepEqual(
-                    milestone.paidAmount,
-                    BigNumber.from(0),
-                    "Should have paid 0 in funds upon creation"
-                );
+                assert.equal(milestone.endDate, milestoneEndDate, "Wrong milestone end date");
+                assert.isFalse(milestone.paid, "Wrong paid status");
+                assert.isFalse(milestone.seedAmountPaid, "Wrong seed amount paid status");
+                assert.isFalse(milestone.streamOngoing, "Wrong stream ongoing status");
+                assert.equal(milestone.paidAmount.toString(), "0", "Wrong paid amount");
             });
 
             it("[IPF][2.1.3] Reverts creation if accepted token address is zero", async () => {
@@ -603,16 +538,16 @@ describe("Investment Pool Factory", async () => {
 
                 const milestoneStartDate = dateToSeconds("2100/09/01");
                 const milestoneEndDate = dateToSeconds("2100/10/01");
-                const campaignStartDate = dateToSeconds("2100/07/01");
-                const campaignEndDate = dateToSeconds("2100/08/01");
+                const fundraiserStartDate = dateToSeconds("2100/07/01");
+                const fundraiserEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: constants.AddressZero,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -622,8 +557,8 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percent10InIpBigNumber,
-                                intervalStreamingPortion: percent90InIpBigNumber,
+                                intervalSeedPortion: formated10Percent,
+                                intervalStreamingPortion: formated90Percent,
                             },
                         ],
                         {value: gelatoFeeAllocation}
@@ -640,16 +575,16 @@ describe("Investment Pool Factory", async () => {
 
                 const milestoneStartDate = dateToSeconds("2100/09/01");
                 const milestoneEndDate = dateToSeconds("2100/10/01");
-                const campaignStartDate = dateToSeconds("2100/07/01");
-                const campaignEndDate = dateToSeconds("2100/08/01");
+                const fundraiserStartDate = dateToSeconds("2100/07/01");
+                const fundraiserEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -659,8 +594,8 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percent10InIpBigNumber,
-                                intervalStreamingPortion: percent90InIpBigNumber,
+                                intervalSeedPortion: formated10Percent,
+                                intervalStreamingPortion: formated90Percent,
                             },
                         ],
                         {value: gelatoFeeAllocation}
@@ -679,20 +614,19 @@ describe("Investment Pool Factory", async () => {
 
                 const milestoneStartDate = dateToSeconds("2100/09/01");
                 const milestoneEndDate = dateToSeconds("2100/10/01");
-                const campaignStartDate = dateToSeconds("2100/07/01");
-                const campaignEndDate = dateToSeconds("2100/08/01");
+                const fundraiserStartDate = dateToSeconds("2100/07/01");
+                const fundraiserEndDate = dateToSeconds("2100/08/01");
 
                 // Move forward in time to simulate retrospective creation for fundraiser
-                const time = dateToSeconds("2100/07/15");
-                await investmentPoolFactory.connect(admin).setTimestamp(time);
+                await investmentPoolFactory.setTimestamp(dateToSeconds("2100/07/15"));
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -702,8 +636,8 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percent10InIpBigNumber,
-                                intervalStreamingPortion: percent90InIpBigNumber,
+                                intervalSeedPortion: formated10Percent,
+                                intervalStreamingPortion: formated90Percent,
                             },
                         ],
                         {value: gelatoFeeAllocation}
@@ -714,23 +648,23 @@ describe("Investment Pool Factory", async () => {
                 );
             });
 
-            it("[IPF][2.1.6] Reverts creation if fundraiser campaign ends before it starts", async () => {
+            it("[IPF][2.1.6] Reverts creation if fundraiser fundraiser ends before it starts", async () => {
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
                 const milestoneStartDate = dateToSeconds("2100/09/01");
                 const milestoneEndDate = dateToSeconds("2100/10/01");
-                // Campaign ends before it starts
-                const campaignStartDate = dateToSeconds("2100/08/01");
-                const campaignEndDate = dateToSeconds("2100/07/01");
+                // Fundraiser ends before it starts
+                const fundraiserStartDate = dateToSeconds("2100/08/01");
+                const fundraiserEndDate = dateToSeconds("2100/07/01");
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -740,8 +674,8 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percent10InIpBigNumber,
-                                intervalStreamingPortion: percent90InIpBigNumber,
+                                intervalSeedPortion: formated10Percent,
+                                intervalStreamingPortion: formated90Percent,
                             },
                         ],
                         {value: gelatoFeeAllocation}
@@ -758,16 +692,16 @@ describe("Investment Pool Factory", async () => {
 
                 const milestoneStartDate = dateToSeconds("2100/11/01");
                 const milestoneEndDate = dateToSeconds("2100/12/01");
-                const campaignStartDate = dateToSeconds("2100/07/01");
-                const campaignEndDate = dateToSeconds("2100/10/10");
+                const fundraiserStartDate = dateToSeconds("2100/07/01");
+                const fundraiserEndDate = dateToSeconds("2100/10/10");
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -777,8 +711,8 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percent10InIpBigNumber,
-                                intervalStreamingPortion: percent90InIpBigNumber,
+                                intervalSeedPortion: formated10Percent,
+                                intervalStreamingPortion: formated90Percent,
                             },
                         ],
                         {value: gelatoFeeAllocation}
@@ -795,16 +729,16 @@ describe("Investment Pool Factory", async () => {
 
                 const milestoneStartDate = dateToSeconds("2100/08/01");
                 const milestoneEndDate = dateToSeconds("2100/09/01");
-                const campaignStartDate = dateToSeconds("2100/07/01");
-                const campaignEndDate = dateToSeconds("2100/07/10");
+                const fundraiserStartDate = dateToSeconds("2100/07/01");
+                const fundraiserEndDate = dateToSeconds("2100/07/10");
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -814,8 +748,8 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percent10InIpBigNumber,
-                                intervalStreamingPortion: percent90InIpBigNumber,
+                                intervalSeedPortion: formated10Percent,
+                                intervalStreamingPortion: formated90Percent,
                             },
                         ],
                         {value: gelatoFeeAllocation}
@@ -830,16 +764,16 @@ describe("Investment Pool Factory", async () => {
                 const softCap = ethers.utils.parseEther("1500");
                 const hardCap = ethers.utils.parseEther("15000");
 
-                const campaignStartDate = dateToSeconds("2100/07/01");
-                const campaignEndDate = dateToSeconds("2100/08/10");
+                const fundraiserStartDate = dateToSeconds("2100/07/01");
+                const fundraiserEndDate = dateToSeconds("2100/08/10");
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -859,30 +793,31 @@ describe("Investment Pool Factory", async () => {
                 const hardCap = ethers.utils.parseEther("15000");
 
                 const milestoneStartDate = dateToSeconds("2100/09/01");
-                const campaignStartDate = dateToSeconds("2100/07/01");
-                const campaignEndDate = dateToSeconds("2100/08/01");
+                const fundraiserStartDate = dateToSeconds("2100/07/01");
+                const fundraiserEndDate = dateToSeconds("2100/08/01");
 
                 // 30 days
-                const milestoneDuration = BigNumber.from(30 * 24 * 60 * 60);
+                const milestoneDuration = 30 * 24 * 60 * 60;
                 const maxMilestones = await investmentPoolFactory.getMaxMilestoneCount();
+                const milestones = generateGaplessMilestones(
+                    milestoneStartDate,
+                    milestoneDuration,
+                    maxMilestones + 1 // Intentionally provoke reverting
+                );
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
-                        generateGaplessMilestones(
-                            milestoneStartDate,
-                            milestoneDuration,
-                            maxMilestones + 1 // Intentionally provoke reverting
-                        ),
+                        milestones,
                         {value: gelatoFeeAllocation}
                     )
                 ).to.be.revertedWithCustomError(
@@ -896,14 +831,12 @@ describe("Investment Pool Factory", async () => {
                 const hardCap = ethers.utils.parseEther("15000");
 
                 const milestoneStartDate = dateToSeconds("2100/09/01");
-                const campaignStartDate = dateToSeconds("2100/07/01");
-                const campaignEndDate = dateToSeconds("2100/08/01");
+                const fundraiserStartDate = dateToSeconds("2100/07/01");
+                const fundraiserEndDate = dateToSeconds("2100/08/01");
 
                 // 30 days
-                const milestoneDuration = BigNumber.from(30 * 24 * 60 * 60);
-
+                const milestoneDuration = 30 * 24 * 60 * 60;
                 const maxMilestones = await investmentPoolFactory.getMaxMilestoneCount();
-
                 const milestones = generateGaplessMilestones(
                     milestoneStartDate,
                     milestoneDuration,
@@ -915,8 +848,8 @@ describe("Investment Pool Factory", async () => {
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -935,16 +868,16 @@ describe("Investment Pool Factory", async () => {
                 // Milestone ends before it starts
                 const milestoneStartDate = dateToSeconds("2100/09/01");
                 const milestoneEndDate = dateToSeconds("2100/11/01");
-                const campaignStartDate = dateToSeconds("2100/08/01");
-                const campaignEndDate = dateToSeconds("2100/10/01");
+                const fundraiserStartDate = dateToSeconds("2100/08/01");
+                const fundraiserEndDate = dateToSeconds("2100/10/01");
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -954,8 +887,8 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percent10InIpBigNumber,
-                                intervalStreamingPortion: percent90InIpBigNumber,
+                                intervalSeedPortion: formated10Percent,
+                                intervalStreamingPortion: formated90Percent,
                             },
                         ],
                         {value: gelatoFeeAllocation}
@@ -973,16 +906,16 @@ describe("Investment Pool Factory", async () => {
                 // Milestone ends before it starts
                 const milestoneStartDate = dateToSeconds("2100/10/01");
                 const milestoneEndDate = dateToSeconds("2100/09/01");
-                const campaignStartDate = dateToSeconds("2100/07/01");
-                const campaignEndDate = dateToSeconds("2100/08/01");
+                const fundraiserStartDate = dateToSeconds("2100/07/01");
+                const fundraiserEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -992,8 +925,8 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percent10InIpBigNumber,
-                                intervalStreamingPortion: percent90InIpBigNumber,
+                                intervalSeedPortion: formated10Percent,
+                                intervalStreamingPortion: formated90Percent,
                             },
                         ],
                         {value: gelatoFeeAllocation}
@@ -1010,16 +943,16 @@ describe("Investment Pool Factory", async () => {
 
                 const milestoneStartDate = dateToSeconds("2100/09/01");
                 const milestoneEndDate = dateToSeconds("2100/9/10");
-                const campaignStartDate = dateToSeconds("2100/07/01");
-                const campaignEndDate = dateToSeconds("2100/08/01");
+                const fundraiserStartDate = dateToSeconds("2100/07/01");
+                const fundraiserEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -1029,8 +962,8 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percent10InIpBigNumber,
-                                intervalStreamingPortion: percent90InIpBigNumber,
+                                intervalSeedPortion: formated10Percent,
+                                intervalStreamingPortion: formated90Percent,
                             },
                         ],
                         {value: gelatoFeeAllocation}
@@ -1047,16 +980,16 @@ describe("Investment Pool Factory", async () => {
 
                 const milestoneStartDate = dateToSeconds("2100/09/01");
                 const milestoneEndDate = dateToSeconds("2100/12/10");
-                const campaignStartDate = dateToSeconds("2100/07/01");
-                const campaignEndDate = dateToSeconds("2100/08/01");
+                const fundraiserStartDate = dateToSeconds("2100/07/01");
+                const fundraiserEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -1066,8 +999,8 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percent10InIpBigNumber,
-                                intervalStreamingPortion: percent90InIpBigNumber,
+                                intervalSeedPortion: formated10Percent,
+                                intervalStreamingPortion: formated90Percent,
                             },
                         ],
                         {value: gelatoFeeAllocation}
@@ -1086,16 +1019,16 @@ describe("Investment Pool Factory", async () => {
                 const milestoneEndDate = dateToSeconds("2100/10/01");
                 const milestoneStartDate2 = dateToSeconds("2100/11/01");
                 const milestoneEndDate2 = dateToSeconds("2100/12/01");
-                const campaignStartDate = dateToSeconds("2100/07/01");
-                const campaignEndDate = dateToSeconds("2100/08/01");
+                const fundraiserStartDate = dateToSeconds("2100/07/01");
+                const fundraiserEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -1105,14 +1038,14 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percent10InIpBigNumber,
-                                intervalStreamingPortion: percent90InIpBigNumber,
+                                intervalSeedPortion: formated10Percent,
+                                intervalStreamingPortion: formated90Percent,
                             },
                             {
                                 startDate: milestoneStartDate2,
                                 endDate: milestoneEndDate2,
-                                intervalSeedPortion: percent10InIpBigNumber,
-                                intervalStreamingPortion: percent90InIpBigNumber,
+                                intervalSeedPortion: formated10Percent,
+                                intervalStreamingPortion: formated90Percent,
                             },
                         ],
                         {value: gelatoFeeAllocation}
@@ -1129,16 +1062,16 @@ describe("Investment Pool Factory", async () => {
 
                 const milestoneStartDate = dateToSeconds("2100/09/01");
                 const milestoneEndDate = dateToSeconds("2100/10/01");
-                const campaignStartDate = dateToSeconds("2100/07/01");
-                const campaignEndDate = dateToSeconds("2100/08/01");
+                const fundraiserStartDate = dateToSeconds("2100/07/01");
+                const fundraiserEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -1148,8 +1081,8 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percent5InIpBigNumber,
-                                intervalStreamingPortion: percent90InIpBigNumber,
+                                intervalSeedPortion: formated5Percent,
+                                intervalStreamingPortion: formated90Percent,
                             },
                         ],
                         {value: gelatoFeeAllocation}
@@ -1159,7 +1092,7 @@ describe("Investment Pool Factory", async () => {
                         investmentPoolFactory,
                         "InvestmentPoolFactory__PercentagesAreNotAddingUp"
                     )
-                    .withArgs(percent95InIpBigNumber, percentageDivider);
+                    .withArgs(formated95Percent, percentageDivider);
             });
 
             it("[IPF][2.1.18] Shouldn't be able to create other type of contract than CLONE_PROXY", async () => {
@@ -1168,16 +1101,16 @@ describe("Investment Pool Factory", async () => {
 
                 const milestoneStartDate = dateToSeconds("2100/09/01");
                 const milestoneEndDate = dateToSeconds("2100/10/01");
-                const campaignStartDate = dateToSeconds("2100/07/01");
-                const campaignEndDate = dateToSeconds("2100/08/01");
+                const fundraiserStartDate = dateToSeconds("2100/07/01");
+                const fundraiserEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -1187,8 +1120,8 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percent10InIpBigNumber,
-                                intervalStreamingPortion: percent90InIpBigNumber,
+                                intervalSeedPortion: formated10Percent,
+                                intervalStreamingPortion: formated90Percent,
                             },
                         ],
                         {value: gelatoFeeAllocation}
@@ -1202,16 +1135,16 @@ describe("Investment Pool Factory", async () => {
 
                 const milestoneStartDate = dateToSeconds("2100/09/01");
                 const milestoneEndDate = dateToSeconds("2100/10/01");
-                const campaignStartDate = dateToSeconds("2100/07/01");
-                const campaignEndDate = dateToSeconds("2100/08/01");
+                const fundraiserStartDate = dateToSeconds("2100/07/01");
+                const fundraiserEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -1221,8 +1154,8 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percent10InIpBigNumber,
-                                intervalStreamingPortion: percent90InIpBigNumber,
+                                intervalSeedPortion: formated10Percent,
+                                intervalStreamingPortion: formated90Percent,
                             },
                         ],
                         {value: gelatoFeeAllocation.sub(1)}
@@ -1239,16 +1172,16 @@ describe("Investment Pool Factory", async () => {
 
                 const milestoneStartDate = dateToSeconds("2100/09/01");
                 const milestoneEndDate = dateToSeconds("2100/10/01");
-                const campaignStartDate = dateToSeconds("2100/07/01");
-                const campaignEndDate = dateToSeconds("2100/08/01");
+                const fundraiserStartDate = dateToSeconds("2100/07/01");
+                const fundraiserEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -1258,8 +1191,8 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percent51InIpBigNumber,
-                                intervalStreamingPortion: percent49InIpBigNumber,
+                                intervalSeedPortion: formated51Percent,
+                                intervalStreamingPortion: formated49Percent,
                             },
                         ],
                         {value: gelatoFeeAllocation}
@@ -1278,16 +1211,16 @@ describe("Investment Pool Factory", async () => {
                 const milestoneEndDate = dateToSeconds("2100/10/01");
                 const milestoneStartDate2 = dateToSeconds("2100/10/01");
                 const milestoneEndDate2 = dateToSeconds("2100/11/01");
-                const campaignStartDate = dateToSeconds("2100/07/01");
-                const campaignEndDate = dateToSeconds("2100/08/01");
+                const fundraiserStartDate = dateToSeconds("2100/07/01");
+                const fundraiserEndDate = dateToSeconds("2100/08/01");
 
                 await expect(
                     investmentPoolFactory.connect(creator).createProjectPools(
                         {
                             softCap: softCap,
                             hardCap: hardCap,
-                            fundraiserStartAt: campaignStartDate,
-                            fundraiserEndAt: campaignEndDate,
+                            fundraiserStartAt: fundraiserStartDate,
+                            fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
                             projectToken: fUSDT.address,
                             tokenRewards: ethers.utils.parseEther("100"),
@@ -1297,14 +1230,14 @@ describe("Investment Pool Factory", async () => {
                             {
                                 startDate: milestoneStartDate,
                                 endDate: milestoneEndDate,
-                                intervalSeedPortion: percent10InIpBigNumber,
-                                intervalStreamingPortion: percent40InIpBigNumber,
+                                intervalSeedPortion: formated10Percent,
+                                intervalStreamingPortion: formated40Percent,
                             },
                             {
                                 startDate: milestoneStartDate2,
                                 endDate: milestoneEndDate2,
-                                intervalSeedPortion: percent6InIpBigNumber,
-                                intervalStreamingPortion: percent44InIpBigNumber,
+                                intervalSeedPortion: formated6Percent,
+                                intervalStreamingPortion: formated44Percent,
                             },
                         ],
                         {value: gelatoFeeAllocation}
