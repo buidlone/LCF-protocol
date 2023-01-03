@@ -16,6 +16,9 @@ error DistributionPool__ProjectTokensAlreadyLocked();
 error DistributionPool__NotInvestmentPool();
 error DistributionPool__NotProjectCreator();
 error DistributionPool__NoAllocatedTokensLeft();
+error DistributionPool__AllTokensAreAllocated();
+error DistributionPool__StateIsInvalidForWithdrawal();
+error DistributionPool__ProjectTokensNotLocked();
 
 contract DistributionPool is IInitializableDistributionPool, Context, Initializable {
     using Arrays for uint256[];
@@ -61,6 +64,7 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
     /** EVENTS */
 
     event LockedTokens();
+    event WithdrewTokens();
     event Allocated(address indexed investor, uint256 milestoneId);
     event RemovedAllocation(address indexed investor, uint256 milestoneId);
     event Claimed(address indexed investor, uint256 tokensAmount);
@@ -168,6 +172,10 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
         emit RemovedAllocation(_investor, _milestoneId);
     }
 
+    /**
+     * @notice Allows investors to claim allocation that is already dedicated to the user (by the passed time)
+     * @notice Function is called directly from the distribution pool and not by investment pool
+     */
     function claimAllocation() external {
         (uint256 previousMilestonesAllocation, uint256 flowRate) = getAllocationData(_msgSender());
         uint256 milestoneStartDate = investmentPool
@@ -188,8 +196,8 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
         }
 
         /// @dev If allocation is calculated larger than total allocation for investor, set it to max amount
-        if (allocation > allocatedTokens[_msgSender()]) {
-            allocation = allocatedTokens[_msgSender()];
+        if (allocation > getAllocatedTokens(_msgSender())) {
+            allocation = getAllocatedTokens(_msgSender());
         }
 
         /// @dev Remove the claimed amount to get the allocation investor will get
@@ -202,6 +210,38 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
         if (!success) revert DistributionPool__TokenTransferFailed();
 
         emit Claimed(_msgSender(), leftAllocation);
+    }
+
+    /**
+     * @notice Allows creator to withdraw tokens that are not allocated if project fails
+     * @notice Function is called directly from the distribution pool and not by investment pool
+     */
+    function withdrawTokens() external onlyCreator {
+        if (!didCreatorLockTokens()) revert DistributionPool__ProjectTokensNotLocked();
+
+        uint256 currentState = investmentPool.getProjectStateByteValue();
+        uint256 withdrawAmount;
+
+        if (
+            currentState == investmentPool.getCanceledProjectStateValue() ||
+            currentState == investmentPool.getFailedFundraiserStateValue()
+        ) {
+            withdrawAmount = getLockedTokens();
+        } else if (
+            currentState == investmentPool.getTerminatedByVotingStateValue() ||
+            currentState == investmentPool.getTerminatedByGelatoStateValue()
+        ) {
+            withdrawAmount = getLockedTokens() - getTotalAllocatedTokens();
+        } else {
+            revert DistributionPool__StateIsInvalidForWithdrawal();
+        }
+
+        if (withdrawAmount == 0) revert DistributionPool__AllTokensAreAllocated();
+
+        bool success = projectToken.transfer(_msgSender(), withdrawAmount);
+        if (!success) revert DistributionPool__TokenTransferFailed();
+
+        emit WithdrewTokens();
     }
 
     /** PUBLIC FUNCTIONS */
