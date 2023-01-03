@@ -17,7 +17,7 @@ contract GelatoOpsMock is IOps, IOpsProxyFactory {
 
     function createTask(
         address _execAddress,
-        bytes calldata, /*execDataOrSelector*/
+        bytes calldata /*execDataOrSelector*/,
         ModuleData calldata moduleData,
         address /*feeToken*/
     ) public returns (bytes32 task) {
@@ -37,19 +37,15 @@ contract GelatoOpsMock is IOps, IOpsProxyFactory {
     }
 
     function gelatoTerminateMilestoneStream(uint256 _id) public {
-        executor.gelatoTerminateMilestoneStreamFinal(_id);
+        executor.gelatoTerminateMilestoneStream(_id);
     }
 
-    function cancelTask(
-        bytes32 /*_taskId*/
-    ) external {
+    function cancelTask(bytes32 /*_taskId*/) external {
         emit CancelGelatoTask();
     }
 
     // For simplicity this contract is returned because we won't deploy any proxy
-    function getProxyOf(
-        address /*account*/
-    ) public view returns (address, bool) {
+    function getProxyOf(address /*account*/) public view returns (address, bool) {
         return (address(this), false);
     }
 }

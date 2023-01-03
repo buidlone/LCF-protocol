@@ -56,7 +56,7 @@ contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
         investmentPoolStateValue = _state;
     }
 
-    function getProjectStateByteValue() public view returns (uint256 stateNumber) {
+    function getProjectStateValue() public view returns (uint256 stateNumber) {
         return investmentPoolStateValue;
     }
 
@@ -84,9 +84,9 @@ contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
 
     function startFirstFundsStream() external {}
 
-    function milestoneJumpOrFinalProjectTermination() external {}
+    function advanceToNextMilestone() external {}
 
-    function withdrawRemainingEth() external {}
+    function withdrawEther() external {}
 
     function isEmergencyTerminated() external view returns (bool) {}
 
@@ -96,33 +96,33 @@ contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
 
     function isSoftCapReached() external view returns (bool) {}
 
-    function didFundraiserPeriodEnd() external view returns (bool) {}
+    function isTimeAfterFundraiser() external view returns (bool) {}
 
-    function isFundraiserNotStarted() external view returns (bool) {}
+    function isTimeBeforeFundraiser() external view returns (bool) {}
 
-    function isFundraiserOngoingNow() external view returns (bool) {}
+    function isTimeWithinFundraiser() external view returns (bool) {}
 
-    function isFundraiserEndedButNoMilestoneIsActive() external view returns (bool) {}
+    function isTimeBetweenFundraiserAndMilestones() external view returns (bool) {}
 
-    function isMilestoneOngoingNow(uint _id) external view returns (bool) {}
+    function isTimeWithinMilestone(uint _id) external view returns (bool) {}
 
-    function isAnyMilestoneOngoing() external view returns (bool) {}
+    function isTimeWithinAnyMilestone() external view returns (bool) {}
 
-    function isLastMilestoneOngoing() external view returns (bool) {}
+    function isTimeWithinLastMilestone() external view returns (bool) {}
 
     function isFailedFundraiser() external view returns (bool) {}
 
-    function didProjectEnd() external view returns (bool) {}
+    function isProjectCompleted() external view returns (bool) {}
 
-    function canTerminateMilestoneStreamFinal(uint256 _milestoneId) external view returns (bool) {}
+    function canTerminateMilestoneStream(uint256 _milestoneId) external view returns (bool) {}
 
-    function canGelatoTerminateMilestoneStreamFinal(
+    function canGelatoTerminateMilestoneStream(
         uint256 _milestoneId
     ) external view returns (bool) {}
 
     function getMilestoneSeedAmount(uint256 _milestoneId) external view returns (uint256) {}
 
-    function getTotalMilestoneTokenAllocation(uint _milestoneId) external returns (uint256) {}
+    function getMilestoneTotalAllocation(uint _milestoneId) external returns (uint256) {}
 
     function getInvestorTokensAllocation(
         address _investor,
@@ -139,7 +139,7 @@ contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
 
     function startGelatoTask() external payable {}
 
-    function gelatoTerminateMilestoneStreamFinal(uint256 _milestoneId) external {}
+    function gelatoTerminateMilestoneStream(uint256 _milestoneId) external {}
 
     function getCfaId() external pure returns (bytes32) {}
 
@@ -216,9 +216,9 @@ contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
 
     function getHardCapMultiplier() external view returns (uint256) {}
 
-    function getVotingTokensAmountToMint(uint256 _amount) external view returns (uint256) {}
+    function getVotingTokensToMint(uint256 _amount) external view returns (uint256) {}
 
-    function calculateInvestmentWeight(uint256 _amount) external view returns (uint256) {}
+    function getInvestmentWeight(uint256 _amount) external view returns (uint256) {}
 
     function getVotingTokensSupplyCap() external view returns (uint256) {}
 

@@ -36,7 +36,7 @@ contract InvestmentPoolMock is InvestmentPool {
     }
 
     function terminateMilestoneStreamFinal(uint256 _id) public {
-        _terminateMilestoneStreamFinal(_id);
+        _terminateMilestoneStream(_id);
     }
 
     function claim(uint256 _id) public {
@@ -58,15 +58,11 @@ contract InvestmentPoolMock is InvestmentPool {
     function encodeGelatoTerminationWithSelector(
         uint256 _milestoneId
     ) public pure returns (bytes memory) {
-        return
-            abi.encodeWithSelector(
-                this.gelatoTerminateMilestoneStreamFinal.selector,
-                _milestoneId
-            );
+        return abi.encodeWithSelector(this.gelatoTerminateMilestoneStream.selector, _milestoneId);
     }
 
     function ifNeededUpdateMemInvestmentValue(uint256 _milestoneId) public {
-        _ifNeededUpdateMemInvestmentValue(_milestoneId);
+        _updateMemInvestment(_milestoneId);
     }
 
     function getMemoizedInvestorInvestment(

@@ -214,7 +214,7 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
     function calculateExpectedTokensAllocation(
         uint256 _investedAmount
     ) public view returns (uint256) {
-        uint256 expectedWeight = investmentPool.calculateInvestmentWeight(_investedAmount);
+        uint256 expectedWeight = investmentPool.getInvestmentWeight(_investedAmount);
         uint256 maxWeight = investmentPool.getMaximumWeightDivisor();
         return (getLockedTokens() * expectedWeight) / maxWeight;
     }
@@ -244,7 +244,7 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
         address _investor
     ) public view returns (uint256 alreadyAllocated, uint256 allocationFlowRate) {
         uint256 currentMilestone = investmentPool.getCurrentMilestoneId();
-        uint256 currentState = investmentPool.getProjectStateByteValue();
+        uint256 currentState = investmentPool.getProjectStateValue();
 
         // If no milestone is ongoing, always return 0
         if (

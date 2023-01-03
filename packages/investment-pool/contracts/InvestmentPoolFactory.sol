@@ -62,11 +62,12 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     uint256 internal constant VOTES_WITHDRAW_FEE = 1; // 1% out of 100%
     uint8 internal constant VOTES_PERCENTAGE_THRESHOLD = 51;
 
-    /// * @notice Multiplier for soft cap - 1,9 | hard cap - 1.
-    /// * @dev Multiplier is firstly multiplied by 10 to avoid decimal places rounding in solidity
+    /// @notice Multiplier for soft cap - 1,9 | hard cap - 1.
+    /// @dev Multiplier is firstly multiplied by 10 to avoid decimal places rounding in solidity
     uint256 internal constant SOFT_CAP_MULTIPLIER = 19;
     uint256 internal constant HARD_CAP_MULTIPLIER = 10;
-    uint256 internal constant SOFT_CAP_MAX_MULTIPLIER = 10;
+    /// @notice Max difference between soft cap and hard cap in times. Hard cap can be 10 times bigger than soft cap.
+    uint256 internal constant MAX_PROPORTIONAL_DIFFERENCE = 10;
 
     /**
      * @notice Amount that will be used to cover transaction fee for gelato automation
@@ -75,7 +76,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
      * @dev 108,328 + 353,912 = 462,240 (gas amount needed for gelato termination)
      * @dev If gas price is 200 Gwei, the total fee is 0,092448
      */
-    uint256 internal gelatoFeeAllocationForProject = 0.1 ether;
+    uint256 internal gelatoFee = 0.1 ether;
 
     /* WARNING: NEVER RE-ORDER VARIABLES! Always double-check that new
        variables are added APPEND-ONLY. Re-ordering variables can
@@ -83,34 +84,31 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
 
     ISuperfluid internal immutable HOST;
     address payable internal immutable GELATO_OPS;
-    address internal investmentPoolImplementation;
-    address internal governancePoolImplementation;
-    address internal distributionPoolImplementation;
+    address internal investmentPoolLogic;
+    address internal governancePoolLogic;
+    address internal distributionPoolLogic;
     IVotingToken internal votingToken;
 
     constructor(
         ISuperfluid _host,
         address payable _gelatoOps,
-        address _ipImplementation,
-        address _gpImplementation,
-        address _dpImplementation,
+        address _ipLogic,
+        address _gpLogic,
+        address _dpLogic,
         IVotingToken _votingToken
     ) {
         if (address(_host) == address(0)) revert InvestmentPoolFactory__HostAddressIsZero();
         if (_gelatoOps == address(0)) revert InvestmentPoolFactory__GelatoOpsAddressIsZero();
-        if (
-            _ipImplementation == address(0) ||
-            _gpImplementation == address(0) ||
-            _dpImplementation == address(0)
-        ) revert InvestmentPoolFactory__ImplementationContractAddressIsZero();
+        if (_ipLogic == address(0) || _gpLogic == address(0) || _dpLogic == address(0))
+            revert InvestmentPoolFactory__ImplementationContractAddressIsZero();
 
         HOST = _host;
         GELATO_OPS = _gelatoOps;
 
         // Assign Investment Pool, Governance Pool logic contracts
-        investmentPoolImplementation = _ipImplementation;
-        governancePoolImplementation = _gpImplementation;
-        distributionPoolImplementation = _dpImplementation;
+        investmentPoolLogic = _ipLogic;
+        governancePoolLogic = _gpLogic;
+        distributionPoolLogic = _dpLogic;
         votingToken = _votingToken;
     }
 
@@ -123,8 +121,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         ProxyType _proxyType,
         IInvestmentPool.MilestoneInterval[] calldata _milestones
     ) external payable returns (address) {
-        if (msg.value < getGelatoFeeAllocationForProject())
-            revert InvestmentPoolFactory__NotEnoughEthValue();
+        if (msg.value < getGelatoFee()) revert InvestmentPoolFactory__NotEnoughEthValue();
 
         IInitializableInvestmentPool invPool;
         IInitializableGovernancePool govPool;
@@ -210,7 +207,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     }
 
     function setGelatoFeeAllocation(uint256 _newAmount) external onlyOwner {
-        gelatoFeeAllocationForProject = _newAmount;
+        gelatoFee = _newAmount;
     }
 
     /** PUBLIC FUNCTIONS */
@@ -268,8 +265,12 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         return HARD_CAP_MULTIPLIER;
     }
 
-    function getGelatoFeeAllocationForProject() public view returns (uint256) {
-        return gelatoFeeAllocationForProject;
+    function getMaxProportionalDifference() public pure returns (uint256) {
+        return MAX_PROPORTIONAL_DIFFERENCE;
+    }
+
+    function getGelatoFee() public view returns (uint256) {
+        return gelatoFee;
     }
 
     function getSuperfluidHost() public view returns (address) {
@@ -280,16 +281,16 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         return GELATO_OPS;
     }
 
-    function getInvestmentPoolImplementation() public view returns (address) {
-        return investmentPoolImplementation;
+    function getInvestmentPoolLogic() public view returns (address) {
+        return investmentPoolLogic;
     }
 
-    function getGovernancePoolImplementation() public view returns (address) {
-        return governancePoolImplementation;
+    function getGovernancePoolLogic() public view returns (address) {
+        return governancePoolLogic;
     }
 
-    function getDistributionPoolImplementation() public view returns (address) {
-        return distributionPoolImplementation;
+    function getDistributionPoolLogic() public view returns (address) {
+        return distributionPoolLogic;
     }
 
     function getVotingToken() public view returns (address) {
@@ -303,20 +304,18 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         virtual
         returns (IInitializableInvestmentPool pool)
     {
-        pool = IInitializableInvestmentPool(payable(getInvestmentPoolImplementation().clone()));
+        pool = IInitializableInvestmentPool(payable(getInvestmentPoolLogic().clone()));
     }
 
     function _deployGovernancePoolClone() internal returns (IInitializableGovernancePool pool) {
-        pool = IInitializableGovernancePool(payable(getGovernancePoolImplementation().clone()));
+        pool = IInitializableGovernancePool(payable(getGovernancePoolLogic().clone()));
     }
 
     function _deployDistributionPoolClone()
         internal
         returns (IInitializableDistributionPool pool)
     {
-        pool = IInitializableDistributionPool(
-            payable(getDistributionPoolImplementation().clone())
-        );
+        pool = IInitializableDistributionPool(payable(getDistributionPoolLogic().clone()));
     }
 
     function _assertPoolInitArguments(
@@ -339,7 +338,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         if (_softCap > _hardCap)
             revert InvestmentPoolFactory__SoftCapIsGreaterThanHardCap(_softCap, _hardCap);
 
-        if (_softCap * SOFT_CAP_MAX_MULTIPLIER < _hardCap)
+        if (_softCap * getMaxProportionalDifference() < _hardCap)
             revert InvestmentPoolFactory__SoftCapAndHardCapDifferenceIsTooLarge();
 
         if (_fundraiserStartAt < _getNow())

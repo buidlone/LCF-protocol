@@ -200,7 +200,7 @@ const getConstantVariablesFromContract = async () => {
     formated20Percent = formatPercentage(20);
     formated70Percent = formatPercentage(70);
 
-    gelatoFeeAllocation = await investmentPoolFactory.getGelatoFeeAllocationForProject();
+    gelatoFeeAllocation = await investmentPoolFactory.getGelatoFee();
     ethAddress = await investmentPoolLogic.getEthAddress();
     investmentWithdrawFee = await investmentPoolFactory.getInvestmentWithdrawPercentageFee();
     softCapMultiplier = await investmentPoolFactory.getSoftCapMultiplier();
@@ -514,7 +514,7 @@ describe("Investment Pool", async () => {
 
                 it("[IP][1.1.18] Fundraiser shouldn't be ongoing on a new project", async () => {
                     // NOTE: At this point we are at 2100/06/01
-                    const isFundraiserOngoing = await investmentPool.isFundraiserOngoingNow();
+                    const isFundraiserOngoing = await investmentPool.isTimeWithinFundraiser();
                     assert.isFalse(isFundraiserOngoing);
                 });
 
@@ -524,7 +524,7 @@ describe("Investment Pool", async () => {
                 });
 
                 it("[IP][1.1.20] Fundraiser shouldn't have ended upon campaign creation", async () => {
-                    const hasFundraiserEnded = await investmentPool.didFundraiserPeriodEnd();
+                    const hasFundraiserEnded = await investmentPool.isTimeAfterFundraiser();
                     assert.isFalse(hasFundraiserEnded);
                 });
 
@@ -637,22 +637,22 @@ describe("Investment Pool", async () => {
                 });
 
                 it("[IP][1.1.34] Fundraiser shouldn't have started yet", async () => {
-                    const fundraiserNotStarted = await investmentPool.isFundraiserNotStarted();
+                    const fundraiserNotStarted = await investmentPool.isTimeBeforeFundraiser();
                     assert.isTrue(fundraiserNotStarted);
                 });
 
                 it("[IP][1.1.35] Milestones shouldn't be ongoing yet", async () => {
-                    const milestonesOngoing = await investmentPool.isAnyMilestoneOngoing();
+                    const milestonesOngoing = await investmentPool.isTimeWithinAnyMilestone();
                     assert.isFalse(milestonesOngoing);
                 });
 
                 it("[IP][1.1.36] Project shouldn't have ended yet", async () => {
-                    const ended = await investmentPool.didProjectEnd();
+                    const ended = await investmentPool.isProjectCompleted();
                     assert.isFalse(ended);
                 });
 
                 it("[IP][1.1.37] Project state should be - before fundraiser", async () => {
-                    const state = await investmentPool.getProjectStateByteValue();
+                    const state = await investmentPool.getProjectStateValue();
                     assert.equal(state.toString(), beforeFundraiserStateValue.toString());
                 });
             });
@@ -675,7 +675,7 @@ describe("Investment Pool", async () => {
                     // Timestamp before fundraiser start
                     await investmentPool.setTimestamp(dateToSeconds("2100/06/15"));
 
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
                     assert.equal(projectState.toString(), beforeFundraiserStateValue.toString());
                 });
 
@@ -684,7 +684,7 @@ describe("Investment Pool", async () => {
 
                     await investmentPool.connect(creator).cancelBeforeFundraiserStart();
 
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
                     assert.equal(projectState.toString(), canceledProjectStateValue.toString());
                 });
 
@@ -730,15 +730,15 @@ describe("Investment Pool", async () => {
                     await investmentPool.connect(creator).cancelBeforeFundraiserStart();
 
                     assert.isTrue(await investmentPool.isCanceledBeforeFundraiserStart());
-                    assert.isTrue(await investmentPool.isFundraiserNotStarted());
+                    assert.isTrue(await investmentPool.isTimeBeforeFundraiser());
                     assert.isTrue(await investmentPool.isEmergencyTerminated());
                     assert.isFalse(await investmentPool.isFailedFundraiser());
-                    assert.isFalse(await investmentPool.isFundraiserOngoingNow());
-                    assert.isFalse(await investmentPool.isFundraiserEndedButNoMilestoneIsActive());
-                    assert.isFalse(await investmentPool.isAnyMilestoneOngoing());
-                    assert.isFalse(await investmentPool.isLastMilestoneOngoing());
+                    assert.isFalse(await investmentPool.isTimeWithinFundraiser());
+                    assert.isFalse(await investmentPool.isTimeBetweenFundraiserAndMilestones());
+                    assert.isFalse(await investmentPool.isTimeWithinAnyMilestone());
+                    assert.isFalse(await investmentPool.isTimeWithinLastMilestone());
                     assert.isFalse(await investmentPool.isCanceledDuringMilestones());
-                    assert.isFalse(await investmentPool.didProjectEnd());
+                    assert.isFalse(await investmentPool.isProjectCompleted());
                     assert.notEqual(
                         await investmentPool.getGelatoTask(),
                         ethers.utils.formatBytes32String("")
@@ -926,7 +926,7 @@ describe("Investment Pool", async () => {
                     await investMoney(fUSDTx, investmentPool, investorA, investedAmount);
 
                     await investmentPool.setTimestamp(dateToSeconds("2100/09/15"));
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(
                         projectState.toString(),
@@ -941,7 +941,7 @@ describe("Investment Pool", async () => {
                     await investMoney(fUSDTx, investmentPool, investorA, investedAmount);
 
                     await investmentPool.setTimestamp(dateToSeconds("2100/10/15"));
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(
                         projectState.toString(),
@@ -1124,10 +1124,10 @@ describe("Investment Pool", async () => {
 
                     const terminationWindow = await investmentPool.getTerminationWindow();
                     await timeTravelToDate(milestone0EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     await timeTravelToDate(milestone1EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     await timeTravelToDate(dateToSeconds("2100/12/15"));
 
@@ -1543,10 +1543,10 @@ describe("Investment Pool", async () => {
 
                     const terminationWindow = await investmentPool.getTerminationWindow();
                     await timeTravelToDate(milestone0EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     await timeTravelToDate(milestone1EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     await timeTravelToDate(dateToSeconds("2100/12/15"));
                     await expect(investmentPool.connect(investorA).unpledge())
@@ -1980,7 +1980,7 @@ describe("Investment Pool", async () => {
                     const usedInvestment = await investmentPool.getUsedInvestmentsData(
                         investorA.address
                     );
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(usedInvestment.alreadyAllocated.toString(), "0");
                     assert.equal(usedInvestment.allocationFlowRate.toString(), "0");
@@ -1991,7 +1991,7 @@ describe("Investment Pool", async () => {
                     const usedInvestment = await investmentPool.getUsedInvestmentsData(
                         investorA.address
                     );
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(usedInvestment.alreadyAllocated.toString(), "0");
                     assert.equal(usedInvestment.allocationFlowRate.toString(), "0");
@@ -2007,7 +2007,7 @@ describe("Investment Pool", async () => {
                     const usedInvestment = await investmentPool.getUsedInvestmentsData(
                         investorA.address
                     );
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(usedInvestment.alreadyAllocated.toString(), "0");
                     assert.equal(usedInvestment.allocationFlowRate.toString(), "0");
@@ -2025,7 +2025,7 @@ describe("Investment Pool", async () => {
                     const usedInvestment = await investmentPool.getUsedInvestmentsData(
                         investorA.address
                     );
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(usedInvestment.alreadyAllocated.toString(), "0");
                     assert.equal(usedInvestment.allocationFlowRate.toString(), "0");
@@ -2043,7 +2043,7 @@ describe("Investment Pool", async () => {
                     const usedInvestment = await investmentPool.getUsedInvestmentsData(
                         investorA.address
                     );
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(usedInvestment.alreadyAllocated.toString(), "0");
                     assert.equal(usedInvestment.allocationFlowRate.toString(), "0");
@@ -2069,7 +2069,7 @@ describe("Investment Pool", async () => {
                         0
                     );
                     const duration = await investmentPool.getMilestoneDuration(0);
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(usedInvestment.alreadyAllocated.toString(), "0");
                     assert.equal(
@@ -2103,7 +2103,7 @@ describe("Investment Pool", async () => {
                         1
                     );
                     const duration1 = await investmentPool.getMilestoneDuration(1);
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(
                         usedInvestment.alreadyAllocated.toString(),
@@ -2132,7 +2132,7 @@ describe("Investment Pool", async () => {
                     const usedInvestment = await investmentPool.getUsedInvestmentsData(
                         investorA.address
                     );
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
                     const investmentAllocation0 = await investmentPool.getInvestorTokensAllocation(
                         investorA.address,
                         0
@@ -2169,7 +2169,7 @@ describe("Investment Pool", async () => {
 
                     const terminationWindow = await investmentPool.getTerminationWindow();
                     await timeTravelToDate(milestone0EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     const autoTerminationWindow =
                         await investmentPool.getAutomatedTerminationWindow();
@@ -2190,7 +2190,7 @@ describe("Investment Pool", async () => {
                         1
                     );
                     const duration1 = await investmentPool.getMilestoneDuration(1);
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     const timePassed = emergencyTimestamp - milestone1StartDate;
                     const allocationUntilTermination = investmentAllocation1
@@ -2218,7 +2218,7 @@ describe("Investment Pool", async () => {
                     const usedInvestment = await investmentPool.getUsedInvestmentsData(
                         investorA.address
                     );
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(
                         usedInvestment.alreadyAllocated.toString(),
@@ -2230,7 +2230,7 @@ describe("Investment Pool", async () => {
             });
         });
 
-        describe("8. getVotingTokensAmountToMint() function", () => {
+        describe("8. getVotingTokensToMint() function", () => {
             describe("8.1 Interactions", () => {
                 it("[IP][8.1.1] Should correctly calculate amount to mint during private funding with amount < soft cap", async () => {
                     const investedAmountA: BigNumber = ethers.utils.parseEther("800");
@@ -2239,8 +2239,9 @@ describe("Investment Pool", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/07/15"));
                     await investMoney(fUSDTx, investmentPool, investorA, investedAmountA);
 
-                    const tokensToMint: BigNumber =
-                        await investmentPool.getVotingTokensAmountToMint(investedAmountB);
+                    const tokensToMint: BigNumber = await investmentPool.getVotingTokensToMint(
+                        investedAmountB
+                    );
 
                     assert.equal(
                         tokensToMint.toString(),
@@ -2255,8 +2256,9 @@ describe("Investment Pool", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/07/15"));
                     await investMoney(fUSDTx, investmentPool, investorA, investedAmountA);
 
-                    const tokensToMint: BigNumber =
-                        await investmentPool.getVotingTokensAmountToMint(investedAmountB);
+                    const tokensToMint: BigNumber = await investmentPool.getVotingTokensToMint(
+                        investedAmountB
+                    );
                     const tokensInPrivateFunding = softCap
                         .sub(investedAmountA)
                         .mul(softCapMultiplier);
@@ -2277,8 +2279,9 @@ describe("Investment Pool", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/07/15"));
                     await investMoney(fUSDTx, investmentPool, investorA, investedAmountA);
 
-                    const tokensToMint: BigNumber =
-                        await investmentPool.getVotingTokensAmountToMint(investedAmountB);
+                    const tokensToMint: BigNumber = await investmentPool.getVotingTokensToMint(
+                        investedAmountB
+                    );
                     const tokensInPublicFunding = investedAmountB.mul(hardCapMultiplier);
 
                     assert.equal(tokensToMint.toString(), tokensInPublicFunding.toString());
@@ -2457,7 +2460,7 @@ describe("Investment Pool", async () => {
                     const creatorBalance = await tokenBalanceOf(fUSDTx, creator.address);
                     const milestone = await investmentPool.getMilestone(0);
                     const milestoneAllocation =
-                        await investmentPool.callStatic.getTotalMilestoneTokenAllocation(0);
+                        await investmentPool.callStatic.getMilestoneTotalAllocation(0);
 
                     assert.equal(milestone.paidAmount.toString(), milestoneAllocation.toString());
                     assert.equal(
@@ -2485,7 +2488,7 @@ describe("Investment Pool", async () => {
                     const contractBalance = await tokenBalanceOf(fUSDTx, investmentPool.address);
 
                     const milestoneAllocation =
-                        await investmentPool.callStatic.getTotalMilestoneTokenAllocation(0);
+                        await investmentPool.callStatic.getMilestoneTotalAllocation(0);
                     assert.equal(
                         creatorPriorBalance.add(milestoneAllocation).toString(),
                         creatorBalance.toString()
@@ -2619,10 +2622,10 @@ describe("Investment Pool", async () => {
 
                     const terminationWindow = await investmentPool.getTerminationWindow();
                     await timeTravelToDate(milestone0EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     await timeTravelToDate(milestone1EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     await timeTravelToDate(dateToSeconds("2100/12/15"));
                     await expect(investmentPool.connect(creator).startFirstFundsStream())
@@ -2717,7 +2720,7 @@ describe("Investment Pool", async () => {
 
                     const milestone = await investmentPool.getMilestone(0);
                     const milestoneAllocation =
-                        await investmentPool.callStatic.getTotalMilestoneTokenAllocation(0);
+                        await investmentPool.callStatic.getMilestoneTotalAllocation(0);
                     assert.equal(milestone.paidAmount.toString(), milestoneAllocation.toString());
                     assert.equal(
                         creatorBalance.sub(milestone.paidAmount).toString(),
@@ -2749,7 +2752,7 @@ describe("Investment Pool", async () => {
                     const timeLeft = milestone0EndDate - flowInfo.timestamp.getTime() / 1000;
                     const seedAmount = (await investmentPool.getMilestone(0)).paidAmount;
                     const tokenAllocation =
-                        await investmentPool.callStatic.getTotalMilestoneTokenAllocation(0);
+                        await investmentPool.callStatic.getMilestoneTotalAllocation(0);
                     const flowRate = tokenAllocation.sub(seedAmount).div(timeLeft);
 
                     assert.isDefined(flowInfo);
@@ -2783,7 +2786,7 @@ describe("Investment Pool", async () => {
 
                     const terminationWindow = await investmentPool.getTerminationWindow();
                     await timeTravelToDate(milestone0EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     await expect(
                         investmentPool.connect(creator).claim(0)
@@ -2977,7 +2980,7 @@ describe("Investment Pool", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/09/15"));
                     await governancePool.cancelDuringMilestones(investmentPool.address);
 
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
                     assert.equal(projectState.toString(), terminatedByVotingStateValue.toString());
                 });
             });
@@ -3072,10 +3075,10 @@ describe("Investment Pool", async () => {
 
                     const terminationWindow = await investmentPool.getTerminationWindow();
                     await timeTravelToDate(milestone0EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     await timeTravelToDate(milestone1EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     await timeTravelToDate(dateToSeconds("2100/12/15"));
 
@@ -3104,7 +3107,7 @@ describe("Investment Pool", async () => {
             });
         });
 
-        describe("13. milestoneJumpOrFinalProjectTermination() function", () => {
+        describe("13. advanceToNextMilestone() function", () => {
             describe("13.1 Public state", () => {
                 it("[IP][13.1.1] Should terminate old milestone stream", async () => {
                     const investedAmount: BigNumber = ethers.utils.parseEther("2000");
@@ -3126,9 +3129,7 @@ describe("Investment Pool", async () => {
                     const terminationWindow = await investmentPool.getTerminationWindow();
                     await timeTravelToDate(milestone0EndDate - terminationWindow / 2);
 
-                    await expect(
-                        investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination()
-                    )
+                    await expect(investmentPool.connect(creator).advanceToNextMilestone())
                         .to.emit(investmentPool, "TerminateStream")
                         .withArgs(0);
 
@@ -3157,7 +3158,7 @@ describe("Investment Pool", async () => {
 
                     const terminationWindow = await investmentPool.getTerminationWindow();
                     await timeTravelToDate(milestone0EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     const currentMilestone = await investmentPool.getCurrentMilestoneId();
                     assert.equal(currentMilestone.toString(), "1");
@@ -3176,9 +3177,7 @@ describe("Investment Pool", async () => {
                     const terminationWindow = await investmentPool.getTerminationWindow();
                     await timeTravelToDate(milestone0EndDate - terminationWindow / 2);
 
-                    await expect(
-                        investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination()
-                    )
+                    await expect(investmentPool.connect(creator).advanceToNextMilestone())
                         .to.emit(investmentPool, "ClaimFunds")
                         .withArgs(1, true, false, false)
                         .to.emit(investmentPool, "ClaimFunds")
@@ -3197,12 +3196,13 @@ describe("Investment Pool", async () => {
 
                     const terminationWindow = await investmentPool.getTerminationWindow();
                     await timeTravelToDate(milestone0EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     await timeTravelToDate(milestone1EndDate - terminationWindow / 2);
-                    await expect(
-                        investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination()
-                    ).to.emit(gelatoOpsMock, "CancelGelatoTask");
+                    await expect(investmentPool.connect(creator).advanceToNextMilestone()).to.emit(
+                        gelatoOpsMock,
+                        "CancelGelatoTask"
+                    );
 
                     const currentMilestone = await investmentPool.getCurrentMilestoneId();
                     const flowInfo = await getSuperTokensFlow(
@@ -3227,13 +3227,13 @@ describe("Investment Pool", async () => {
 
                     const terminationWindow = await investmentPool.getTerminationWindow();
                     await timeTravelToDate(milestone0EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     await timeTravelToDate(milestone1EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     await timeTravelToDate(dateToSeconds("2100/12/15"));
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(projectState.toString(), successfullyEndedStateValue.toString());
                 });
@@ -3242,9 +3242,7 @@ describe("Investment Pool", async () => {
             describe("13.2 Interactions", () => {
                 it("[IP][13.2.1] Non-creator should be able to do a milestone jump", async () => {
                     await expect(
-                        investmentPool
-                            .connect(foreignActor)
-                            .milestoneJumpOrFinalProjectTermination()
+                        investmentPool.connect(foreignActor).advanceToNextMilestone()
                     ).to.be.revertedWithCustomError(investmentPool, "InvestmentPool__NotCreator");
                 });
 
@@ -3252,9 +3250,7 @@ describe("Investment Pool", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/06/15"));
                     await investmentPool.connect(creator).cancelBeforeFundraiserStart();
 
-                    await expect(
-                        investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination()
-                    )
+                    await expect(investmentPool.connect(creator).advanceToNextMilestone())
                         .to.be.revertedWithCustomError(
                             investmentPool,
                             "InvestmentPool__CurrentStateIsNotAllowed"
@@ -3265,9 +3261,7 @@ describe("Investment Pool", async () => {
                 it("[IP][13.2.3] Shouldn't be able to do a milestone jump if fundraiser hasn't started", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/06/15"));
 
-                    await expect(
-                        investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination()
-                    )
+                    await expect(investmentPool.connect(creator).advanceToNextMilestone())
                         .to.be.revertedWithCustomError(
                             investmentPool,
                             "InvestmentPool__CurrentStateIsNotAllowed"
@@ -3278,9 +3272,7 @@ describe("Investment Pool", async () => {
                 it("[IP][13.2.4] Shouldn't be able to do a milestone jump if fundraiser is active", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/07/15"));
 
-                    await expect(
-                        investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination()
-                    )
+                    await expect(investmentPool.connect(creator).advanceToNextMilestone())
                         .to.be.revertedWithCustomError(
                             investmentPool,
                             "InvestmentPool__CurrentStateIsNotAllowed"
@@ -3291,9 +3283,7 @@ describe("Investment Pool", async () => {
                 it("[IP][13.2.5] Shouldn't be able to do a milestone jump if fundraiser has failed", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/08/15"));
 
-                    await expect(
-                        investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination()
-                    )
+                    await expect(investmentPool.connect(creator).advanceToNextMilestone())
                         .to.be.revertedWithCustomError(
                             investmentPool,
                             "InvestmentPool__CurrentStateIsNotAllowed"
@@ -3308,9 +3298,7 @@ describe("Investment Pool", async () => {
                     await investMoney(fUSDTx, investmentPool, investorA, investedAmount);
 
                     await investmentPool.setTimestamp(dateToSeconds("2100/08/15"));
-                    await expect(
-                        investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination()
-                    )
+                    await expect(investmentPool.connect(creator).advanceToNextMilestone())
                         .to.be.revertedWithCustomError(
                             investmentPool,
                             "InvestmentPool__CurrentStateIsNotAllowed"
@@ -3327,9 +3315,7 @@ describe("Investment Pool", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/09/15"));
                     await governancePool.cancelDuringMilestones(investmentPool.address);
 
-                    await expect(
-                        investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination()
-                    )
+                    await expect(investmentPool.connect(creator).advanceToNextMilestone())
                         .to.be.revertedWithCustomError(
                             investmentPool,
                             "InvestmentPool__CurrentStateIsNotAllowed"
@@ -3349,15 +3335,13 @@ describe("Investment Pool", async () => {
 
                     const terminationWindow = await investmentPool.getTerminationWindow();
                     await timeTravelToDate(milestone0EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     await timeTravelToDate(milestone1EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     await timeTravelToDate(dateToSeconds("2100/12/15"));
-                    await expect(
-                        investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination()
-                    )
+                    await expect(investmentPool.connect(creator).advanceToNextMilestone())
                         .to.be.revertedWithCustomError(
                             investmentPool,
                             "InvestmentPool__CurrentStateIsNotAllowed"
@@ -3376,7 +3360,7 @@ describe("Investment Pool", async () => {
                     await investmentPool.connect(creator).startFirstFundsStream();
 
                     await expect(
-                        investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination()
+                        investmentPool.connect(creator).advanceToNextMilestone()
                     ).to.be.revertedWithCustomError(
                         investmentPool,
                         "InvestmentPool__MilestoneStreamTerminationUnavailable"
@@ -3394,7 +3378,7 @@ describe("Investment Pool", async () => {
                     await timeTravelToDate(milestone0EndDate - terminationWindow / 2);
 
                     await expect(
-                        investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination()
+                        investmentPool.connect(creator).advanceToNextMilestone()
                     ).to.be.revertedWithCustomError(
                         investmentPool,
                         "InvestmentPool__MilestoneStreamTerminationUnavailable"
@@ -3403,7 +3387,7 @@ describe("Investment Pool", async () => {
             });
         });
 
-        describe("14. withdrawRemainingEth() function", () => {
+        describe("14. withdrawEther() function", () => {
             describe("14.1 Public state", () => {
                 it("[IP][14.1.1] Creator should be able to get the transfered eth", async () => {
                     await investmentPool.connect(creator).cancelBeforeFundraiserStart();
@@ -3413,7 +3397,7 @@ describe("Investment Pool", async () => {
                     );
                     const priorCreatorBalance = await ethers.provider.getBalance(creator.address);
 
-                    const tx = await investmentPool.connect(creator).withdrawRemainingEth();
+                    const tx = await investmentPool.connect(creator).withdrawEther();
                     const receipt = await tx.wait();
                     const txFee = receipt.gasUsed.mul(receipt.effectiveGasPrice);
 
@@ -3438,14 +3422,14 @@ describe("Investment Pool", async () => {
                 it("[IP][14.2.1] Creator should be able to withdraw eth if fundraiser has already been canceled", async () => {
                     await investmentPool.connect(creator).cancelBeforeFundraiserStart();
 
-                    await expect(investmentPool.connect(creator).withdrawRemainingEth()).not.to.be
+                    await expect(investmentPool.connect(creator).withdrawEther()).not.to.be
                         .reverted;
                 });
 
                 it("[IP][14.2.2] Creator should be able to withdraw eth if fundraiser has failed", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/08/15"));
 
-                    await expect(investmentPool.connect(creator).withdrawRemainingEth()).not.to.be
+                    await expect(investmentPool.connect(creator).withdrawEther()).not.to.be
                         .reverted;
                 });
 
@@ -3458,7 +3442,7 @@ describe("Investment Pool", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/09/15"));
                     await governancePool.cancelDuringMilestones(investmentPool.address);
 
-                    await expect(investmentPool.connect(creator).withdrawRemainingEth()).not.to.be
+                    await expect(investmentPool.connect(creator).withdrawEther()).not.to.be
                         .reverted;
                 });
 
@@ -3474,20 +3458,20 @@ describe("Investment Pool", async () => {
 
                     const terminationWindow = await investmentPool.getTerminationWindow();
                     await timeTravelToDate(milestone0EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     await timeTravelToDate(milestone1EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     await timeTravelToDate(dateToSeconds("2100/12/15"));
-                    await expect(investmentPool.connect(creator).withdrawRemainingEth()).not.to.be
+                    await expect(investmentPool.connect(creator).withdrawEther()).not.to.be
                         .reverted;
                 });
 
                 it("[IP][14.2.5] Creator shouldn't be able to withdraw eth if fundraiser hasn't been started", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/06/15"));
 
-                    await expect(investmentPool.connect(creator).withdrawRemainingEth())
+                    await expect(investmentPool.connect(creator).withdrawEther())
                         .to.be.revertedWithCustomError(
                             investmentPool,
                             "InvestmentPool__CurrentStateIsNotAllowed"
@@ -3498,7 +3482,7 @@ describe("Investment Pool", async () => {
                 it("[IP][14.2.6] Creator shouldn't be able to withdraw eth if fundraiser is active", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/07/15"));
 
-                    await expect(investmentPool.connect(creator).withdrawRemainingEth())
+                    await expect(investmentPool.connect(creator).withdrawEther())
                         .to.be.revertedWithCustomError(
                             investmentPool,
                             "InvestmentPool__CurrentStateIsNotAllowed"
@@ -3513,7 +3497,7 @@ describe("Investment Pool", async () => {
                     await investMoney(fUSDTx, investmentPool, investorA, investedAmount);
 
                     await investmentPool.setTimestamp(dateToSeconds("2100/08/15"));
-                    await expect(investmentPool.connect(creator).withdrawRemainingEth())
+                    await expect(investmentPool.connect(creator).withdrawEther())
                         .to.be.revertedWithCustomError(
                             investmentPool,
                             "InvestmentPool__CurrentStateIsNotAllowed"
@@ -3528,7 +3512,7 @@ describe("Investment Pool", async () => {
                     await investMoney(fUSDTx, investmentPool, investorA, investedAmount);
 
                     await investmentPool.setTimestamp(dateToSeconds("2100/09/15"));
-                    await expect(investmentPool.connect(creator).withdrawRemainingEth())
+                    await expect(investmentPool.connect(creator).withdrawEther())
                         .to.be.revertedWithCustomError(
                             investmentPool,
                             "InvestmentPool__CurrentStateIsNotAllowed"
@@ -3543,7 +3527,7 @@ describe("Investment Pool", async () => {
                     await investMoney(fUSDTx, investmentPool, investorA, investedAmount);
 
                     await investmentPool.setTimestamp(dateToSeconds("2100/10/15"));
-                    await expect(investmentPool.connect(creator).withdrawRemainingEth())
+                    await expect(investmentPool.connect(creator).withdrawEther())
                         .to.be.revertedWithCustomError(
                             investmentPool,
                             "InvestmentPool__CurrentStateIsNotAllowed"
@@ -3553,10 +3537,10 @@ describe("Investment Pool", async () => {
 
                 it("[IP][14.2.10] Creator shouldn't be able to withdraw eth if 0 amount is left", async () => {
                     await investmentPool.connect(creator).cancelBeforeFundraiserStart();
-                    await investmentPool.connect(creator).withdrawRemainingEth();
+                    await investmentPool.connect(creator).withdrawEther();
 
                     await expect(
-                        investmentPool.connect(creator).withdrawRemainingEth()
+                        investmentPool.connect(creator).withdrawEther()
                     ).to.be.revertedWithCustomError(
                         investmentPool,
                         "InvestmentPool__NoEthLeftToWithdraw"
@@ -3578,13 +3562,13 @@ describe("Investment Pool", async () => {
                     await timeTravelToDate(milestone0EndDate - automatedTerminationWindow / 2);
                     await gelatoOpsMock.gelatoTerminateMilestoneStream(0);
 
-                    await expect(investmentPool.connect(creator).withdrawRemainingEth()).not.to.be
+                    await expect(investmentPool.connect(creator).withdrawEther()).not.to.be
                         .reverted;
                 });
             });
         });
 
-        describe("15. gelatoTerminateMilestoneStreamFinal() function", () => {
+        describe("15. gelatoTerminateMilestoneStream() function", () => {
             describe("15.1 Interactions", () => {
                 it("[IP][15.1.1] Non gelato address should be able to call gelato stream termination", async () => {
                     const investedAmount: BigNumber = ethers.utils.parseEther("2000");
@@ -3601,7 +3585,7 @@ describe("Investment Pool", async () => {
                     await timeTravelToDate(milestone0EndDate - automatedTerminationWindow / 2);
 
                     await expect(
-                        investmentPool.connect(foreignActor).gelatoTerminateMilestoneStreamFinal(0)
+                        investmentPool.connect(foreignActor).gelatoTerminateMilestoneStream(0)
                     ).not.to.be.reverted;
                 });
                 it("[IP][15.1.2] Gelato shouldn't be able to terminate stream if gelatoTask is not assigned", async () => {
@@ -3799,7 +3783,7 @@ describe("Investment Pool", async () => {
                     await timeTravelToDate(milestone0EndDate - automatedTerminationWindow / 2);
                     await gelatoOpsMock.gelatoTerminateMilestoneStream(0);
 
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
                     assert.equal(projectState.toString(), terminatedByGelatoStateValue.toString());
                 });
 
@@ -3824,11 +3808,10 @@ describe("Investment Pool", async () => {
             });
         });
 
-        describe("16. getMilestonesInvestmentsListForFormula() function", () => {
+        describe("16. getMemoizedInvestmentsList() function", () => {
             describe("16.1 Interactions", () => {
                 it("[IP][16.1.1] Should return empty list if no investments were made", async () => {
-                    const investmentsList =
-                        await investmentPool.getMilestonesInvestmentsListForFormula();
+                    const investmentsList = await investmentPool.getMemoizedInvestmentsList();
                     assert.equal(investmentsList[0].toString(), "0");
                     assert.equal(investmentsList[1].toString(), "0");
                 });
@@ -3839,8 +3822,7 @@ describe("Investment Pool", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/07/15"));
                     await investMoney(fUSDTx, investmentPool, investorA, investedAmount);
 
-                    const investmentsList =
-                        await investmentPool.getMilestonesInvestmentsListForFormula();
+                    const investmentsList = await investmentPool.getMemoizedInvestmentsList();
                     assert.equal(investmentsList[0].toString(), investedAmount.toString());
                     assert.equal(investmentsList[1].toString(), "0");
                 });
@@ -3866,7 +3848,7 @@ describe("Investment Pool", async () => {
                 it("[IP][18.1.1] Should return 0 if project is canceled", async () => {
                     await investmentPool.connect(creator).cancelBeforeFundraiserStart();
                     const usedFunds = await investmentPool.getFundsUsed();
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(usedFunds.toString(), "0");
                     assert.equal(projectState.toString(), canceledProjectStateValue.toString());
@@ -3874,7 +3856,7 @@ describe("Investment Pool", async () => {
 
                 it("[IP][18.1.2] Should return 0 if state is before fundraiser", async () => {
                     const usedFunds = await investmentPool.getFundsUsed();
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(usedFunds.toString(), "0");
                     assert.equal(projectState.toString(), beforeFundraiserStateValue.toString());
@@ -3884,7 +3866,7 @@ describe("Investment Pool", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/07/15"));
 
                     const usedFunds = await investmentPool.getFundsUsed();
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(usedFunds.toString(), "0");
                     assert.equal(projectState.toString(), fundraiserOngoingStateValue.toString());
@@ -3894,7 +3876,7 @@ describe("Investment Pool", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/08/15"));
 
                     const usedFunds = await investmentPool.getFundsUsed();
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(usedFunds.toString(), "0");
                     assert.equal(projectState.toString(), failedFundraiserStateValue.toString());
@@ -3908,7 +3890,7 @@ describe("Investment Pool", async () => {
 
                     await investmentPool.setTimestamp(dateToSeconds("2100/08/15"));
                     const usedFunds = await investmentPool.getFundsUsed();
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(usedFunds.toString(), "0");
                     assert.equal(
@@ -3929,7 +3911,7 @@ describe("Investment Pool", async () => {
 
                     const usedFunds = await investmentPool.getFundsUsed();
                     const milestone0 = await investmentPool.getMilestone(0);
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(
                         usedFunds.toString(),
@@ -3957,14 +3939,14 @@ describe("Investment Pool", async () => {
                     // Do milestone jump from milestone id 0 to 1
                     let terminationWindow = await investmentPool.getTerminationWindow();
                     await timeTravelToDate(milestone0EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     await timeTravelToDate(dateToSeconds("2100/10/15"));
 
                     const usedFunds = await investmentPool.getFundsUsed();
                     const milestone0 = await investmentPool.getMilestone(0);
                     const milestone1 = await investmentPool.getMilestone(1);
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(
                         usedFunds.toString(),
@@ -3998,7 +3980,7 @@ describe("Investment Pool", async () => {
 
                     const usedFunds = await investmentPool.getFundsUsed();
                     const milestone0 = await investmentPool.getMilestone(0);
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(usedFunds.toString(), milestone0.paidAmount.toString());
                     assert.equal(projectState.toString(), terminatedByVotingStateValue.toString());
@@ -4020,7 +4002,7 @@ describe("Investment Pool", async () => {
 
                     const usedFunds = await investmentPool.getFundsUsed();
                     const milestone0 = await investmentPool.getMilestone(0);
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(usedFunds.toString(), milestone0.paidAmount.toString());
                     assert.equal(projectState.toString(), terminatedByGelatoStateValue.toString());
@@ -4039,16 +4021,16 @@ describe("Investment Pool", async () => {
 
                     const terminationWindow = await investmentPool.getTerminationWindow();
                     await timeTravelToDate(milestone0EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     await timeTravelToDate(milestone1EndDate - terminationWindow / 2);
-                    await investmentPool.connect(creator).milestoneJumpOrFinalProjectTermination();
+                    await investmentPool.connect(creator).advanceToNextMilestone();
 
                     await timeTravelToDate(dateToSeconds("2100/12/05"));
                     const usedFunds = await investmentPool.getFundsUsed();
                     const milestone0 = await investmentPool.getMilestone(0);
                     const milestone1 = await investmentPool.getMilestone(1);
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
 
                     assert.equal(
                         usedFunds.toString(),
@@ -4152,7 +4134,7 @@ describe("Investment Pool", async () => {
                 it("[IP][1001.1.1] Fundraiser should be ongoing if the starting date has passed", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/07/15"));
 
-                    const isFundraiserOngoing = await investmentPool.isFundraiserOngoingNow();
+                    const isFundraiserOngoing = await investmentPool.isTimeWithinFundraiser();
                     assert.isTrue(isFundraiserOngoing);
                 });
 
@@ -4166,7 +4148,7 @@ describe("Investment Pool", async () => {
                 it("[IP][1001.1.3] Fundraiser period shouldn't have ended yet", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/07/15"));
 
-                    const hasFundraiserEnded = await investmentPool.didFundraiserPeriodEnd();
+                    const hasFundraiserEnded = await investmentPool.isTimeAfterFundraiser();
                     assert.isFalse(hasFundraiserEnded);
                 });
 
@@ -4180,7 +4162,7 @@ describe("Investment Pool", async () => {
                 it("[IP][6.1.5] During the fundraiser, it should return the correct state", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/07/15"));
 
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
                     assert.equal(projectState.toString(), fundraiserOngoingStateValue.toString());
                 });
             });
@@ -4205,21 +4187,21 @@ describe("Investment Pool", async () => {
                 it("[IP][1002.1.3] Fundraiser shouldn't be ongoing for a failed campaign", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/08/15"));
 
-                    const isFundraiserOngoing = await investmentPool.isFundraiserOngoingNow();
+                    const isFundraiserOngoing = await investmentPool.isTimeWithinFundraiser();
                     assert.isFalse(isFundraiserOngoing);
                 });
 
                 it("[IP][1002.1.4] Fundraiser should have ended for a failed campaign", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/08/15"));
 
-                    const hasFundraiserEnded = await investmentPool.didFundraiserPeriodEnd();
+                    const hasFundraiserEnded = await investmentPool.isTimeAfterFundraiser();
                     assert.isTrue(hasFundraiserEnded);
                 });
 
                 it("[IP][1002.1.5] If fundraiser failed, it should return the correct state", async () => {
                     await investmentPool.setTimestamp(dateToSeconds("2100/08/15"));
 
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
                     assert.equal(projectState.toString(), failedFundraiserStateValue.toString());
                 });
             });
@@ -4256,7 +4238,7 @@ describe("Investment Pool", async () => {
                     await investMoney(fUSDTx, investmentPool, investorA, investedAmount);
 
                     await investmentPool.setTimestamp(dateToSeconds("2100/08/15"));
-                    const isFundraiserOngoing = await investmentPool.isFundraiserOngoingNow();
+                    const isFundraiserOngoing = await investmentPool.isTimeWithinFundraiser();
                     assert.isFalse(isFundraiserOngoing);
                 });
 
@@ -4267,7 +4249,7 @@ describe("Investment Pool", async () => {
                     await investMoney(fUSDTx, investmentPool, investorA, investedAmount);
 
                     await investmentPool.setTimestamp(dateToSeconds("2100/08/15"));
-                    const hasFundraiserEnded = await investmentPool.didFundraiserPeriodEnd();
+                    const hasFundraiserEnded = await investmentPool.isTimeAfterFundraiser();
                     assert.isTrue(hasFundraiserEnded);
                 });
 
@@ -4278,7 +4260,7 @@ describe("Investment Pool", async () => {
                     await investMoney(fUSDTx, investmentPool, investorA, investedAmount);
 
                     await investmentPool.setTimestamp(dateToSeconds("2100/08/15"));
-                    const projectState = await investmentPool.getProjectStateByteValue();
+                    const projectState = await investmentPool.getProjectStateValue();
                     assert.equal(
                         projectState.toString(),
                         fundraiserEndedNoMilestonesOngoingStateValue.toString()
@@ -4353,7 +4335,7 @@ describe("Investment Pool", async () => {
                     const milestone = await investmentPool.getMilestone(0);
                     const paidAmount = milestone.paidAmount;
                     const tokenAllocation =
-                        await investmentPool.callStatic.getTotalMilestoneTokenAllocation(0);
+                        await investmentPool.callStatic.getMilestoneTotalAllocation(0);
 
                     assert.equal(
                         paidAmount.toString(),
@@ -4408,7 +4390,7 @@ describe("Investment Pool", async () => {
                     // Use the timestamp source from the flow info for precision
                     const timeLeft = milestone0EndDate - flowInfo.timestamp.getTime() / 1000;
                     const tokenAllocation =
-                        await investmentPool.callStatic.getTotalMilestoneTokenAllocation(0);
+                        await investmentPool.callStatic.getMilestoneTotalAllocation(0);
                     const flowRate = tokenAllocation.sub(streamedSoFar).div(timeLeft);
 
                     assert.equal(flowInfo.flowRate, flowRate.toString());
@@ -4451,7 +4433,7 @@ describe("Investment Pool", async () => {
                     const creatorBalance = await tokenBalanceOf(fUSDTx, creator.address);
                     const milestone = await investmentPool.getMilestone(0);
                     const tokenAllocation =
-                        await investmentPool.callStatic.getTotalMilestoneTokenAllocation(0);
+                        await investmentPool.callStatic.getMilestoneTotalAllocation(0);
 
                     assert.equal(
                         creatorBalance.sub(initialCreatorBalance).toString(),
@@ -4506,7 +4488,7 @@ describe("Investment Pool", async () => {
                     const creatorBalance = await tokenBalanceOf(fUSDTx, creator.address);
                     const milestone = await investmentPool.getMilestone(0);
                     const tokenAllocation =
-                        await investmentPool.callStatic.getTotalMilestoneTokenAllocation(0);
+                        await investmentPool.callStatic.getMilestoneTotalAllocation(0);
 
                     assert.equal(
                         creatorBalance.sub(initialCreatorBalance).toString(),
