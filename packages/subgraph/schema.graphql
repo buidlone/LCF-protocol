@@ -1,0 +1,7 @@
+type Project @entity(immutable: true) {
+  id: Bytes!
+  owner: Bytes
+  displayName: String
+  imageUrl: String
+  accepted: Boolean
+}

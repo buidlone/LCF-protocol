@@ -3,7 +3,9 @@
     "version": "0.0.1",
     "private": true,
     "description": "Buidl1 contracts monorepo.",
-    "scripts": {},
+    "scripts": {
+        "build":"set -e;for i in investment-pool governance-pool distribution-pool;do yarn workspace @buidlone/$i build;done"
+    },
     "workspaces": {
         "packages": [
             "packages/*"

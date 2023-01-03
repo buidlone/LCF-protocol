@@ -1,0 +1,36 @@
+specVersion: 0.0.2
+description: buidl1 subgraph
+repository: https://github.com/buidlone/LCF-protocol
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum/contract
+    name: InvestmentPool
+    network: goerli
+    source:
+      address: '0x2E645469f354BB4F5c8a05B3b30A929361cf77eC'
+      abi: InvestmentPool
+      startBlock: 6175244
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      entities:
+        - Project
+      abis:
+        - name: InvestmentPool
+          file: ./abis/InvestmentPool.json
+      eventHandlers:
+        - event: Cancel()
+          handler: handleCancelled
+        - event: Invest(indexed address,uint256)
+          handler: handleInvested
+        - event: Unpledge(indexed address,uint256)
+          handler: handleUnpledged
+        - event: ClaimFunds(uint256,bool,bool,bool)
+          handler: handleClaimedFunds
+        - event: Refund(indexed address,uint256);
+          handler: handleRefunded
+        - event: TerminateStream(uint256);
+          handler: handleTerminatedStream
+      file: ./src/mapping.ts

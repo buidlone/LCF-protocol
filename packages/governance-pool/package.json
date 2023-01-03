@@ -1,6 +1,9 @@
 {
   "name": "@buidlone/governance-pool",
   "version": "0.0.1",
+  "files": [
+    "/build/contracts/**/*"
+  ],
   "scripts": {
     "start": "npx hardhat run --network localhost scripts/deploy.ts",
     "build": "npx hardhat compile",
