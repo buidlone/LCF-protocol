@@ -153,7 +153,7 @@ const getConstantVariablesFromContract = async () => {
     formated90Percent = formatPercentage(90);
     formated95Percent = formatPercentage(95);
 
-    gelatoFeeAllocation = await investmentPoolFactory.getGelatoFeeAllocationForProject();
+    gelatoFeeAllocation = await investmentPoolFactory.getGelatoFee();
 };
 
 const deploySuperfluidToken = async () => {
@@ -223,10 +223,8 @@ describe("Investment Pool Factory", async () => {
 
                 const contractHost = await investmentPoolFactory.getSuperfluidHost();
                 const contractGelatoOps = await investmentPoolFactory.getGelatoOps();
-                const ipContractAddress =
-                    await investmentPoolFactory.getInvestmentPoolImplementation();
-                const gpContractAddress =
-                    await investmentPoolFactory.getGovernancePoolImplementation();
+                const ipContractAddress = await investmentPoolFactory.getInvestmentPoolLogic();
+                const gpContractAddress = await investmentPoolFactory.getGovernancePoolLogic();
                 const votingTokenAddress = await investmentPoolFactory.getVotingToken();
 
                 assert.equal(contractHost, sf.settings.config.hostAddress);
@@ -372,7 +370,7 @@ describe("Investment Pool Factory", async () => {
                     investmentPoolFactory.connect(buidl1Admin).setGelatoFeeAllocation(newEthFee)
                 ).not.to.be.reverted;
 
-                const gelatoFee = await investmentPoolFactory.getGelatoFeeAllocationForProject();
+                const gelatoFee = await investmentPoolFactory.getGelatoFee();
                 assert.equal(gelatoFee.toString(), newEthFee.toString());
             });
 
@@ -397,7 +395,7 @@ describe("Investment Pool Factory", async () => {
                     investmentPoolFactory.connect(foreignActor).setGelatoFeeAllocation(newEthFee)
                 ).to.be.revertedWith("Ownable: caller is not the owner");
 
-                const gelatoFee = await investmentPoolFactory.getGelatoFeeAllocationForProject();
+                const gelatoFee = await investmentPoolFactory.getGelatoFee();
                 assert.equal(gelatoFee.toString(), gelatoFeeAllocation.toString());
             });
         });

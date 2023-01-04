@@ -9159,7 +9159,7 @@
               notice:
                 "Vote against the project by transfering investor vote tokens to the governance pool contract.Before calling this function investor needs to approve spender with 'votingToken.setApprovalForAll(governancePoolAddress, true)'.",
             },
-            "votesAgainstPercentageCount(address,uint256)": {
+            "percentageAgainst(address,uint256)": {
               inputs: [
                 {
                   internalType: "address",
@@ -9172,7 +9172,7 @@
                   type: "uint256",
                 },
               ],
-              name: "votesAgainstPercentageCount",
+              name: "percentageAgainst",
               outputs: [{ internalType: "uint8", name: "", type: "uint8" }],
               stateMutability: "view",
               type: "function",
@@ -9199,7 +9199,7 @@
               notice:
                 "mapping from investor address => investment pool id => voting tokens asmount",
             },
-            "willInvestorReachThreshold(address,uint256)": {
+            "thresholdReached(address,uint256)": {
               inputs: [
                 {
                   internalType: "address",
@@ -9212,7 +9212,7 @@
                   type: "uint256",
                 },
               ],
-              name: "willInvestorReachThreshold",
+              name: "thresholdReached",
               outputs: [{ internalType: "bool", name: "", type: "bool" }],
               stateMutability: "view",
               type: "function",

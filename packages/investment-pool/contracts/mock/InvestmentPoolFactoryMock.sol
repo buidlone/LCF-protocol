@@ -50,9 +50,7 @@ contract InvestmentPoolFactoryMock is InvestmentPoolFactory {
         override
         returns (IInitializableInvestmentPool pool)
     {
-        InvestmentPoolMock p = InvestmentPoolMock(
-            payable(getInvestmentPoolImplementation().clone())
-        );
+        InvestmentPoolMock p = InvestmentPoolMock(payable(getInvestmentPoolLogic().clone()));
         p.setTimestamp(timestamp);
         return p;
     }

@@ -9147,7 +9147,7 @@
               stateMutability: "view",
               type: "function",
             },
-            "canGelatoTerminateMilestoneStreamFinal(uint256)": {
+            "canGelatoTerminateMilestoneStream(uint256)": {
               inputs: [
                 {
                   internalType: "uint256",
@@ -9155,14 +9155,14 @@
                   type: "uint256",
                 },
               ],
-              name: "canGelatoTerminateMilestoneStreamFinal",
+              name: "canGelatoTerminateMilestoneStream",
               outputs: [{ internalType: "bool", name: "", type: "bool" }],
               stateMutability: "view",
               type: "function",
               notice:
                 "Check if milestone can be terminated by Gelato automation",
             },
-            "canTerminateMilestoneStreamFinal(uint256)": {
+            "canTerminateMilestoneStream(uint256)": {
               inputs: [
                 {
                   internalType: "uint256",
@@ -9170,7 +9170,7 @@
                   type: "uint256",
                 },
               ],
-              name: "canTerminateMilestoneStreamFinal",
+              name: "canTerminateMilestoneStream",
               outputs: [{ internalType: "bool", name: "", type: "bool" }],
               stateMutability: "view",
               type: "function",
@@ -9225,17 +9225,17 @@
               stateMutability: "view",
               type: "function",
             },
-            "didFundraiserPeriodEnd()": {
+            "isTimeAfterFundraiser()": {
               inputs: [],
-              name: "didFundraiserPeriodEnd",
+              name: "isTimeAfterFundraiser",
               outputs: [{ internalType: "bool", name: "", type: "bool" }],
               stateMutability: "view",
               type: "function",
               notice: "Check if the fundraiser period has ended",
             },
-            "didProjectEnd()": {
+            "isProjectCompleted()": {
               inputs: [],
-              name: "didProjectEnd",
+              name: "isProjectCompleted",
               outputs: [{ internalType: "bool", name: "", type: "bool" }],
               stateMutability: "view",
               type: "function",
@@ -9307,7 +9307,7 @@
               stateMutability: "view",
               type: "function",
             },
-            "gelatoTerminateMilestoneStreamFinal(uint256)": {
+            "gelatoTerminateMilestoneStream(uint256)": {
               inputs: [
                 {
                   internalType: "uint256",
@@ -9315,7 +9315,7 @@
                   type: "uint256",
                 },
               ],
-              name: "gelatoTerminateMilestoneStreamFinal",
+              name: "gelatoTerminateMilestoneStream",
               outputs: [],
               stateMutability: "nonpayable",
               type: "function",
@@ -9334,9 +9334,9 @@
               type: "function",
               notice: "get seed amount dedicated to the milestone",
             },
-            "getProjectStateByteValue()": {
+            "getProjectStateValue()": {
               inputs: [],
-              name: "getProjectStateByteValue",
+              name: "getProjectStateValue",
               outputs: [
                 {
                   internalType: "uint256",
@@ -9353,7 +9353,7 @@
               },
               notice: "Complete multiple checks and determine project state",
             },
-            "getTotalMilestoneTokenAllocation(uint256)": {
+            "getMilestoneTotalAllocation(uint256)": {
               inputs: [
                 {
                   internalType: "uint256",
@@ -9361,7 +9361,7 @@
                   type: "uint256",
                 },
               ],
-              name: "getTotalMilestoneTokenAllocation",
+              name: "getMilestoneTotalAllocation",
               outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
               stateMutability: "nonpayable",
               type: "function",
@@ -9516,9 +9516,9 @@
               stateMutability: "view",
               type: "function",
             },
-            "isAnyMilestoneOngoing()": {
+            "isTimeWithinAnyMilestone()": {
               inputs: [],
-              name: "isAnyMilestoneOngoing",
+              name: "isTimeWithinAnyMilestone",
               outputs: [{ internalType: "bool", name: "", type: "bool" }],
               stateMutability: "view",
               type: "function",
@@ -9558,44 +9558,44 @@
               notice:
                 "Check if fundraiser has failed (didn't raise >= soft cap && ended)",
             },
-            "isFundraiserEndedButNoMilestoneIsActive()": {
+            "isTimeBetweenFundraiserAndMilestones()": {
               inputs: [],
-              name: "isFundraiserEndedButNoMilestoneIsActive",
+              name: "isTimeBetweenFundraiserAndMilestones",
               outputs: [{ internalType: "bool", name: "", type: "bool" }],
               stateMutability: "view",
               type: "function",
               notice:
                 "Check if fundraiser has ended but 0 milestone has not started yet. Gap between fundraiser and 0 milestone",
             },
-            "isFundraiserNotStarted()": {
+            "isTimeBeforeFundraiser()": {
               inputs: [],
-              name: "isFundraiserNotStarted",
+              name: "isTimeBeforeFundraiser",
               outputs: [{ internalType: "bool", name: "", type: "bool" }],
               stateMutability: "view",
               type: "function",
               notice: "Check if the fundraiser period has not started",
             },
-            "isFundraiserOngoingNow()": {
+            "isTimeWithinFundraiser()": {
               inputs: [],
-              name: "isFundraiserOngoingNow",
+              name: "isTimeWithinFundraiser",
               outputs: [{ internalType: "bool", name: "", type: "bool" }],
               stateMutability: "view",
               type: "function",
               notice: "Check if in fundraiser period",
             },
-            "isLastMilestoneOngoing()": {
+            "isTimeWithinLastMilestone()": {
               inputs: [],
-              name: "isLastMilestoneOngoing",
+              name: "isTimeWithinLastMilestone",
               outputs: [{ internalType: "bool", name: "", type: "bool" }],
               stateMutability: "view",
               type: "function",
               notice: "Check if last milestone is ongoing now",
             },
-            "isMilestoneOngoingNow(uint256)": {
+            "isTimeWithinMilestone(uint256)": {
               inputs: [
                 { internalType: "uint256", name: "_id", type: "uint256" },
               ],
-              name: "isMilestoneOngoingNow",
+              name: "isTimeWithinMilestone",
               outputs: [{ internalType: "bool", name: "", type: "bool" }],
               stateMutability: "view",
               type: "function",
@@ -9611,9 +9611,9 @@
               notice:
                 "Check if the fundraiser has raised enough invested funds to reach soft cap",
             },
-            "milestoneJumpOrFinalProjectTermination()": {
+            "advanceToNextMilestone()": {
               inputs: [],
-              name: "milestoneJumpOrFinalProjectTermination",
+              name: "advanceToNextMilestone",
               outputs: [],
               stateMutability: "nonpayable",
               type: "function",
@@ -9704,9 +9704,9 @@
               notice:
                 "Allows investors to change their mind during the active fundraiser or not last milestone is active.Funds are transfered back if milestone hasn't started yet. Unpledge all at once, or just a specified amount",
             },
-            "withdrawRemainingEth()": {
+            "withdrawEther()": {
               inputs: [],
-              name: "withdrawRemainingEth",
+              name: "withdrawEther",
               outputs: [],
               stateMutability: "nonpayable",
               type: "function",
@@ -9785,9 +9785,9 @@
             },
           },
           stateVariables: {
-            "gelatoFeeAllocationForProject()": {
+            "gelatoFee()": {
               inputs: [],
-              name: "gelatoFeeAllocationForProject",
+              name: "gelatoFee",
               outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
               stateMutability: "view",
               type: "stateVariable",
@@ -9957,9 +9957,9 @@
               stateMutability: "view",
               type: "function",
             },
-            "investmentPoolImplementation()": {
+            "investmentPoolLogic()": {
               inputs: [],
-              name: "investmentPoolImplementation",
+              name: "investmentPoolLogic",
               outputs: [{ internalType: "address", name: "", type: "address" }],
               stateMutability: "view",
               type: "function",

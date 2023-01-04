@@ -202,7 +202,7 @@ const deployLogicContracts = async (): Promise<
 const getConstantVariablesFromContract = async () => {
     await deployInvestmentPoolFactory();
 
-    gelatoFeeAllocation = await investmentPoolFactory.getGelatoFeeAllocationForProject();
+    gelatoFeeAllocation = await investmentPoolFactory.getGelatoFee();
     percentageDivider = await investmentPoolFactory.getPercentageDivider();
     formated5Percent = formatPercentage(5);
     formated20Percent = formatPercentage(20);
@@ -341,9 +341,7 @@ describe("Investment Pool integration with Governance Pool and Distribution Pool
 
         it("[IP-DP][3.2] Distribution pool should allocate tokens.", async () => {
             const investedAmount: BigNumber = ethers.utils.parseEther("100");
-            const investmentWeight = await investmentPool.calculateInvestmentWeight(
-                investedAmount
-            );
+            const investmentWeight = await investmentPool.getInvestmentWeight(investedAmount);
 
             await investmentPool.setTimestamp(dateToSeconds("2100/07/15"));
             await investMoney(fUSDTx, investmentPool, investorA, investedAmount);
@@ -369,10 +367,7 @@ describe("Investment Pool integration with Governance Pool and Distribution Pool
             const totalSupply = await governancePool.getVotingTokensSupply();
 
             await investmentPool.setTimestamp(dateToSeconds("2100/09/15"));
-            const activeVotingTokens = await governancePool.getActiveVotingTokensBalance(
-                0,
-                investorA.address
-            );
+            const activeVotingTokens = await governancePool.getActiveVotes(0, investorA.address);
 
             assert.equal(
                 totalSupply.toString(),

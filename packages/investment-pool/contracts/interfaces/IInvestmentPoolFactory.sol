@@ -64,15 +64,15 @@ interface IInvestmentPoolFactory {
 
     function getHardCapMultiplier() external pure returns (uint256);
 
-    function getGelatoFeeAllocationForProject() external view returns (uint256);
+    function getGelatoFee() external view returns (uint256);
 
     function getSuperfluidHost() external view returns (address);
 
     function getGelatoOps() external view returns (address payable);
 
-    function getInvestmentPoolImplementation() external view returns (address);
+    function getInvestmentPoolLogic() external view returns (address);
 
-    function getGovernancePoolImplementation() external view returns (address);
+    function getGovernancePoolLogic() external view returns (address);
 
     function getVotingToken() external view returns (address);
 }

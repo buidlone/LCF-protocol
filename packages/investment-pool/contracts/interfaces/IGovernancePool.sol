@@ -18,13 +18,13 @@ interface IGovernancePool {
 
     function permanentlyLockVotes(uint256 _votes) external;
 
-    function getUnusedVotesAmount() external view returns (uint256);
+    function getUnusedVotes(address _investor) external view returns (uint256);
 
-    function votesAgainstPercentageCount(uint256 _votesAgainst) external view returns (uint8);
+    function percentageAgainst(uint256 _votesAgainst) external view returns (uint8);
 
-    function willInvestorReachThreshold(uint256 _investorVotesCount) external view returns (bool);
+    function thresholdReached(uint256 _investorVotesCount) external view returns (bool);
 
-    function getActiveVotingTokensBalance(
+    function getActiveVotes(
         uint256 _milestoneId,
         address _account
     ) external view returns (uint256);
@@ -59,9 +59,7 @@ interface IGovernancePool {
 
     function getTotalLockedAmount() external view returns (uint256);
 
-    function getMilestonesIdsInWhichBalanceChanged(
-        address _investor
-    ) external view returns (uint256[] memory);
+    function getMilestonesWithVotes(address _investor) external view returns (uint256[] memory);
 
     function getTokensMinted(
         address _investor,
