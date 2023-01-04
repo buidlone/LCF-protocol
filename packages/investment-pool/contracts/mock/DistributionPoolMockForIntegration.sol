@@ -32,6 +32,8 @@ contract DistributionPoolMockForIntegration is IInitializableDistributionPool {
 
     function claimAllocation() external {}
 
+    function withdrawTokens() external {}
+
     function calculateExpectedTokensAllocation(
         uint256 _investedAmount
     ) public view returns (uint256) {}

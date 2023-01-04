@@ -21,6 +21,8 @@ interface IDistributionPool {
 
     function claimAllocation() external;
 
+    function withdrawTokens() external;
+
     function calculateExpectedTokensAllocation(
         uint256 _investedAmount
     ) external view returns (uint256);
