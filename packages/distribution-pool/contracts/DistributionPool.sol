@@ -219,7 +219,7 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
     function withdrawTokens() external onlyCreator {
         if (!didCreatorLockTokens()) revert DistributionPool__ProjectTokensNotLocked();
 
-        uint256 currentState = investmentPool.getProjectStateByteValue();
+        uint256 currentState = investmentPool.getProjectStateValue();
         uint256 withdrawAmount;
 
         if (
