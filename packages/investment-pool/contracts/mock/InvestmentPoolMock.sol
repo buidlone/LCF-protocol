@@ -19,11 +19,11 @@ contract InvestmentPoolMock is InvestmentPool {
         return timestamp == 0 ? block.timestamp : timestamp;
     }
 
-    function getMemMilestonePortions(uint256 _id) public view returns (uint256) {
+    function getMemMilestonePortions(uint16 _id) public view returns (uint256) {
         return memMilestonePortions[_id];
     }
 
-    function getMemMilestoneInvestments(uint256 _id) public view returns (uint256) {
+    function getMemMilestoneInvestments(uint16 _id) public view returns (uint256) {
         return memMilestoneInvestments[_id];
     }
 
@@ -31,15 +31,15 @@ contract InvestmentPoolMock is InvestmentPool {
         currentMilestone++;
     }
 
-    function setCurrentMilestone(uint256 _milestone) public {
+    function setCurrentMilestone(uint16 _milestone) public {
         currentMilestone = _milestone;
     }
 
-    function terminateMilestoneStreamFinal(uint256 _id) public {
+    function terminateMilestoneStreamFinal(uint16 _id) public {
         _terminateMilestoneStream(_id);
     }
 
-    function claim(uint256 _id) public {
+    function claim(uint16 _id) public {
         _claim(_id);
     }
 
@@ -56,25 +56,25 @@ contract InvestmentPoolMock is InvestmentPool {
     }
 
     function encodeGelatoTerminationWithSelector(
-        uint256 _milestoneId
+        uint16 _milestoneId
     ) public pure returns (bytes memory) {
         return abi.encodeWithSelector(this.gelatoTerminateMilestoneStream.selector, _milestoneId);
     }
 
-    function ifNeededUpdateMemInvestmentValue(uint256 _milestoneId) public {
+    function ifNeededUpdateMemInvestmentValue(uint16 _milestoneId) public {
         _updateMemInvestment(_milestoneId);
     }
 
     function getMemoizedInvestorInvestment(
         address _investor,
-        uint256 _milestoneId
+        uint16 _milestoneId
     ) public view returns (uint256) {
         return _getMemoizedInvestorInvestment(_investor, _milestoneId);
     }
 
     function getMemInvestorInvestments(
         address _investor,
-        uint256 _milestoneId
+        uint16 _milestoneId
     ) public view returns (uint256) {
         return memInvestorInvestments[_investor][_milestoneId];
     }

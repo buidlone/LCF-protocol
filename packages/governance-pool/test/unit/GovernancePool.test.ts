@@ -19,24 +19,26 @@ let votingToken: VotingToken;
 let governancePool: GovernancePoolMock;
 let investmentPool: InvestmentPoolMockForIntegration;
 
-let votesWithdrawFee: BigNumber;
-let fundraiserOngoingStateValue: BigNumber;
-let anyMilestoneOngoingStateValue: BigNumber;
-let milestonesOngoingBeforeLastStateValue: BigNumber;
-let lastMilestoneOngoingStateValue: BigNumber;
+let votesWithdrawFee: number;
 let governancePoolRole: string;
 
-const defineStateValues = async () => {
-    fundraiserOngoingStateValue = await governancePool.getFundraiserOngoingStateValue();
-    anyMilestoneOngoingStateValue = await governancePool.getAnyMilestoneOngoingStateValue();
-    milestonesOngoingBeforeLastStateValue =
-        await governancePool.getMilestonesOngoingBeforeLastStateValue();
-    lastMilestoneOngoingStateValue = await governancePool.getLastMilestoneOngoingStateValue();
+let fundraiserOngoingStateValue: number;
+let anyMilestoneOngoingStateValue: number;
+let milestonesOngoingBeforeLastStateValue: number;
+let lastMilestoneOngoingStateValue: number;
+
+const defineStateValues = async (ip: InvestmentPoolMockForIntegration) => {
+    fundraiserOngoingStateValue = await ip.getFundraiserOngoingStateValue();
+    anyMilestoneOngoingStateValue = await ip.getAnyMilestoneOngoingStateValue();
+    milestonesOngoingBeforeLastStateValue = await ip.getMilestonesOngoingBeforeLastStateValue();
+    lastMilestoneOngoingStateValue = await ip.getLastMilestoneOngoingStateValue();
 };
 
 const getConstantVariablesFromContract = async () => {
+    await deployContracts();
+
     votesWithdrawFee = await governancePool.getVotesWithdrawPercentageFee();
-    await defineStateValues();
+    await defineStateValues(investmentPool);
 };
 
 const deployContracts = async () => {
@@ -76,7 +78,6 @@ describe("Governance Pool", async () => {
         investmentPoolFactoryAsUser = accounts[5];
 
         // Deploy before defining contract variables
-        await deployContracts();
         await getConstantVariablesFromContract();
     });
 
@@ -628,8 +629,8 @@ describe("Governance Pool", async () => {
                         investorA.address
                     );
 
-                    assert.deepEqual(initialMilestonesIds, [BigNumber.from(0), BigNumber.from(1)]);
-                    assert.deepEqual(milestonesIdsAfterBurn, [BigNumber.from(0)]);
+                    assert.deepEqual(initialMilestonesIds, [0, 1]);
+                    assert.deepEqual(milestonesIdsAfterBurn, [0]);
                 });
 
                 it("[GP][7.1.7] Should update memActiveTokens mapping", async () => {
@@ -1221,10 +1222,7 @@ describe("Governance Pool", async () => {
                         investorA.address
                     );
 
-                    const expectedIds = [
-                        ...priorSenderMilestonesIds,
-                        BigNumber.from(currentMilestoneId),
-                    ];
+                    const expectedIds = [...priorSenderMilestonesIds, currentMilestoneId];
                     assert.deepEqual(endingSenderMilestonesIds, expectedIds);
                 });
 
@@ -1252,10 +1250,7 @@ describe("Governance Pool", async () => {
                     const endingRecipientMilestonesIds =
                         await governancePool.getMilestonesWithVotes(investorB.address);
 
-                    const expectedIds = [
-                        ...priorRecipientMilestonesIds,
-                        BigNumber.from(currentMilestoneId),
-                    ];
+                    const expectedIds = [...priorRecipientMilestonesIds, currentMilestoneId];
                     assert.deepEqual(endingRecipientMilestonesIds, expectedIds);
                 });
 
@@ -1621,10 +1616,7 @@ describe("Governance Pool", async () => {
                         investorA.address
                     );
 
-                    const expectedIds = [
-                        ...priorSenderMilestonesIds,
-                        BigNumber.from(currentMilestoneId),
-                    ];
+                    const expectedIds = [...priorSenderMilestonesIds, currentMilestoneId];
                     assert.deepEqual(endingSenderMilestonesIds, expectedIds);
                 });
 

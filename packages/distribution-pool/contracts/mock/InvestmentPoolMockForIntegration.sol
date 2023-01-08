@@ -7,28 +7,16 @@ import {ISuperfluid, ISuperToken, ISuperApp, ISuperAgreement, SuperAppDefinition
 import {IGovernancePool} from "@buidlone/investment-pool/contracts/interfaces/IGovernancePool.sol";
 import {IDistributionPool} from "@buidlone/investment-pool/contracts/interfaces/IDistributionPool.sol";
 import {IInitializableInvestmentPool, IInvestmentPool} from "@buidlone/investment-pool/contracts/interfaces/IInvestmentPool.sol";
+import {AbstractInvestmentPool, AbstractEmptyInvestmentPool} from "@buidlone/investment-pool/contracts/abstracts/AInvestmentPool.sol";
 
-contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
+contract InvestmentPoolMockForIntegration is AbstractInvestmentPool, AbstractEmptyInvestmentPool {
     IDistributionPool public distributionPool;
     uint48 internal emergencyTerminationTimestamp;
     address internal creator;
-    uint256 internal currentMilestone = 0;
-    uint256 internal investmentPoolStateValue;
-    uint256 internal constant CANCELED_PROJECT_STATE_VALUE = 1;
-    uint256 internal constant BEFORE_FUNDRAISER_STATE_VALUE = 2;
-    uint256 internal constant FUNDRAISER_ONGOING_STATE_VALUE = 4;
-    uint256 internal constant FAILED_FUNDRAISER_STATE_VALUE = 8;
-    uint256 internal constant FUNDRAISER_ENDED_NO_MILESTONES_ONGOING_STATE_VALUE = 16;
-    uint256 internal constant MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE = 32;
-    uint256 internal constant LAST_MILESTONE_ONGOING_STATE_VALUE = 64;
-    uint256 internal constant TERMINATED_BY_VOTING_STATE_VALUE = 128;
-    uint256 internal constant TERMINATED_BY_GELATO_STATE_VALUE = 256;
-    uint256 internal constant SUCCESSFULLY_ENDED_STATE_VALUE = 512;
-    uint256 internal constant UNKNOWN_STATE_VALUE = 1024;
-    uint256 internal constant ANY_MILESTONE_ONGOING_STATE_VALUE =
-        MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE | LAST_MILESTONE_ONGOING_STATE_VALUE;
+    uint16 internal currentMilestone = 0;
+    uint24 internal investmentPoolStateValue;
 
-    mapping(uint256 => IInvestmentPool.Milestone) internal milestones;
+    mapping(uint16 => IInvestmentPool.Milestone) internal milestones;
 
     constructor(
         IDistributionPool _distributionPool,
@@ -39,7 +27,7 @@ contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
         creator = _creator;
 
         MilestoneInterval memory interval;
-        for (uint32 i = 0; i < _milestones.length; ++i) {
+        for (uint16 i = 0; i < _milestones.length; ++i) {
             interval = _milestones[i];
             milestones[i] = Milestone({
                 startDate: interval.startDate,
@@ -54,19 +42,8 @@ contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
         }
     }
 
-    function initialize(
-        ISuperfluid _host,
-        address payable _gelatoOps,
-        IInvestmentPool.ProjectInfo calldata _projectInfo,
-        IInvestmentPool.VotingTokensMultipliers calldata _multipliers,
-        uint256 _investmentWithdrawFee,
-        MilestoneInterval[] calldata _milestones,
-        IGovernancePool _governancePool,
-        IDistributionPool _distributionPool
-    ) external payable {}
-
     function allocateTokens(
-        uint256 _milestoneId,
+        uint16 _milestoneId,
         address _investor,
         uint256 _investmentWeight,
         uint256 _weightDivisor,
@@ -81,19 +58,36 @@ contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
         );
     }
 
-    function getCreator() external view returns (address) {
+    function getCreator()
+        external
+        view
+        override(IInvestmentPool, AbstractEmptyInvestmentPool)
+        returns (address)
+    {
         return creator;
     }
 
-    function getInvestmentWeight(uint256 _amount) external pure returns (uint256) {
+    function getInvestmentWeight(
+        uint256 _amount
+    ) external pure override(IInvestmentPool, AbstractEmptyInvestmentPool) returns (uint256) {
         return _amount * 10;
     }
 
-    function getMaximumWeightDivisor() external pure returns (uint256) {
+    function getMaximumWeightDivisor()
+        external
+        pure
+        override(IInvestmentPool, AbstractEmptyInvestmentPool)
+        returns (uint256)
+    {
         return 100000 ether;
     }
 
-    function getCurrentMilestoneId() external view returns (uint256) {
+    function getCurrentMilestoneId()
+        external
+        view
+        override(IInvestmentPool, AbstractEmptyInvestmentPool)
+        returns (uint16)
+    {
         return currentMilestone;
     }
 
@@ -101,28 +95,47 @@ contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
         currentMilestone += 1;
     }
 
-    function setMilestoneId(uint256 _id) external {
+    function setMilestoneId(uint16 _id) external {
         currentMilestone = _id;
     }
 
-    function setProjectState(uint256 _state) public {
+    function setProjectState(uint24 _state) public {
         investmentPoolStateValue = _state;
     }
 
-    function getProjectStateValue() public view returns (uint256 stateNumber) {
+    function getProjectStateValue()
+        public
+        view
+        override(IInvestmentPool, AbstractEmptyInvestmentPool)
+        returns (uint24 stateNumber)
+    {
         return investmentPoolStateValue;
     }
 
-    function getMilestoneDuration(uint256 _milestoneId) public view returns (uint256) {
+    function getMilestoneDuration(
+        uint16 _milestoneId
+    ) public view override(IInvestmentPool, AbstractEmptyInvestmentPool) returns (uint256) {
         Milestone memory milestone = getMilestone(_milestoneId);
         return milestone.endDate - milestone.startDate;
     }
 
-    function getMilestone(uint256 _milestoneId) public view returns (Milestone memory) {
+    function getMilestone(
+        uint16 _milestoneId
+    )
+        public
+        view
+        override(IInvestmentPool, AbstractEmptyInvestmentPool)
+        returns (Milestone memory)
+    {
         return milestones[_milestoneId];
     }
 
-    function isStateAnyMilestoneOngoing() external view returns (bool) {
+    function isStateAnyMilestoneOngoing()
+        external
+        view
+        override(IInvestmentPool, AbstractEmptyInvestmentPool)
+        returns (bool)
+    {
         if (investmentPoolStateValue & getAnyMilestoneOngoingStateValue() == 0) {
             return false;
         } else {
@@ -130,234 +143,16 @@ contract InvestmentPoolMockForIntegration is IInitializableInvestmentPool {
         }
     }
 
-    function getEmergencyTerminationTimestamp() external view returns (uint48) {
+    function getEmergencyTerminationTimestamp()
+        external
+        view
+        override(IInvestmentPool, AbstractEmptyInvestmentPool)
+        returns (uint48)
+    {
         return emergencyTerminationTimestamp;
     }
 
     function setEmergencyTerminationTimestamp(uint48 _timestamp) external {
         emergencyTerminationTimestamp = _timestamp;
     }
-
-    function getCanceledProjectStateValue() public pure returns (uint256) {
-        return CANCELED_PROJECT_STATE_VALUE;
-    }
-
-    function getBeforeFundraiserStateValue() public pure returns (uint256) {
-        return BEFORE_FUNDRAISER_STATE_VALUE;
-    }
-
-    function getFundraiserOngoingStateValue() public pure returns (uint256) {
-        return FUNDRAISER_ONGOING_STATE_VALUE;
-    }
-
-    function getFailedFundraiserStateValue() public pure returns (uint256) {
-        return FAILED_FUNDRAISER_STATE_VALUE;
-    }
-
-    function getFundraiserEndedNoMilestonesOngoingStateValue() public pure returns (uint256) {
-        return FUNDRAISER_ENDED_NO_MILESTONES_ONGOING_STATE_VALUE;
-    }
-
-    function getMilestonesOngoingBeforeLastStateValue() public pure returns (uint256) {
-        return MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE;
-    }
-
-    function getLastMilestoneOngoingStateValue() public pure returns (uint256) {
-        return LAST_MILESTONE_ONGOING_STATE_VALUE;
-    }
-
-    function getTerminatedByVotingStateValue() public pure returns (uint256) {
-        return TERMINATED_BY_VOTING_STATE_VALUE;
-    }
-
-    function getTerminatedByGelatoStateValue() public pure returns (uint256) {
-        return TERMINATED_BY_GELATO_STATE_VALUE;
-    }
-
-    function getSuccessfullyEndedStateValue() public pure returns (uint256) {
-        return SUCCESSFULLY_ENDED_STATE_VALUE;
-    }
-
-    function getUnknownStateValue() public pure returns (uint256) {
-        return UNKNOWN_STATE_VALUE;
-    }
-
-    function getAnyMilestoneOngoingStateValue() public pure returns (uint256) {
-        return ANY_MILESTONE_ONGOING_STATE_VALUE;
-    }
-
-    function getGovernancePool() public view returns (address) {}
-
-    function invest(uint256 _amount, bool _strict) external {}
-
-    function unpledge() external {}
-
-    function refund() external {}
-
-    function cancelBeforeFundraiserStart() external {}
-
-    function cancelDuringMilestones() external {}
-
-    function startFirstFundsStream() external {}
-
-    function advanceToNextMilestone() external {}
-
-    function withdrawEther() external {}
-
-    function isEmergencyTerminated() external view returns (bool) {}
-
-    function isCanceledBeforeFundraiserStart() external view returns (bool) {}
-
-    function isCanceledDuringMilestones() external view returns (bool) {}
-
-    function isSoftCapReached() external view returns (bool) {}
-
-    function isTimeAfterFundraiser() external view returns (bool) {}
-
-    function isTimeBeforeFundraiser() external view returns (bool) {}
-
-    function isTimeWithinFundraiser() external view returns (bool) {}
-
-    function isTimeBetweenFundraiserAndMilestones() external view returns (bool) {}
-
-    function isTimeWithinMilestone(uint _id) external view returns (bool) {}
-
-    function isTimeWithinAnyMilestone() external view returns (bool) {}
-
-    function isTimeWithinLastMilestone() external view returns (bool) {}
-
-    function isFailedFundraiser() external view returns (bool) {}
-
-    function isProjectCompleted() external view returns (bool) {}
-
-    function canTerminateMilestoneStream(uint256 _milestoneId) external view returns (bool) {}
-
-    function canGelatoTerminateMilestoneStream(
-        uint256 _milestoneId
-    ) external view returns (bool) {}
-
-    function getMilestoneSeedAmount(uint256 _milestoneId) external view returns (uint256) {}
-
-    function getMilestoneTotalAllocation(uint _milestoneId) external returns (uint256) {}
-
-    function getInvestorTokensAllocation(
-        address _investor,
-        uint256 _milestoneId
-    ) external view returns (uint256) {}
-
-    function getUsedInvestmentsData(address _investor) external view returns (uint256, uint256) {}
-
-    function getMilestonesWithInvestment(
-        address _investor
-    ) external view returns (uint256[] memory) {}
-
-    function gelatoChecker() external view returns (bool canExec, bytes memory execPayload) {}
-
-    function startGelatoTask() external payable {}
-
-    function gelatoTerminateMilestoneStream(uint256 _milestoneId) external {}
-
-    function getCfaId() external pure returns (bytes32) {}
-
-    function getPercentageDivider() external pure returns (uint256) {}
-
-    function getEthAddress() external pure returns (address) {}
-
-    function getAcceptedToken() external view returns (address) {}
-
-    function getGelatoTaskCreated() external view returns (bool) {}
-
-    function getGelatoOps() external view returns (address) {}
-
-    function getGelato() external view returns (address payable) {}
-
-    function getGelatoTask() external view returns (bytes32) {}
-
-    function getSoftCap() external view returns (uint96) {}
-
-    function getHardCap() external view returns (uint96) {}
-
-    function getFundraiserStartTime() external view returns (uint48) {}
-
-    function getFundraiserEndTime() external view returns (uint48) {}
-
-    function getTotalStreamingDuration() external view returns (uint48) {}
-
-    function getTerminationWindow() external view returns (uint48) {}
-
-    function getAutomatedTerminationWindow() external view returns (uint48) {}
-
-    function getTotalInvestedAmount() external view returns (uint256) {}
-
-    function getInvestedAmount(
-        address _investor,
-        uint256 _milestoneId
-    ) external view returns (uint256) {}
-
-    function getMilestonesCount() external view returns (uint256) {}
-
-    function getInvestmentWithdrawPercentageFee() external view returns (uint256) {}
-
-    function getSoftCapMultiplier() external view returns (uint256) {}
-
-    function getHardCapMultiplier() external view returns (uint256) {}
-
-    function getVotingTokensToMint(uint256 _amount) external view returns (uint256) {}
-
-    function getVotingTokensSupplyCap() external view returns (uint256) {}
-
-    function getMilestonesPortionLeft(uint256 _milestoneId) external view returns (uint256) {}
-
-    function getFundsUsed() external view returns (uint256) {}
-
-    function beforeAgreementCreated(
-        ISuperToken superToken,
-        address agreementClass,
-        bytes32 agreementId,
-        bytes calldata agreementData,
-        bytes calldata ctx
-    ) external view returns (bytes memory cbdata) {}
-
-    function afterAgreementCreated(
-        ISuperToken superToken,
-        address agreementClass,
-        bytes32 agreementId,
-        bytes calldata agreementData,
-        bytes calldata cbdata,
-        bytes calldata ctx
-    ) external returns (bytes memory newCtx) {}
-
-    function beforeAgreementTerminated(
-        ISuperToken superToken,
-        address agreementClass,
-        bytes32 agreementId,
-        bytes calldata agreementData,
-        bytes calldata ctx
-    ) external view returns (bytes memory cbdata) {}
-
-    function afterAgreementTerminated(
-        ISuperToken superToken,
-        address agreementClass,
-        bytes32 agreementId,
-        bytes calldata agreementData,
-        bytes calldata cbdata,
-        bytes calldata ctx
-    ) external returns (bytes memory newCtx) {}
-
-    function beforeAgreementUpdated(
-        ISuperToken superToken,
-        address agreementClass,
-        bytes32 agreementId,
-        bytes calldata agreementData,
-        bytes calldata ctx
-    ) external view returns (bytes memory cbdata) {}
-
-    function afterAgreementUpdated(
-        ISuperToken superToken,
-        address agreementClass,
-        bytes32 agreementId,
-        bytes calldata agreementData,
-        bytes calldata cbdata,
-        bytes calldata ctx
-    ) external returns (bytes memory newCtx) {}
 }

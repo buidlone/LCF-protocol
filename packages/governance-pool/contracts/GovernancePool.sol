@@ -6,10 +6,10 @@ pragma solidity ^0.8.14;
 import {ERC1155Holder} from "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
-import {Arrays} from "@openzeppelin/contracts/utils/Arrays.sol";
 import {IInvestmentPool} from "@buidlone/investment-pool/contracts/interfaces/IInvestmentPool.sol";
 import {IInitializableGovernancePool} from "@buidlone/investment-pool/contracts/interfaces/IGovernancePool.sol";
 import {VotingToken} from "./VotingToken.sol";
+import {Arrays} from "@buidlone/investment-pool/contracts/utils/Arrays.sol";
 
 error GovernancePool__InvestmentPoolAlreadyExists();
 error GovernancePool__NotInvestmentPool();
@@ -20,27 +20,19 @@ error GovernancePool__AmountIsGreaterThanVotingTokensBalance(uint256 amount, uin
 error GovernancePool__NoVotesAgainstProject();
 error GovernancePool__AmountIsGreaterThanDelegatedVotes(uint256 amount, uint256 votes);
 error GovernancePool__TotalSupplyIsSmallerThanVotesAgainst(uint256 totalSupply, uint256 votes);
-error GovernancePool__InvestmentPoolStateNotAllowed(uint256 stateValue);
+error GovernancePool__InvestmentPoolStateNotAllowed(uint24 stateValue);
 error GovernancePool__CannotTransferMoreThanUnlockedTokens();
 error GovernancePool__NoVotingTokensMintedDuringCurrentMilestone();
 
 /// @title Governance Pool contract.
 contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context, Initializable {
-    using Arrays for uint256[];
+    using Arrays for uint16[];
 
     // ERC1155 contract where all voting tokens are stored
     VotingToken internal votingToken;
-    uint8 internal votesPercentageThreshold;
-    uint256 internal votesWithdrawFee; // out of 100%
-    // TODO: investment pool also hold the values of state. Only in one contract value should be hardcode and others should get from it.
-    // This will prevent for later bugs when changing state values
-    uint256 internal constant FUNDRAISER_ONGOING_STATE_VALUE = 4;
-    uint256 internal constant MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE = 32;
-    uint256 internal constant LAST_MILESTONE_ONGOING_STATE_VALUE = 64;
-    uint256 internal constant ANY_MILESTONE_ONGOING_STATE_VALUE =
-        MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE | LAST_MILESTONE_ONGOING_STATE_VALUE;
-
     IInvestmentPool investmentPool;
+    uint8 internal votesPercentageThreshold;
+    uint32 internal votesWithdrawFee; // out of 100%
 
     /// @notice mapping from investor address => votes amount against the project
     mapping(address => uint256) internal votesAmount;
@@ -51,7 +43,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
     uint256 internal totalLockedAmount;
 
     /// @notice mapping from investor address => milestone id => amount of voting tokens minted
-    mapping(address => mapping(uint256 => uint256)) internal tokensMinted;
+    mapping(address => mapping(uint16 => uint256)) internal tokensMinted;
 
     /**
      * @notice It's a memoization mapping from investor address => milestone id => amount of voting tokens
@@ -60,16 +52,16 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
      * @dev It doesn't hold real money value, but a value, which will be used in other formulas.
      * @dev Memoization will never be used on it's own, to get voting tokens balance.
      */
-    mapping(address => mapping(uint256 => uint256)) internal memActiveTokens;
+    mapping(address => mapping(uint16 => uint256)) internal memActiveTokens;
     /**
      * @notice mapping from investor address => list of milestones
      * @dev Array returns all milestones, in which voting tokens amount increased or decreased was made by investor.
      */
-    mapping(address => uint256[]) internal milestonesWithVotes;
+    mapping(address => uint16[]) internal milestonesWithVotes;
 
     /** EVENTS */
 
-    event MintVotingTokens(address indexed investor, uint256 indexed milestoneId, uint256 amount);
+    event MintVotingTokens(address indexed investor, uint16 indexed milestoneId, uint256 amount);
     event VoteAgainstProject(address indexed investor, uint256 amount);
     event FinishVoting();
     event RetractVotes(address indexed investor, uint256 amount);
@@ -80,8 +72,8 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
     /** MODIFIERS */
 
     /// @notice Ensures that provided current project state is one of the provided. It uses bitwise operations in condition
-    modifier allowedInvestmentPoolStates(uint256 _states) {
-        uint256 currentInvestmentPoolState = investmentPool.getProjectStateValue();
+    modifier allowedInvestmentPoolStates(uint24 _states) {
+        uint24 currentInvestmentPoolState = investmentPool.getProjectStateValue();
         if (_states & currentInvestmentPoolState == 0)
             revert GovernancePool__InvestmentPoolStateNotAllowed(currentInvestmentPoolState);
         _;
@@ -110,7 +102,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
         address _votingToken,
         IInvestmentPool _investmentPool,
         uint8 _threshold,
-        uint256 _votestWithdrawFee
+        uint32 _votestWithdrawFee
     ) external payable initializer {
         /// @dev we can skip checking if threshold is valid number, because that check was already done in IPF
 
@@ -130,7 +122,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
      *  @param _amount tokens amount to mint.
      */
     function mintVotingTokens(
-        uint256 _milestoneId,
+        uint16 _milestoneId,
         address _investor,
         uint256 _amount
     )
@@ -259,13 +251,13 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
      *  @param _milestoneId milestone, in which investor invested previously.
      */
     function burnVotes(
-        uint256 _milestoneId,
+        uint16 _milestoneId,
         address _investor
     )
         external
         onlyInvestmentPool
         allowedInvestmentPoolStates(
-            getFundraiserOngoingStateValue() | getAnyMilestoneOngoingStateValue()
+            getFundraiserOngoingStateValue() | getMilestonesOngoingBeforeLastStateValue()
         )
     {
         uint256 burnAmount = getTokensMinted(_investor, _milestoneId);
@@ -293,7 +285,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
         uint256 _amount
     ) external allowedInvestmentPoolStates(getAnyMilestoneOngoingStateValue()) {
         if (_amount == 0) revert GovernancePool__AmountIsZero();
-        uint256 currentMilestoneId = investmentPool.getCurrentMilestoneId();
+        uint16 currentMilestoneId = investmentPool.getCurrentMilestoneId();
         uint256 votesLeft = getUnusedVotes(_msgSender());
 
         if (_amount > votesLeft) revert GovernancePool__CannotTransferMoreThanUnlockedTokens();
@@ -338,7 +330,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
         notZeroAmount(_votes)
         allowedInvestmentPoolStates(getAnyMilestoneOngoingStateValue())
     {
-        uint256 currentMilestoneId = investmentPool.getCurrentMilestoneId();
+        uint16 currentMilestoneId = investmentPool.getCurrentMilestoneId();
         uint256 votesLeft = getUnusedVotes(_msgSender());
 
         if (_votes > votesLeft) revert GovernancePool__CannotTransferMoreThanUnlockedTokens();
@@ -377,7 +369,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
      *  @return votes that are sill unused
      */
     function getUnusedVotes(address _investor) public view returns (uint256) {
-        uint256 currentMilestoneId = investmentPool.getCurrentMilestoneId();
+        uint16 currentMilestoneId = investmentPool.getCurrentMilestoneId();
 
         // Get the voting tokens that are active and can be used for voting
         uint256 activeVotingTokensBalance = _getActiveVotes(currentMilestoneId, _investor);
@@ -437,7 +429,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
      *  @param _account address of the account to check
      *  @return uint256 -> balance of tokens owned in milestone
      */
-    function getActiveVotes(uint256 _milestoneId, address _account) public view returns (uint256) {
+    function getActiveVotes(uint16 _milestoneId, address _account) public view returns (uint256) {
         // If no milestone is ongoing, always return 0
         if (!investmentPool.isStateAnyMilestoneOngoing()) {
             return 0;
@@ -456,10 +448,10 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
      *  @return uint256 -> balance of tokens owned in milestone
      */
     function _getActiveVotes(
-        uint256 _milestoneId,
+        uint16 _milestoneId,
         address _account
     ) internal view returns (uint256) {
-        uint256[] memory milestonesIds = getMilestonesWithVotes(_account);
+        uint16[] memory milestonesIds = getMilestonesWithVotes(_account);
 
         // Calculate the real balance
         if (milestonesIds.length == 0) {
@@ -483,16 +475,14 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
             // Because in previous condition we checked if investments were made to the milestone id,
             // we can be sure that findUpperBound function will return the value greater than element of length of the array,
             /// @dev not using milestonesIds variable because findUpperBound works only with storage variables.
-            uint256 nearestMilestoneIdFromTop = milestonesWithVotes[_account].findUpperBound(
-                _milestoneId
-            );
+            uint16 nearestMilestoneIdFromTop = milestonesIds.findUpperBound(_milestoneId);
 
             if (nearestMilestoneIdFromTop == milestonesIds.length) {
                 // If length of an array was returned, it means
                 // no milestone id in the array is greater than the current one.
                 // Get the last value on milestonesIds array, because all the milestones after it
                 // have the same active tokens amount.
-                uint256 lastMilestoneIdWithInvestment = milestonesIds[milestonesIds.length - 1];
+                uint16 lastMilestoneIdWithInvestment = milestonesIds[milestonesIds.length - 1];
                 return memActiveTokens[_account][lastMilestoneIdWithInvestment];
             } else if (
                 nearestMilestoneIdFromTop == 0 &&
@@ -517,7 +507,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
                 // the index that is higher by 1 array element. That is we need to subtract 1, to get the right index
                 // When we have the right index, we can return the active tokens amount
                 // This condition can be met when looking for tokens amount in past milestones
-                uint256 milestoneIdWithInvestment = milestonesIds[nearestMilestoneIdFromTop - 1];
+                uint16 milestoneIdWithInvestment = milestonesIds[nearestMilestoneIdFromTop - 1];
                 return memActiveTokens[_account][milestoneIdWithInvestment];
             }
         }
@@ -561,24 +551,20 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
         return votesPercentageThreshold;
     }
 
-    function getVotesWithdrawPercentageFee() public view returns (uint256) {
+    function getVotesWithdrawPercentageFee() public view returns (uint32) {
         return votesWithdrawFee;
     }
 
-    function getFundraiserOngoingStateValue() public pure returns (uint256) {
-        return FUNDRAISER_ONGOING_STATE_VALUE;
+    function getFundraiserOngoingStateValue() public view returns (uint24) {
+        return investmentPool.getFundraiserOngoingStateValue();
     }
 
-    function getMilestonesOngoingBeforeLastStateValue() public pure returns (uint256) {
-        return MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE;
+    function getMilestonesOngoingBeforeLastStateValue() public view returns (uint24) {
+        return investmentPool.getMilestonesOngoingBeforeLastStateValue();
     }
 
-    function getLastMilestoneOngoingStateValue() public pure returns (uint256) {
-        return LAST_MILESTONE_ONGOING_STATE_VALUE;
-    }
-
-    function getAnyMilestoneOngoingStateValue() public pure returns (uint256) {
-        return ANY_MILESTONE_ONGOING_STATE_VALUE;
+    function getAnyMilestoneOngoingStateValue() public view returns (uint24) {
+        return investmentPool.getAnyMilestoneOngoingStateValue();
     }
 
     function getInvestmentPool() public view returns (address) {
@@ -601,13 +587,13 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
         return totalLockedAmount;
     }
 
-    function getMilestonesWithVotes(address _investor) public view returns (uint256[] memory) {
+    function getMilestonesWithVotes(address _investor) public view returns (uint16[] memory) {
         return milestonesWithVotes[_investor];
     }
 
     function getTokensMinted(
         address _investor,
-        uint256 _milestoneId
+        uint16 _milestoneId
     ) public view returns (uint256) {
         return tokensMinted[_investor][_milestoneId];
     }

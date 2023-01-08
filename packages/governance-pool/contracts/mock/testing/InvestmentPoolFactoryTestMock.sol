@@ -34,11 +34,11 @@ contract InvestmentPoolFactoryTestMock is InvestmentPoolFactory {
         return 15 minutes;
     }
 
-    function getMilestoneMinDuration() public pure override returns (uint256) {
+    function getMilestoneMinDuration() public pure override returns (uint48) {
         return 2 hours;
     }
 
-    function getFundraiserMinDuration() public pure override returns (uint256) {
+    function getFundraiserMinDuration() public pure override returns (uint48) {
         return 1 minutes;
     }
 }

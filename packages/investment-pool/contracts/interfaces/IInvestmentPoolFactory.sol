@@ -42,27 +42,31 @@ interface IInvestmentPoolFactory {
         IInvestmentPool.MilestoneInterval[] calldata _milestones
     ) external payable returns (address);
 
-    function getMaxMilestoneCount() external pure returns (uint32);
+    function getMaxMilestoneCount() external pure returns (uint16);
 
     function getTerminationWindow() external pure returns (uint48);
 
     function getAutomatedTerminationWindow() external pure returns (uint48);
 
-    function getPercentageDivider() external pure returns (uint256);
+    function getPercentageDivider() external pure returns (uint48);
 
-    function getMilestoneMinDuration() external pure returns (uint256);
+    function getMilestoneMinDuration() external pure returns (uint48);
 
-    function getMilestoneMaxDuration() external pure returns (uint256);
+    function getMilestoneMaxDuration() external pure returns (uint48);
 
-    function getFundraiserMinDuration() external pure returns (uint256);
+    function getFundraiserMinDuration() external pure returns (uint48);
 
-    function getFundraiserMaxDuration() external pure returns (uint256);
+    function getFundraiserMaxDuration() external pure returns (uint48);
 
-    function getInvestmentWithdrawPercentageFee() external pure returns (uint256);
+    function getInvestmentWithdrawPercentageFee() external pure returns (uint32);
 
-    function getSoftCapMultiplier() external pure returns (uint256);
+    function getVotesWithdrawPercentageFee() external pure returns (uint32);
 
-    function getHardCapMultiplier() external pure returns (uint256);
+    function getSoftCapMultiplier() external pure returns (uint16);
+
+    function getHardCapMultiplier() external pure returns (uint16);
+
+    function getMaxProportionalDifference() external pure returns (uint16);
 
     function getGelatoFee() external view returns (uint256);
 

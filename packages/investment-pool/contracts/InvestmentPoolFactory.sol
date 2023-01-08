@@ -32,12 +32,12 @@ error InvestmentPoolFactory__MilestonesCountExceedsMaxCount();
 error InvestmentPoolFactory__MilestoneStartsBeforeFundraiserEnds();
 error InvestmentPoolFactory__InvalidMilestoneInverval();
 error InvestmentPoolFactory__PercentagesAreNotAddingUp(
-    uint256 totalPercentagesProvided,
-    uint256 maxPercentages
+    uint48 totalPercentagesProvided,
+    uint48 maxPercentages
 );
 error InvestmentPoolFactory__MilestonesAreNotAdjacentInTime(
-    uint256 oldMilestoneEnd,
-    uint256 newMilestoneStart
+    uint48 oldMilestoneEnd,
+    uint48 newMilestoneStart
 );
 error InvestmentPoolFactory__NotEnoughEthValue();
 error InvestmentPoolFactory__FailedToSendEthToInvestmentPool();
@@ -50,24 +50,28 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     // Assign all Clones library functions to addresses
     using Clones for address;
 
-    uint32 internal constant MAX_MILESTONE_COUNT = 10;
+    /* WARNING: NEVER RE-ORDER VARIABLES! Always double-check that new
+       variables are added APPEND-ONLY. Re-ordering variables can
+       permanently BREAK the deployed proxy contract. */
+
+    uint8 internal constant VOTES_PERCENTAGE_THRESHOLD = 51;
+    /// @dev Multiplier is firstly multiplied by 10 to avoid decimal places rounding in solidity
+    uint16 internal constant SOFT_CAP_MULTIPLIER = 19;
+    uint16 internal constant HARD_CAP_MULTIPLIER = 10;
+    /// @notice Max difference between soft cap and hard cap in times. Hard cap can be 10 times bigger than soft cap.
+    uint16 internal constant MAX_PROPORTIONAL_DIFFERENCE = 10;
+
+    uint16 internal constant MAX_MILESTONE_COUNT = 10;
+    uint48 internal constant PERCENTAGE_DIVIDER = 10 ** 6;
+    uint32 internal constant INVESTMENT_WITHDRAW_FEE = 1; // 1% out of 100%
+    uint32 internal constant VOTES_WITHDRAW_FEE = 1; // 1% out of 100%
+
     uint48 internal constant TERMINATION_WINDOW = 3 days;
     uint48 internal constant AUTOMATED_TERMINATION_WINDOW = 1 hours;
-    uint256 internal constant PERCENTAGE_DIVIDER = 10 ** 6;
-    uint256 internal constant MILESTONE_MIN_DURATION = 30 days;
-    uint256 internal constant MILESTONE_MAX_DURATION = 90 days;
-    uint256 internal constant FUNDRAISER_MIN_DURATION = 30 days;
-    uint256 internal constant FUNDRAISER_MAX_DURATION = 90 days;
-    uint256 internal constant INVESTMENT_WITHDRAW_FEE = 1; // 1% out of 100%
-    uint256 internal constant VOTES_WITHDRAW_FEE = 1; // 1% out of 100%
-    uint8 internal constant VOTES_PERCENTAGE_THRESHOLD = 51;
-
-    /// @notice Multiplier for soft cap - 1,9 | hard cap - 1.
-    /// @dev Multiplier is firstly multiplied by 10 to avoid decimal places rounding in solidity
-    uint256 internal constant SOFT_CAP_MULTIPLIER = 19;
-    uint256 internal constant HARD_CAP_MULTIPLIER = 10;
-    /// @notice Max difference between soft cap and hard cap in times. Hard cap can be 10 times bigger than soft cap.
-    uint256 internal constant MAX_PROPORTIONAL_DIFFERENCE = 10;
+    uint48 internal constant MILESTONE_MIN_DURATION = 30 days;
+    uint48 internal constant MILESTONE_MAX_DURATION = 90 days;
+    uint48 internal constant FUNDRAISER_MIN_DURATION = 30 days;
+    uint48 internal constant FUNDRAISER_MAX_DURATION = 90 days;
 
     /**
      * @notice Amount that will be used to cover transaction fee for gelato automation
@@ -77,10 +81,6 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
      * @dev If gas price is 200 Gwei, the total fee is 0,092448
      */
     uint256 internal gelatoFee = 0.1 ether;
-
-    /* WARNING: NEVER RE-ORDER VARIABLES! Always double-check that new
-       variables are added APPEND-ONLY. Re-ordering variables can
-       permanently BREAK the deployed proxy contract. */
 
     ISuperfluid internal immutable HOST;
     address payable internal immutable GELATO_OPS;
@@ -213,7 +213,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     /** PUBLIC FUNCTIONS */
 
     /** GETTERS */
-    function getMaxMilestoneCount() public pure returns (uint32) {
+    function getMaxMilestoneCount() public pure returns (uint16) {
         return MAX_MILESTONE_COUNT;
     }
 
@@ -225,31 +225,31 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         return AUTOMATED_TERMINATION_WINDOW;
     }
 
-    function getPercentageDivider() public pure returns (uint256) {
+    function getPercentageDivider() public pure returns (uint48) {
         return PERCENTAGE_DIVIDER;
     }
 
-    function getMilestoneMinDuration() public pure virtual returns (uint256) {
+    function getMilestoneMinDuration() public pure virtual returns (uint48) {
         return MILESTONE_MIN_DURATION;
     }
 
-    function getMilestoneMaxDuration() public pure virtual returns (uint256) {
+    function getMilestoneMaxDuration() public pure virtual returns (uint48) {
         return MILESTONE_MAX_DURATION;
     }
 
-    function getFundraiserMinDuration() public pure virtual returns (uint256) {
+    function getFundraiserMinDuration() public pure virtual returns (uint48) {
         return FUNDRAISER_MIN_DURATION;
     }
 
-    function getFundraiserMaxDuration() public pure virtual returns (uint256) {
+    function getFundraiserMaxDuration() public pure virtual returns (uint48) {
         return FUNDRAISER_MAX_DURATION;
     }
 
-    function getInvestmentWithdrawPercentageFee() public pure returns (uint256) {
+    function getInvestmentWithdrawPercentageFee() public pure returns (uint32) {
         return INVESTMENT_WITHDRAW_FEE;
     }
 
-    function getVotesWithdrawPercentageFee() public pure returns (uint256) {
+    function getVotesWithdrawPercentageFee() public pure returns (uint32) {
         return VOTES_WITHDRAW_FEE;
     }
 
@@ -257,15 +257,15 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
         return VOTES_PERCENTAGE_THRESHOLD;
     }
 
-    function getSoftCapMultiplier() public pure returns (uint256) {
+    function getSoftCapMultiplier() public pure returns (uint16) {
         return SOFT_CAP_MULTIPLIER;
     }
 
-    function getHardCapMultiplier() public pure returns (uint256) {
+    function getHardCapMultiplier() public pure returns (uint16) {
         return HARD_CAP_MULTIPLIER;
     }
 
-    function getMaxProportionalDifference() public pure returns (uint256) {
+    function getMaxProportionalDifference() public pure returns (uint16) {
         return MAX_PROPORTIONAL_DIFFERENCE;
     }
 
@@ -373,7 +373,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
             )
         ) revert InvestmentPoolFactory__SeedFundsAllocationExceedsMax();
 
-        uint256 totalPercentage = _milestones[0].intervalSeedPortion +
+        uint48 totalPercentage = _milestones[0].intervalSeedPortion +
             _milestones[0].intervalStreamingPortion;
 
         // Starting at index 1, since the first milestone has been checked already
@@ -429,7 +429,7 @@ contract InvestmentPoolFactory is IInvestmentPoolFactory, Context, Ownable {
     ) internal pure returns (bool) {
         if (allowedSeedFundsAllocation > getPercentageDivider())
             revert InvestmentPoolFactory__SeedFundsAllocationGreaterThanTotal();
-        uint milestoneMaxPercentages = milestone.intervalSeedPortion +
+        uint48 milestoneMaxPercentages = milestone.intervalSeedPortion +
             milestone.intervalStreamingPortion;
 
         return

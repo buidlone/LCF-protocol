@@ -58,33 +58,33 @@ let fundraiserEndDate: number;
 let tokenRewards: BigNumber;
 
 let gelatoFeeAllocation: BigNumber;
-let investmentWithdrawFee: BigNumber;
+let investmentWithdrawFee: number;
 let ethAddress: string;
 
 // Percentages (in divider format)
-let percentageDivider: BigNumber = BigNumber.from(0);
-let formated5Percent: BigNumber;
-let formated20Percent: BigNumber;
-let formated70Percent: BigNumber;
+let percentageDivider: number = 0;
+let formated5Percent: number;
+let formated20Percent: number;
+let formated70Percent: number;
 
 // Project state values
-let canceledProjectStateValue: BigNumber;
-let beforeFundraiserStateValue: BigNumber;
-let fundraiserOngoingStateValue: BigNumber;
-let failedFundraiserStateValue: BigNumber;
-let fundraiserEndedNoMilestonesOngoingStateValue: BigNumber;
-let milestonesOngoingBeforeLastStateValue: BigNumber;
-let lastMilestoneOngoingStateValue: BigNumber;
-let terminatedByVotingStateValue: BigNumber;
-let terminatedByGelatoStateValue: BigNumber;
-let successfullyEndedStateValue: BigNumber;
+let canceledProjectStateValue: number;
+let beforeFundraiserStateValue: number;
+let fundraiserOngoingStateValue: number;
+let failedFundraiserStateValue: number;
+let fundraiserEndedNoMilestonesOngoingStateValue: number;
+let milestonesOngoingBeforeLastStateValue: number;
+let lastMilestoneOngoingStateValue: number;
+let terminatedByVotingStateValue: number;
+let terminatedByGelatoStateValue: number;
+let successfullyEndedStateValue: number;
 
 // Multipliers
-let softCapMultiplier: BigNumber;
-let hardCapMultiplier: BigNumber;
+let softCapMultiplier: number;
+let hardCapMultiplier: number;
 
-const formatPercentage = (percent: BigNumberish): BigNumber => {
-    return percentageDivider.mul(percent).div(100);
+const formatPercentage = (percent: number): number => {
+    return (percentageDivider * percent) / 100;
 };
 
 const errorHandler = (err: any) => {
@@ -206,10 +206,10 @@ const getConstantVariablesFromContract = async () => {
     softCapMultiplier = await investmentPoolFactory.getSoftCapMultiplier();
     hardCapMultiplier = await investmentPoolFactory.getHardCapMultiplier();
 
-    await defineProjectStateByteValues(investmentPoolLogic);
+    await defineStateValues(investmentPoolLogic);
 };
 
-const defineProjectStateByteValues = async (ip: InvestmentPoolMock) => {
+const defineStateValues = async (ip: InvestmentPoolMock) => {
     canceledProjectStateValue = await ip.getCanceledProjectStateValue();
     beforeFundraiserStateValue = await ip.getBeforeFundraiserStateValue();
     fundraiserOngoingStateValue = await ip.getFundraiserOngoingStateValue();
@@ -822,11 +822,13 @@ describe("Investment Pool", async () => {
                 it("[IP][3.1.6] In milestone 0 period investors investment should update memMilestoneInvestments", async () => {
                     const investedAmount: BigNumber = ethers.utils.parseEther("2000");
                     const investedAmount2: BigNumber = ethers.utils.parseEther("100");
+                    await investmentPool.setTimestamp(0);
 
-                    await investmentPool.setTimestamp(dateToSeconds("2100/07/15"));
+                    await timeTravelToDate(dateToSeconds("2100/07/15"));
                     await investMoney(fUSDTx, investmentPool, investorA, investedAmount);
 
-                    await investmentPool.setTimestamp(dateToSeconds("2100/09/15"));
+                    await timeTravelToDate(dateToSeconds("2100/09/15"));
+                    await investmentPool.connect(creator).startFirstFundsStream();
                     await investMoney(fUSDTx, investmentPool, investorB, investedAmount2);
 
                     const memMilestoneInvestments =
@@ -960,7 +962,7 @@ describe("Investment Pool", async () => {
                     const milestoneIds = await investmentPool.getMilestonesWithInvestment(
                         investorA.address
                     );
-                    assert.deepEqual(milestoneIds, [BigNumber.from(0), BigNumber.from(1)]);
+                    assert.deepEqual(milestoneIds, [0, 1]);
                 });
 
                 it("[IP][3.1.14] Shouldn't push milestone id to the milestonesWithInvestment list if investment was already made previously", async () => {
@@ -973,7 +975,7 @@ describe("Investment Pool", async () => {
                     const milestoneIds = await investmentPool.getMilestonesWithInvestment(
                         investorA.address
                     );
-                    assert.deepEqual(milestoneIds, [BigNumber.from(0)]);
+                    assert.deepEqual(milestoneIds, [0]);
                 });
 
                 it("[IP][3.1.15] In fundraiser period should update memInvestorInvestments", async () => {
@@ -1295,17 +1297,19 @@ describe("Investment Pool", async () => {
                 it("[IP][4.1.6] In milestone 0 period unpledge should update memMilestoneInvestments", async () => {
                     const investedAmount: BigNumber = ethers.utils.parseEther("2000");
                     const investedAmount2: BigNumber = ethers.utils.parseEther("100");
+                    await investmentPool.setTimestamp(0);
 
-                    await investmentPool.setTimestamp(dateToSeconds("2100/07/15"));
+                    await timeTravelToDate(dateToSeconds("2100/07/15"));
                     await investMoney(fUSDTx, investmentPool, investorA, investedAmount);
+
+                    await timeTravelToDate(dateToSeconds("2100/09/15"));
+                    await investmentPool.connect(creator).startFirstFundsStream();
+                    await investMoney(fUSDTx, investmentPool, investorB, investedAmount2);
+
+                    await investmentPool.connect(investorB).unpledge();
 
                     const priorMemMilestoneInvestments =
                         await investmentPool.getMemMilestoneInvestments(0);
-
-                    await investmentPool.setTimestamp(dateToSeconds("2100/09/15"));
-                    await investMoney(fUSDTx, investmentPool, investorB, investedAmount2);
-                    await investmentPool.connect(investorB).unpledge();
-
                     const memMilestoneInvestments =
                         await investmentPool.getMemMilestoneInvestments(1);
                     assert.equal(
@@ -1418,7 +1422,7 @@ describe("Investment Pool", async () => {
                     const milestoneIds = await investmentPool.getMilestonesWithInvestment(
                         investorA.address
                     );
-                    assert.deepEqual(milestoneIds, [BigNumber.from(0)]);
+                    assert.deepEqual(milestoneIds, [0]);
                 });
 
                 it("[IP][4.1.13] Should remove investment from memInvestorInvestments", async () => {
@@ -3952,9 +3956,9 @@ describe("Investment Pool", async () => {
                         usedFunds.toString(),
                         investedAmount
                             .mul(
-                                milestone1.intervalSeedPortion
-                                    .add(milestone0.intervalStreamingPortion)
-                                    .add(milestone0.intervalSeedPortion)
+                                milestone1.intervalSeedPortion +
+                                    milestone0.intervalStreamingPortion +
+                                    milestone0.intervalSeedPortion
                             )
                             .div(percentageDivider)
                             .toString()

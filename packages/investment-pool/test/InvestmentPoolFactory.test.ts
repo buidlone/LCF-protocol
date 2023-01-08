@@ -21,7 +21,6 @@ const deploySuperToken = require("@superfluid-finance/ethereum-contracts/scripts
 const provider = web3;
 
 // eslint-disable-next-line no-unused-vars
-let fUSDT: InstanceType<typeof fTokenAbi>;
 let fUSDTx: WrapperSuperToken;
 
 let accounts: SignerWithAddress[];
@@ -37,18 +36,19 @@ let governancePoolLogic: GovernancePoolMockForIntegration;
 let distributionPoolLogic: DistributionPoolMockForIntegration;
 let gelatoOpsMock: GelatoOpsMock;
 let votingToken: VotingTokenMock;
-
+let buidl1Token: Buidl1;
 let gelatoFeeAllocation: BigNumber;
-let percentageDivider = BigNumber.from(0);
-let formated5Percent: BigNumber;
-let formated6Percent: BigNumber;
-let formated10Percent: BigNumber;
-let formated40Percent: BigNumber;
-let formated44Percent: BigNumber;
-let formated49Percent: BigNumber;
-let formated51Percent: BigNumber;
-let formated90Percent: BigNumber;
-let formated95Percent: BigNumber;
+
+let percentageDivider: number = 0;
+let formated5Percent: number;
+let formated6Percent: number;
+let formated10Percent: number;
+let formated40Percent: number;
+let formated44Percent: number;
+let formated49Percent: number;
+let formated51Percent: number;
+let formated90Percent: number;
+let formated95Percent: number;
 
 const generateGaplessMilestones = (
     startTimeStamp: number,
@@ -67,8 +67,8 @@ const generateGaplessMilestones = (
         arr.push({
             startDate: prevTimestamp,
             endDate: prevTimestamp + duration,
-            intervalSeedPortion: formated10Percent.div(amount),
-            intervalStreamingPortion: formated90Percent.div(amount),
+            intervalSeedPortion: BigNumber.from(formated10Percent).div(amount),
+            intervalStreamingPortion: BigNumber.from(formated90Percent).div(amount),
         });
         prevTimestamp += duration;
     }
@@ -76,8 +76,8 @@ const generateGaplessMilestones = (
     return arr;
 };
 
-const formatPercentage = (percent: BigNumberish): BigNumber => {
-    return percentageDivider.mul(percent).div(100);
+const formatPercentage = (percent: number): number => {
+    return (percentageDivider * percent) / 100;
 };
 
 const dateToSeconds = (date: string): number => {
@@ -184,7 +184,12 @@ const deploySuperfluidToken = async () => {
     });
 
     fUSDTx = await sf.loadWrapperSuperToken("fUSDTx");
-    fUSDT = new ethers.Contract(fUSDTx.underlyingToken.address, fTokenAbi, superfluidAdmin);
+};
+
+const deployBuidl1Token = async () => {
+    const buidl1TokenDep = await ethers.getContractFactory("Buidl1", creator);
+    buidl1Token = await buidl1TokenDep.deploy();
+    await buidl1Token.deployed();
 };
 
 describe("Investment Pool Factory", async () => {
@@ -197,6 +202,7 @@ describe("Investment Pool Factory", async () => {
         foreignActor = accounts[3];
 
         await deploySuperfluidToken();
+        await deployBuidl1Token();
         await getConstantVariablesFromContract();
     });
 
@@ -428,7 +434,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
@@ -469,7 +475,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
@@ -547,7 +553,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: constants.AddressZero,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
@@ -584,7 +590,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
@@ -626,7 +632,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
@@ -664,7 +670,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
@@ -701,7 +707,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
@@ -738,7 +744,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
@@ -773,7 +779,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
@@ -797,6 +803,7 @@ describe("Investment Pool Factory", async () => {
                 // 30 days
                 const milestoneDuration = 30 * 24 * 60 * 60;
                 const maxMilestones = await investmentPoolFactory.getMaxMilestoneCount();
+
                 const milestones = generateGaplessMilestones(
                     milestoneStartDate,
                     milestoneDuration,
@@ -811,7 +818,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
@@ -849,7 +856,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
@@ -877,7 +884,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
@@ -915,7 +922,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
@@ -952,7 +959,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
@@ -989,7 +996,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
@@ -1028,7 +1035,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
@@ -1071,7 +1078,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
@@ -1110,7 +1117,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         1, // CLONE-PROXY
@@ -1144,7 +1151,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
@@ -1181,7 +1188,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
@@ -1220,7 +1227,7 @@ describe("Investment Pool Factory", async () => {
                             fundraiserStartAt: fundraiserStartDate,
                             fundraiserEndAt: fundraiserEndDate,
                             acceptedToken: fUSDTx.address,
-                            projectToken: fUSDT.address,
+                            projectToken: buidl1Token.address,
                             tokenRewards: ethers.utils.parseEther("100"),
                         },
                         0, // CLONE-PROXY
