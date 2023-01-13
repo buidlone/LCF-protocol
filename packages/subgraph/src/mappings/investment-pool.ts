@@ -16,14 +16,17 @@ export function handleInitialized(event: InitializedEvent): void {
     const milestonesCount = ipContract.getMilestonesCount().toI32();
     let milestoneIds: string[] = [];
 
+    // Get project entity
     const projectId: string = event.address.toHexString();
     let project = Project.load(projectId);
     if (project) return;
 
+    // Create new project entity
     project = new Project(projectId);
     project.creator = ipContract.getCreator();
     project.percentageDivider = ipContract.getPercentageDivider();
 
+    // Loop through each milestone and create a new milestone entity with the data
     for (let milestoneId = 0; milestoneId < milestonesCount; milestoneId++) {
         const id: string = `${projectId}-${milestoneId.toString()}`;
         let milestone = Milestone.load(id);
@@ -53,6 +56,7 @@ export function handleInitialized(event: InitializedEvent): void {
         milestoneIds.push(id);
     }
 
+    // Add all milestones to project entity
     project.milestones = milestoneIds;
     project.save();
 }
@@ -68,6 +72,7 @@ export function handleUnpledged(event: UnpledgeEvent): void {
 function updateSeedAndStreamAllocations(contractAddress: Address): void {
     const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(contractAddress);
 
+    // Get project entity
     const projectId: string = contractAddress.toHexString();
     const project = Project.load(projectId);
     if (!project) return;
@@ -75,11 +80,13 @@ function updateSeedAndStreamAllocations(contractAddress: Address): void {
     const memoizedInvestments: BigInt[] = ipContract.getMilestonesInvestmentsListForFormula();
     const milestones: string[] = project.milestones;
 
+    // Loop through each milestone and update the seed and stream allocations
     for (let i = 0; i < milestones.length; i++) {
         let milestone = Milestone.load(milestones[i]);
         if (!milestone) return;
 
         const milestoneIdBI: BigInt = BigInt.fromI32(milestone.milestoneId);
+        // Find the memoized investment
         const memMilestoneInvestment: BigInt = findInvestment(memoizedInvestments, milestoneIdBI);
 
         milestone.seedFundsAllocation = memMilestoneInvestment
@@ -96,10 +103,12 @@ function updateSeedAndStreamAllocations(contractAddress: Address): void {
 export function handleCanceled(event: CancelEvent): void {
     const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(event.address);
 
+    // Get project entity
     const projectId: string = event.address.toHexString();
     const project = Project.load(projectId);
     if (!project) return;
 
+    // If project was canceled before the fundraiser started, no data needs to be updated
     const canceledBefore = ipContract.isCanceledBeforeFundraiserStart();
     if (canceledBefore) return;
 
@@ -108,6 +117,7 @@ export function handleCanceled(event: CancelEvent): void {
     let milestone = Milestone.load(`${projectId}-${milestoneIdBI.toString()}`);
     if (!milestone) return;
 
+    // Update milestone data
     const milestoneData = ipContract.getMilestone(milestoneIdBI);
     milestone.isTotalAllocationPaid = milestoneData.paid;
     milestone.isStreamOngoing = milestoneData.streamOngoing;
@@ -123,14 +133,17 @@ export function handleRefunded(event: RefundedEvent): void {
 export function handleClaimedFunds(event: ClaimedFundsEvent): void {
     const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(event.address);
 
+    // Get project entity
     const projectId: string = event.address.toHexString();
     const project = Project.load(projectId);
     if (!project) return;
 
+    // Find the milestone entity
     const milestoneIdBI: BigInt = event.params.milestoneId;
     let milestone = Milestone.load(`${projectId}-${milestoneIdBI.toString()}`);
     if (!milestone) return;
 
+    // Update milestone data from the event data passed in
     const isSeedAllocationPaid = event.params.gotSeedFunds;
     const isTotalAllocationPaid = event.params.gotStreamAmount;
     const isStreamOngoing = event.params.openedStream;
@@ -147,14 +160,17 @@ export function handleClaimedFunds(event: ClaimedFundsEvent): void {
 export function handleTerminatedStream(event: TerminatedStreamEvent): void {
     const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(event.address);
 
+    // Get project entity
     const projectId: string = event.address.toHexString();
     const project = Project.load(projectId);
     if (!project) return;
 
+    // Find the milestone entity
     const milestoneIdBI: BigInt = event.params.milestoneId;
     let milestone = Milestone.load(`${projectId}-${milestoneIdBI.toString()}`);
     if (!milestone) return;
 
+    // Update milestone data from the smart contract
     const milestoneData = ipContract.getMilestone(milestoneIdBI);
     milestone.isTotalAllocationPaid = milestoneData.paid;
     milestone.isStreamOngoing = milestoneData.streamOngoing;
@@ -163,6 +179,16 @@ export function handleTerminatedStream(event: TerminatedStreamEvent): void {
     milestone.save();
 }
 
+/**
+ * Find the memoized investment for the milestone.
+ * If the milestone has no investment, find the last investment before the milestone.
+ * If there is no investment before the milestone, return 0.
+ * @param investmentsList memoized investments list
+ * @param idBI milestone id
+ * @returns memoized investment
+ * Example: list = [100, 0, 0], id = 1;
+ * This will return 100, because there is no memoized investment for milestone 1, but there is for milestone 0.
+ */
 function findInvestment(investmentsList: BigInt[], idBI: BigInt): BigInt {
     const id = idBI.toI32();
     const investment = investmentsList[id];
