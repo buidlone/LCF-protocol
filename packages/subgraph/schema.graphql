@@ -1,7 +1,27 @@
 type Project @entity(immutable: true) {
-  id: Bytes!
-  owner: Bytes
-  displayName: String
-  imageUrl: String
-  accepted: Boolean
+    # Investment Pool address
+    id: ID!
+    creator: Bytes!
+    percentageDivider: BigInt!
+    # Milestones are not derived from Milestone entity
+    # It is more efficient to have them stored directly on the Project entity
+    milestones: [Milestone!]!
+}
+
+type Milestone @entity {
+    id: ID!
+    # TODO: decide if we want to store the project address here
+    project: Project!
+    milestoneId: Int!
+    startTime: Int!
+    endTime: Int!
+    duration: Int!
+    seedFundsAllocation: BigInt!
+    streamFundsAllocation: BigInt!
+    seedPercentagePortion: BigInt!
+    streamPercentagePortion: BigInt!
+    isSeedAllocationPaid: Boolean!
+    isTotalAllocationPaid: Boolean!
+    isStreamOngoing: Boolean!
+    paidAmount: BigInt!
 }
