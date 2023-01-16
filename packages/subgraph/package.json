@@ -5,9 +5,19 @@
   "main": "index.js",
   "scripts": {
     "abi": "node scripts/getAbi.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "test": "graph test",
+    "deploy": "graph deploy --node https://api.studio.thegraph.com/deploy/ investment-pool",
+    "create-local": "graph create --node http://localhost:8020/ investment-pool",
+    "remove-local": "graph remove --node http://localhost:8020/ investment-pool",
+    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 investment-pool"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {},
+  "devDependencies": {
+    "@graphprotocol/graph-ts": "^0.29.1"
+  }
 }

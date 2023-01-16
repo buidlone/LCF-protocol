@@ -1,7 +1,93 @@
 type Project @entity(immutable: true) {
-  id: Bytes!
-  owner: Bytes
-  displayName: String
-  imageUrl: String
-  accepted: Boolean
+    """
+    Investment Pool address
+    Example: 0x1234567890abcdef1234567890abcdef1234567890
+    """
+    id: ID!
+    """
+    Wallet address of the project creator
+    """
+    creator: Bytes!
+    """
+    Holds the number that is used as dividor to calculate the seed and stream allocation funds
+    This number represents the 100% of portion
+    """
+    percentageDivider: BigInt!
+    # Milestones are not derived from Milestone entity
+    # It is more efficient to have them stored directly on the Project entity
+    """
+    List of milestones
+    """
+    milestones: [Milestone!]!
+}
+
+type Milestone @entity {
+    """
+    Unique ID for all milestone entities
+    Is created from the investment pool address, dash and the milestoneId value
+    Example: 0x1234567890abcdef1234567890abcdef1234567890-1
+    """
+    id: ID!
+    # TODO: decide if we want to store the project address here
+    """
+    The project that this milestone belongs to
+    """
+    project: Project!
+    """
+    The milestone ID for the project
+    """
+    milestoneId: Int!
+    """
+    Timestamp when the milestone starts
+    Specified in seconds
+    """
+    startTime: Int!
+    """
+    Timestamp when the milestone ends
+    Specified in seconds
+    """
+    endTime: Int!
+    """
+    Duration from the start to the end of the milestone
+    Specified in seconds
+    """
+    duration: Int!
+    """
+    The amount of funds that will be transferred to the creator on milestone start.
+    Specified in wei [10^18 ETH]
+    """
+    seedFundsAllocation: BigInt!
+    """
+    The amount of funds that will be transferred to the creator throughout this milestone.
+    Specified in wei [10^18 ETH]
+    """
+    streamFundsAllocation: BigInt!
+    """
+    Portion of funds transferred for creator on milestone start.
+    Represents the percentage part, where percentage divider is 100%
+    """
+    seedPercentagePortion: BigInt!
+    """
+    Portion of funds transferred for creator throughout this milestone.
+    Represents the percentage part, where percentage divider is 100%
+    """
+    streamPercentagePortion: BigInt!
+    """
+    Describes if seed allocation was transferred for the creator
+    """
+    isSeedAllocationPaid: Boolean!
+    """
+    Describes if total allocation was transferred for the creator
+    """
+    isTotalAllocationPaid: Boolean!
+    """
+    Describes if stream for the creator is currently opened
+    """
+    isStreamOngoing: Boolean!
+    """
+    Amount of funds that was transferred for the creator.
+    If stream is opened and active, this value will not change on every seconds.
+    Only after the stream is closed, this value will be updated.
+    """
+    paidAmount: BigInt!
 }
