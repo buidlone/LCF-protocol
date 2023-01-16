@@ -3,13 +3,13 @@
 
 pragma solidity ^0.8.14;
 
-import "@openzeppelin/contracts/utils/Arrays.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
 import {IInvestmentPool} from "@buidlone/investment-pool/contracts/interfaces/IInvestmentPool.sol";
 import {IInitializableDistributionPool} from "@buidlone/investment-pool/contracts/interfaces/IDistributionPool.sol";
+import {Arrays} from "@buidlone/investment-pool/contracts/utils/Arrays.sol";
 
 error DistributionPool__TokenTransferFailed();
 error DistributionPool__ProjectTokensAlreadyLocked();
@@ -19,19 +19,17 @@ error DistributionPool__NoAllocatedTokensLeft();
 error DistributionPool__AllTokensAreAllocated();
 error DistributionPool__StateIsInvalidForWithdrawal();
 error DistributionPool__ProjectTokensNotLocked();
+error DistributionPool__InvestmentPoolStateNotAllowed(uint24 state);
 
 contract DistributionPool is IInitializableDistributionPool, Context, Initializable {
-    using Arrays for uint256[];
+    using Arrays for uint16[];
 
     /** STATE VARIABLES */
-
-    uint256 internal constant PERCENTAGE_DIVIDER = 10 ** 6;
-
     IERC20 internal projectToken;
     IInvestmentPool internal investmentPool;
     uint256 internal lockedTokens;
-    bool internal creatorLockedTokens;
     uint256 internal totalAllocatedTokens;
+    bool internal creatorLockedTokens;
 
     /**
      * @dev Holds amount of tokens that investor will own after all streams
@@ -52,24 +50,32 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
      * @dev Memoization will never be used on it's own, to get allocated rewards value.
      * @dev investor => milestone id => memoized tokens allocated
      */
-    mapping(address => mapping(uint256 => uint256)) internal memMilestoneAllocation;
+    mapping(address => mapping(uint16 => uint256)) internal memMilestoneAllocation;
 
     /**
      * @dev Mapping holds milestone ids, in which allocation size increased.
      * @dev It will be used with memMilestoneAllocation data to find the right nubmer
      * @dev investor => milestone ids list
      */
-    mapping(address => uint256[]) internal milestonesWithAllocation;
+    mapping(address => uint16[]) internal milestonesWithAllocation;
 
     /** EVENTS */
 
     event LockedTokens();
     event WithdrewTokens();
-    event Allocated(address indexed investor, uint256 milestoneId);
-    event RemovedAllocation(address indexed investor, uint256 milestoneId);
+    event Allocated(address indexed investor, uint16 milestoneId);
+    event RemovedAllocation(address indexed investor, uint16 milestoneId);
     event Claimed(address indexed investor, uint256 tokensAmount);
 
     /** MODIFIERS */
+
+    /// @notice Ensures that provided current project state is one of the provided. It uses bitwise operations in condition
+    modifier allowedInvestmentPoolStates(uint24 _states) {
+        uint24 currentInvestmentPoolState = investmentPool.getProjectStateValue();
+        if (_states & currentInvestmentPoolState == 0)
+            revert DistributionPool__InvestmentPoolStateNotAllowed(currentInvestmentPoolState);
+        _;
+    }
 
     modifier onlyInvestmentPool() {
         if (_msgSender() != getInvestmentPool()) revert DistributionPool__NotInvestmentPool();
@@ -121,7 +127,7 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
      * @param _allocationCoefficient the percentage that is left of the project.
      */
     function allocateTokens(
-        uint256 _milestoneId,
+        uint16 _milestoneId,
         address _investor,
         uint256 _investmentWeight,
         uint256 _weightDivisor,
@@ -156,7 +162,7 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
      * @param _investor investor address
      */
     function removeTokensAllocation(
-        uint256 _milestoneId,
+        uint16 _milestoneId,
         address _investor
     ) external onlyInvestmentPool {
         /// @dev Function is called only by investment pool that's why we don't check if data is valid
@@ -219,17 +225,17 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
     function withdrawTokens() external onlyCreator {
         if (!didCreatorLockTokens()) revert DistributionPool__ProjectTokensNotLocked();
 
-        uint256 currentState = investmentPool.getProjectStateValue();
+        uint24 currentState = investmentPool.getProjectStateValue();
         uint256 withdrawAmount;
 
         if (
-            currentState == investmentPool.getCanceledProjectStateValue() ||
-            currentState == investmentPool.getFailedFundraiserStateValue()
+            currentState == getCanceledProjectStateValue() ||
+            currentState == getFailedFundraiserStateValue()
         ) {
             withdrawAmount = getLockedTokens();
         } else if (
-            currentState == investmentPool.getTerminatedByVotingStateValue() ||
-            currentState == investmentPool.getTerminatedByGelatoStateValue()
+            currentState == getTerminatedByVotingStateValue() ||
+            currentState == getTerminatedByGelatoStateValue()
         ) {
             withdrawAmount = getLockedTokens() - getTotalAllocatedTokens();
         } else {
@@ -265,7 +271,7 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
      */
     function getAllocatedAmount(
         address _investor,
-        uint256 _milestoneId
+        uint16 _milestoneId
     ) public view returns (uint256) {
         IInvestmentPool.Milestone memory milestone = investmentPool.getMilestone(_milestoneId);
         return
@@ -283,22 +289,22 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
     function getAllocationData(
         address _investor
     ) public view returns (uint256 alreadyAllocated, uint256 allocationFlowRate) {
-        uint256 currentMilestone = investmentPool.getCurrentMilestoneId();
-        uint256 currentState = investmentPool.getProjectStateValue();
+        uint16 currentMilestone = investmentPool.getCurrentMilestoneId();
+        uint24 currentState = investmentPool.getProjectStateValue();
 
         // If no milestone is ongoing, always return 0
         if (
-            currentState == investmentPool.getCanceledProjectStateValue() ||
-            currentState == investmentPool.getBeforeFundraiserStateValue() ||
-            currentState == investmentPool.getFundraiserOngoingStateValue() ||
-            currentState == investmentPool.getFailedFundraiserStateValue() ||
-            currentState == investmentPool.getFundraiserEndedNoMilestonesOngoingStateValue()
+            currentState == getCanceledProjectStateValue() ||
+            currentState == getBeforeFundraiserStateValue() ||
+            currentState == getFundraiserOngoingStateValue() ||
+            currentState == getFailedFundraiserStateValue() ||
+            currentState == getFundraiserEndedNoMilestonesOngoingStateValue()
         ) {
             // Milestones haven't started, so return 0;
             return (0, 0);
         } else if (investmentPool.isStateAnyMilestoneOngoing()) {
             uint256 previousMilestonesAllocation = 0;
-            for (uint256 i = 0; i < currentMilestone; i++) {
+            for (uint16 i = 0; i < currentMilestone; i++) {
                 previousMilestonesAllocation += getAllocatedAmount(_investor, i);
             }
 
@@ -307,13 +313,13 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
 
             return (previousMilestonesAllocation, allocationPerSecond);
         } else if (
-            currentState == investmentPool.getTerminatedByVotingStateValue() ||
-            currentState == investmentPool.getTerminatedByGelatoStateValue()
+            currentState == getTerminatedByVotingStateValue() ||
+            currentState == getTerminatedByGelatoStateValue()
         ) {
             uint48 milestoneStartDate = investmentPool.getMilestone(currentMilestone).startDate;
             uint48 terminationTimestamp = investmentPool.getEmergencyTerminationTimestamp();
             uint256 previousMilestonesAllocation = 0;
-            for (uint256 i = 0; i < currentMilestone; i++) {
+            for (uint16 i = 0; i < currentMilestone; i++) {
                 previousMilestonesAllocation += getAllocatedAmount(_investor, i);
             }
 
@@ -327,7 +333,7 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
             }
 
             return (previousMilestonesAllocation, 0);
-        } else if (currentState == investmentPool.getSuccessfullyEndedStateValue()) {
+        } else if (currentState == getSuccessfullyEndedStateValue()) {
             // Return full allocation
             uint256 fullAllocation = getAllocatedTokens(_investor);
             return (fullAllocation, 0);
@@ -344,14 +350,12 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
         return claimedTokens[_investor];
     }
 
-    function getMilestonesWithAllocation(
-        address _investor
-    ) public view returns (uint256[] memory) {
+    function getMilestonesWithAllocation(address _investor) public view returns (uint16[] memory) {
         return milestonesWithAllocation[_investor];
     }
 
-    function getPercentageDivider() public pure returns (uint256) {
-        return PERCENTAGE_DIVIDER;
+    function getPercentageDivider() public view returns (uint48) {
+        return investmentPool.getPercentageDivider();
     }
 
     function getInvestmentPool() public view returns (address) {
@@ -374,13 +378,45 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
         return totalAllocatedTokens;
     }
 
+    function getCanceledProjectStateValue() public view returns (uint24) {
+        return investmentPool.getCanceledProjectStateValue();
+    }
+
+    function getBeforeFundraiserStateValue() public view returns (uint24) {
+        return investmentPool.getBeforeFundraiserStateValue();
+    }
+
+    function getFundraiserOngoingStateValue() public view returns (uint24) {
+        return investmentPool.getFundraiserOngoingStateValue();
+    }
+
+    function getFailedFundraiserStateValue() public view returns (uint24) {
+        return investmentPool.getFailedFundraiserStateValue();
+    }
+
+    function getFundraiserEndedNoMilestonesOngoingStateValue() public view returns (uint24) {
+        return investmentPool.getFundraiserEndedNoMilestonesOngoingStateValue();
+    }
+
+    function getTerminatedByVotingStateValue() public view returns (uint24) {
+        return investmentPool.getTerminatedByVotingStateValue();
+    }
+
+    function getTerminatedByGelatoStateValue() public view returns (uint24) {
+        return investmentPool.getTerminatedByGelatoStateValue();
+    }
+
+    function getSuccessfullyEndedStateValue() public view returns (uint24) {
+        return investmentPool.getSuccessfullyEndedStateValue();
+    }
+
     /** INTERNAL FUNCTIONS */
 
     function _getMemoizedMilestoneAllocation(
         address _investor,
-        uint256 _milestoneId
+        uint16 _milestoneId
     ) internal view returns (uint256) {
-        uint256[] memory milestonesIds = getMilestonesWithAllocation(_investor);
+        uint16[] memory milestonesIds = getMilestonesWithAllocation(_investor);
 
         if (milestonesIds.length == 0) {
             // If milestonesIds array is empty that means that no investments were made
@@ -402,16 +438,14 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
             // Because in previous condition we checked if investments were made to the milestone id,
             // we can be sure that findUpperBound function will return the value greater than element or length of the array,
             /// @dev not using milestonesIds variable because findUpperBound works only with storage variables.
-            uint256 largerMilestoneIndex = milestonesWithAllocation[_investor].findUpperBound(
-                _milestoneId
-            );
+            uint16 largerMilestoneIndex = milestonesIds.findUpperBound(_milestoneId);
 
             if (largerMilestoneIndex == milestonesIds.length) {
                 // If length of an array was returned, it means
                 // no milestone id in the array is greater than the current one.
                 // Get the last value on milestonesIds array, because all the milestones after it
                 // have the same active tokens amount.
-                uint256 lastMilestone = milestonesIds[milestonesIds.length - 1];
+                uint16 lastMilestone = milestonesIds[milestonesIds.length - 1];
                 return memMilestoneAllocation[_investor][lastMilestone];
             } else if (
                 largerMilestoneIndex == 0 && _milestoneId < milestonesIds[largerMilestoneIndex]
@@ -427,7 +461,7 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
                 // the index that is higher by 1 array element. That is we need to subtract 1, to get the right index
                 // When we have the right index, we can return the active tokens amount
                 // This condition can be met when looking for tokens amount in past milestones
-                uint256 milestoneIdWithAllocation = milestonesIds[largerMilestoneIndex - 1];
+                uint16 milestoneIdWithAllocation = milestonesIds[largerMilestoneIndex - 1];
                 return memMilestoneAllocation[_investor][milestoneIdWithAllocation];
             }
         }

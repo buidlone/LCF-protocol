@@ -36,7 +36,7 @@ contract GelatoOpsMock is IOps, IOpsProxyFactory {
         return (payable(address(this)));
     }
 
-    function gelatoTerminateMilestoneStream(uint256 _id) public {
+    function gelatoTerminateMilestoneStream(uint16 _id) public {
         executor.gelatoTerminateMilestoneStream(_id);
     }
 

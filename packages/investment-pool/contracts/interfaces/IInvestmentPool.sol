@@ -21,8 +21,8 @@ interface IInvestmentPool is ISuperApp {
     }
 
     struct VotingTokensMultipliers {
-        uint256 softCapMultiplier;
-        uint256 hardCapMultiplier;
+        uint16 softCapMultiplier;
+        uint16 hardCapMultiplier;
     }
 
     struct MilestoneInterval {
@@ -33,11 +33,11 @@ interface IInvestmentPool is ISuperApp {
         // Describes the portion of the total funds(all milestones),
         // assigned as a seed portion for this milestone
         // 100% == 10 ** 6
-        uint256 intervalSeedPortion;
+        uint48 intervalSeedPortion;
         // Describes the portion of the total funds(all milestones),
         // assigned as a streaming portion for this milestone
         // 100% == 10 ** 6
-        uint256 intervalStreamingPortion;
+        uint48 intervalStreamingPortion;
     }
 
     struct Milestone {
@@ -50,11 +50,11 @@ interface IInvestmentPool is ISuperApp {
         // Describes the portion of the total funds(all milestones),
         // assigned as a seed portion for this milestone
         // 100% == 10 ** 6
-        uint256 intervalSeedPortion;
+        uint48 intervalSeedPortion;
         // Describes the portion of the total funds(all milestones),
         // assigned as a streaming portion for this milestone
         // 100% == 10 ** 6
-        uint256 intervalStreamingPortion;
+        uint48 intervalStreamingPortion;
         // TODO: More fields here for internal state tracking
     }
 
@@ -74,7 +74,7 @@ interface IInvestmentPool is ISuperApp {
 
     function withdrawEther() external;
 
-    function getCurrentMilestoneId() external view returns (uint256);
+    function getCurrentMilestoneId() external view returns (uint16);
 
     function isEmergencyTerminated() external view returns (bool);
 
@@ -92,7 +92,7 @@ interface IInvestmentPool is ISuperApp {
 
     function isTimeBetweenFundraiserAndMilestones() external view returns (bool);
 
-    function isTimeWithinMilestone(uint _id) external view returns (bool);
+    function isTimeWithinMilestone(uint16 _id) external view returns (bool);
 
     function isTimeWithinAnyMilestone() external view returns (bool);
 
@@ -102,19 +102,19 @@ interface IInvestmentPool is ISuperApp {
 
     function isProjectCompleted() external view returns (bool);
 
-    function getProjectStateValue() external view returns (uint256 stateNumber);
+    function getProjectStateValue() external view returns (uint24 stateNumber);
 
-    function canTerminateMilestoneStream(uint256 _milestoneId) external view returns (bool);
+    function canTerminateMilestoneStream(uint16 _milestoneId) external view returns (bool);
 
-    function canGelatoTerminateMilestoneStream(uint256 _milestoneId) external view returns (bool);
+    function canGelatoTerminateMilestoneStream(uint16 _milestoneId) external view returns (bool);
 
-    function getMilestoneSeedAmount(uint256 _milestoneId) external view returns (uint256);
+    function getMilestoneSeedAmount(uint16 _milestoneId) external view returns (uint256);
 
-    function getMilestoneTotalAllocation(uint _milestoneId) external returns (uint256);
+    function getMilestoneTotalAllocation(uint16 _milestoneId) external returns (uint256);
 
     function getInvestorTokensAllocation(
         address _investor,
-        uint256 _milestoneId
+        uint16 _milestoneId
     ) external view returns (uint256);
 
     function getFundsUsed() external view returns (uint256);
@@ -125,41 +125,41 @@ interface IInvestmentPool is ISuperApp {
 
     function getMilestonesWithInvestment(
         address _investor
-    ) external view returns (uint256[] memory);
+    ) external view returns (uint16[] memory);
 
     function gelatoChecker() external view returns (bool canExec, bytes memory execPayload);
 
     function startGelatoTask() external payable;
 
-    function gelatoTerminateMilestoneStream(uint256 _milestoneId) external;
+    function gelatoTerminateMilestoneStream(uint16 _milestoneId) external;
 
     function getCfaId() external pure returns (bytes32);
 
-    function getPercentageDivider() external pure returns (uint256);
+    function getPercentageDivider() external pure returns (uint48);
 
-    function getCanceledProjectStateValue() external pure returns (uint256);
+    function getCanceledProjectStateValue() external pure returns (uint24);
 
-    function getBeforeFundraiserStateValue() external pure returns (uint256);
+    function getBeforeFundraiserStateValue() external pure returns (uint24);
 
-    function getFundraiserOngoingStateValue() external pure returns (uint256);
+    function getFundraiserOngoingStateValue() external pure returns (uint24);
 
-    function getFailedFundraiserStateValue() external pure returns (uint256);
+    function getFailedFundraiserStateValue() external pure returns (uint24);
 
-    function getFundraiserEndedNoMilestonesOngoingStateValue() external pure returns (uint256);
+    function getFundraiserEndedNoMilestonesOngoingStateValue() external pure returns (uint24);
 
-    function getMilestonesOngoingBeforeLastStateValue() external pure returns (uint256);
+    function getMilestonesOngoingBeforeLastStateValue() external pure returns (uint24);
 
-    function getLastMilestoneOngoingStateValue() external pure returns (uint256);
+    function getLastMilestoneOngoingStateValue() external pure returns (uint24);
 
-    function getTerminatedByVotingStateValue() external pure returns (uint256);
+    function getTerminatedByVotingStateValue() external pure returns (uint24);
 
-    function getTerminatedByGelatoStateValue() external pure returns (uint256);
+    function getTerminatedByGelatoStateValue() external pure returns (uint24);
 
-    function getSuccessfullyEndedStateValue() external pure returns (uint256);
+    function getSuccessfullyEndedStateValue() external pure returns (uint24);
 
-    function getUnknownStateValue() external pure returns (uint256);
+    function getUnknownStateValue() external pure returns (uint24);
 
-    function getAnyMilestoneOngoingStateValue() external pure returns (uint256);
+    function getAnyMilestoneOngoingStateValue() external pure returns (uint24);
 
     function getEthAddress() external pure returns (address);
 
@@ -197,18 +197,18 @@ interface IInvestmentPool is ISuperApp {
 
     function getInvestedAmount(
         address _investor,
-        uint256 _milestoneId
+        uint16 _milestoneId
     ) external view returns (uint256);
 
-    function getMilestonesCount() external view returns (uint256);
+    function getMilestonesCount() external view returns (uint16);
 
-    function getMilestone(uint256 _milestoneId) external view returns (Milestone memory);
+    function getMilestone(uint16 _milestoneId) external view returns (Milestone memory);
 
-    function getInvestmentWithdrawPercentageFee() external view returns (uint256);
+    function getInvestmentWithdrawPercentageFee() external view returns (uint32);
 
-    function getSoftCapMultiplier() external view returns (uint256);
+    function getSoftCapMultiplier() external view returns (uint16);
 
-    function getHardCapMultiplier() external view returns (uint256);
+    function getHardCapMultiplier() external view returns (uint16);
 
     function getVotingTokensToMint(uint256 _amount) external view returns (uint256);
 
@@ -218,9 +218,9 @@ interface IInvestmentPool is ISuperApp {
 
     function getMaximumWeightDivisor() external view returns (uint256);
 
-    function getMilestonesPortionLeft(uint256 _milestoneId) external view returns (uint256);
+    function getMilestonesPortionLeft(uint16 _milestoneId) external view returns (uint48);
 
-    function getMilestoneDuration(uint256 _milestoneId) external view returns (uint256);
+    function getMilestoneDuration(uint16 _milestoneId) external view returns (uint256);
 }
 
 interface IInitializableInvestmentPool is IInvestmentPool {
@@ -229,7 +229,7 @@ interface IInitializableInvestmentPool is IInvestmentPool {
         address payable _gelatoOps,
         IInvestmentPool.ProjectInfo calldata _projectInfo,
         IInvestmentPool.VotingTokensMultipliers calldata _multipliers,
-        uint256 _investmentWithdrawFee,
+        uint32 _investmentWithdrawFee,
         MilestoneInterval[] calldata _milestones,
         IGovernancePool _governancePool,
         IDistributionPool _distributionPool

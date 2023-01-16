@@ -10,12 +10,15 @@ import {CFAv1Library} from "@superfluid-finance/ethereum-contracts/contracts/app
 import {SuperAppBase} from "@superfluid-finance/ethereum-contracts/contracts/apps/SuperAppBase.sol";
 
 // Openzepelin imports
-import "@openzeppelin/contracts/utils/Arrays.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+import {Arrays} from "./utils/Arrays.sol";
 import {IInitializableInvestmentPool, IInvestmentPool} from "./interfaces/IInvestmentPool.sol";
+import {AbstractInvestmentPool} from "./abstracts/AInvestmentPool.sol";
+
+// Buidl1 imports
 import {IGovernancePool} from "./interfaces/IGovernancePool.sol";
 import {IDistributionPool} from "./interfaces/IDistributionPool.sol";
 import "./interfaces/GelatoTypes.sol";
@@ -47,37 +50,17 @@ error InvestmentPool__GelatoTaskAlreadyStarted();
 error InvestmentPool__EthTransferFailed();
 error InvestmentPool__NotGelatoDedicatedSender();
 
-contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, Initializable {
+contract InvestmentPool is AbstractInvestmentPool, SuperAppBase, Context, Initializable {
     using CFAv1Library for CFAv1Library.InitData;
-    using Arrays for uint256[];
+    using Arrays for uint16[];
 
     /** STATE VARIABLES */
-
-    bytes32 internal constant CFA_ID =
-        keccak256("org.superfluid-finance.agreements.ConstantFlowAgreement.v1");
-    uint256 internal constant PERCENTAGE_DIVIDER = 10 ** 6;
-
-    /**
-     * @dev Values are used for bitwise operations to determine current project state.
-     * @dev Investment pool can't have multiple states at the same time.
-     */
-    uint256 internal constant CANCELED_PROJECT_STATE_VALUE = 1;
-    uint256 internal constant BEFORE_FUNDRAISER_STATE_VALUE = 2;
-    uint256 internal constant FUNDRAISER_ONGOING_STATE_VALUE = 4;
-    uint256 internal constant FAILED_FUNDRAISER_STATE_VALUE = 8;
-    uint256 internal constant FUNDRAISER_ENDED_NO_MILESTONES_ONGOING_STATE_VALUE = 16;
-    uint256 internal constant MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE = 32;
-    uint256 internal constant LAST_MILESTONE_ONGOING_STATE_VALUE = 64;
-    uint256 internal constant TERMINATED_BY_VOTING_STATE_VALUE = 128;
-    uint256 internal constant TERMINATED_BY_GELATO_STATE_VALUE = 256;
-    uint256 internal constant SUCCESSFULLY_ENDED_STATE_VALUE = 512;
-    uint256 internal constant UNKNOWN_STATE_VALUE = 1024;
-    uint256 internal constant ANY_MILESTONE_ONGOING_STATE_VALUE =
-        MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE | LAST_MILESTONE_ONGOING_STATE_VALUE;
-
     /* WARNING: NEVER RE-ORDER VARIABLES! Always double-check that new
        variables are added APPEND-ONLY. Re-ordering variables can
        permanently BREAK the deployed proxy contract. */
+
+    bytes32 internal constant CFA_ID =
+        keccak256("org.superfluid-finance.agreements.ConstantFlowAgreement.v1");
 
     // Contains addresses of superfluid's host and ConstanFlowAgreement
     CFAv1Library.InitData public cfaV1Lib;
@@ -113,14 +96,13 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      * @dev It doesn't hold the total invested amount.
      * @dev Mapping from investor => milestone Id => amount invested
      */
-    mapping(address => mapping(uint256 => uint256)) internal investedAmount;
-    //
+    mapping(address => mapping(uint16 => uint256)) internal investedAmount;
     /**
      * @dev Mapping holds milestone ids, in which investor invested size increased.
      * @dev It will be used with memInvestorInvestments data to find the right nubmer
      * @dev Mapping from invstor => list of milestone ids
      */
-    mapping(address => uint256[]) internal milestonesWithInvestment;
+    mapping(address => uint16[]) internal milestonesWithInvestment;
     /**
      * @dev It's a memoization mapping for milestone Investments for each investor
      * @dev n-th element describes how much money is invested into the project
@@ -128,32 +110,34 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      * @dev Memoization will never be used on it's own, to get invested value.
      * @dev Mapping investor => milestone Id => amount
      */
-    mapping(address => mapping(uint256 => uint256)) internal memInvestorInvestments;
+    mapping(address => mapping(uint16 => uint256)) internal memInvestorInvestments;
 
     /// @dev Milestone data
-    uint256 internal milestoneCount;
-    uint256 internal currentMilestone;
+    uint16 internal milestoneCount;
+    uint16 internal currentMilestone;
     // TODO: Look into, maybe an array would be better, since we have a fixed amount?
-    mapping(uint256 => Milestone) internal milestones;
+    mapping(uint16 => Milestone) internal milestones;
 
-    uint256 internal investmentWithdrawFee;
-    uint256 internal softCapMultiplier;
-    uint256 internal hardCapMultiplier;
+    uint32 internal investmentWithdrawFee;
+    uint16 internal softCapMultiplier;
+    uint16 internal hardCapMultiplier;
 
     /**
      * @dev It's a memoization mapping for milestone Portions
      * @dev n-th element describes how much of a project is "left"
      * @dev all values are divided later by PERCENTAGE_DIVIDER
      * @dev in other words, 10% would be PERCENTAGE_DIVIDER / 10
+     * @dev milestone -> portion left
      */
-    mapping(uint256 => uint256) internal memMilestonePortions;
+    mapping(uint16 => uint48) internal memMilestonePortions;
     /**
      * @dev It's a memoization mapping for milestone Investments
      * @dev n-th element describes how much money is invested into the project
      * @dev It doesn't hold real money value, but a value, which will be used in other formulas.
      * @dev Memoization will never be used on it's own, to get invested value.
+     * @dev milestone -> memoized investment value
      */
-    mapping(uint256 => uint256) internal memMilestoneInvestments;
+    mapping(uint16 => uint256) internal memMilestoneInvestments;
 
     /** EVENTS */
 
@@ -161,13 +145,13 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     event Invest(address indexed caller, uint256 amount);
     event Unpledge(address indexed caller, uint256 amount);
     event ClaimFunds(
-        uint256 milestoneId,
+        uint16 milestoneId,
         bool gotSeedFunds,
         bool gotStreamAmount,
         bool openedStream
     );
     event Refund(address indexed caller, uint256 amount);
-    event TerminateStream(uint256 milestoneId);
+    event TerminateStream(uint16 milestoneId);
     event GelatoFeeTransfer(uint256 fee, address feeToken);
 
     /** MODIFIERS */
@@ -205,22 +189,22 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     }
 
     /// @notice Ensures that the milestone stream can be terminated
-    modifier canTerminateMilestoneFinal(uint _index) {
+    modifier canTerminateMilestoneFinal(uint16 _index) {
         if (!canTerminateMilestoneStream(_index))
             revert InvestmentPool__MilestoneStreamTerminationUnavailable();
         _;
     }
 
     /// @notice Ensures that the milestone stream can be terminated by gelato
-    modifier canGelatoTerminateMilestoneFinal(uint _index) {
+    modifier canGelatoTerminateMilestoneFinal(uint16 _index) {
         if (!canGelatoTerminateMilestoneStream(_index))
             revert InvestmentPool__GelatoMilestoneStreamTerminationUnavailable();
         _;
     }
 
     /// @notice Ensures that provided current project state is one of the provided. It uses bitwise operations in condition
-    modifier allowedProjectStates(uint256 _states) {
-        uint256 currentState = getProjectStateValue();
+    modifier allowedProjectStates(uint24 _states) {
+        uint24 currentState = getProjectStateValue();
         if (_states & currentState == 0)
             revert InvestmentPool__CurrentStateIsNotAllowed(currentState);
         _;
@@ -247,7 +231,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         address payable _gelatoOps,
         IInvestmentPool.ProjectInfo calldata _projectInfo,
         IInvestmentPool.VotingTokensMultipliers calldata _multipliers,
-        uint256 _investmentWithdrawFee,
+        uint32 _investmentWithdrawFee,
         MilestoneInterval[] calldata _milestones,
         IGovernancePool _governancePool,
         IDistributionPool _distributionPool
@@ -273,7 +257,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         hardCapMultiplier = _multipliers.hardCapMultiplier;
 
         investmentWithdrawFee = _investmentWithdrawFee;
-        milestoneCount = _milestones.length;
+        milestoneCount = uint16(_milestones.length);
         currentMilestone = 0;
         governancePool = _governancePool;
         distributionPool = _distributionPool;
@@ -286,7 +270,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
         // 100% of the project is "left" at the start
         memMilestonePortions[0] = getPercentageDivider();
-        for (uint32 i = 0; i < _milestones.length; ++i) {
+        for (uint16 i = 0; i < uint16(_milestones.length); ++i) {
             interval = _milestones[i];
             milestones[i] = Milestone({
                 startDate: interval.startDate,
@@ -344,14 +328,11 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             }
         }
 
-        uint256 investToMilestoneId = isTimeWithinFundraiser() ? 0 : getCurrentMilestoneId() + 1;
+        uint16 investToMilestoneId = isTimeWithinFundraiser() ? 0 : getCurrentMilestoneId() + 1;
         _investToMilestone(_msgSender(), investToMilestoneId, _amount);
 
-        bool successfulTransfer = acceptedToken.transferFrom(_msgSender(), address(this), _amount);
-        if (!successfulTransfer) revert InvestmentPool__SuperTokenTransferFailed();
-
+        // Call governance and distribution pools
         governancePool.mintVotingTokens(investToMilestoneId, _msgSender(), votingTokensToMint);
-
         distributionPool.allocateTokens(
             investToMilestoneId,
             _msgSender(),
@@ -373,31 +354,17 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             getFundraiserOngoingStateValue() | getMilestonesOngoingBeforeLastStateValue()
         )
     {
-        uint256 unpledgeFromMilestoneId = isTimeWithinFundraiser()
+        uint16 unpledgeFromMilestoneId = isTimeWithinFundraiser()
             ? 0
             : getCurrentMilestoneId() + 1;
-        uint256 investmentCoefficient = memMilestonePortions[unpledgeFromMilestoneId];
         uint256 amount = getInvestedAmount(_msgSender(), unpledgeFromMilestoneId);
 
         if (amount == 0) revert InvestmentPool__NoMoneyInvested();
 
-        memMilestoneInvestments[unpledgeFromMilestoneId] -=
-            (amount * getPercentageDivider()) /
-            investmentCoefficient;
-        investedAmount[_msgSender()][unpledgeFromMilestoneId] -= amount;
-        totalInvestedAmount -= amount;
+        _unpledgeFromMilestone(_msgSender(), unpledgeFromMilestoneId, amount);
 
-        milestonesWithInvestment[_msgSender()].pop();
-        memInvestorInvestments[_msgSender()][unpledgeFromMilestoneId] = 0;
-
-        // Apply fee for withdrawal during the same period as invested (milestone or fundraiser)
-        uint256 amountToTransfer = (amount * (100 - getInvestmentWithdrawPercentageFee())) / 100;
-
-        bool successfulTransfer = acceptedToken.transfer(_msgSender(), amountToTransfer);
-        if (!successfulTransfer) revert InvestmentPool__SuperTokenTransferFailed();
-
+        // Call governance and distribution pools
         governancePool.burnVotes(unpledgeFromMilestoneId, _msgSender());
-
         distributionPool.removeTokensAllocation(unpledgeFromMilestoneId, _msgSender());
 
         emit Unpledge(_msgSender(), amount);
@@ -417,7 +384,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     {
         // If fundraiser failed, transfer back total amount that investor invested
         if (isFailedFundraiser()) {
-            uint investment = getInvestedAmount(_msgSender(), 0);
+            uint256 investment = getInvestedAmount(_msgSender(), 0);
             if (investment == 0) revert InvestmentPool__NoMoneyInvested();
 
             investedAmount[_msgSender()][0] = 0;
@@ -429,43 +396,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             return;
         }
 
-        uint256 currentMilestoneId = getCurrentMilestoneId();
-        uint256 tokensOwned;
-        uint256 totalMilestones = getMilestonesCount();
-
-        // Calculate, how much money is left for each investment
-        for (uint256 i = 0; i < totalMilestones; i++) {
-            // We'll just straight up delete the investment information for now. Maybe needed for bookkeeping reasons?
-            uint256 investment = getInvestedAmount(_msgSender(), i);
-
-            if (investment != 0) {
-                investedAmount[_msgSender()][i] = 0;
-
-                if (i > currentMilestoneId) {
-                    tokensOwned += investment;
-                } else {
-                    // It means i <= currentMilestoneId
-                    // After project stop milestones don't change.
-                    uint256 investmentCoef = memMilestonePortions[i];
-
-                    // Total project portion that is left (Not amount for creator)
-                    uint256 actualProjectLeft = _getEarlyTerminationProjectLeftPortion(
-                        currentMilestoneId
-                    );
-
-                    // Get amount that was not used yet. This amount belongs to investor and should be transfered to him
-                    uint256 investmentLeft = _getUnburnedAmountForInvestment(
-                        investment,
-                        actualProjectLeft,
-                        investmentCoef
-                    );
-
-                    tokensOwned += investmentLeft;
-                }
-            }
-        }
-
-        if (tokensOwned == 0) revert InvestmentPool__NoMoneyInvested();
+        uint16 currentMilestoneId = getCurrentMilestoneId();
+        uint256 tokensOwned = _totalRefundAmount(_msgSender(), currentMilestoneId);
 
         bool successfulTransfer2 = acceptedToken.transfer(_msgSender(), tokensOwned);
         if (!successfulTransfer2) revert InvestmentPool__SuperTokenTransferFailed();
@@ -512,7 +444,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         onlyCreator
         allowedProjectStates(getAnyMilestoneOngoingStateValue())
     {
-        uint curMil = getCurrentMilestoneId();
+        uint16 curMil = getCurrentMilestoneId();
         _terminateMilestoneStream(curMil);
 
         if (!isTimeWithinLastMilestone()) {
@@ -544,19 +476,19 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         if (!success) revert InvestmentPool__EthTransferFailed();
     }
 
-    /** PUBLIC FUNCTIONS */
-
     /**
      * @notice Cancel project during milestone periods.
      * @notice Should only be called by the governane pool or gelato
      */
     function cancelDuringMilestones()
-        public
+        external
         onlyGovernancePool
         allowedProjectStates(getAnyMilestoneOngoingStateValue())
     {
         _cancelDuringMilestones();
     }
+
+    /** PUBLIC FUNCTIONS */
 
     /// @notice Checks if project was canceled
     function isEmergencyTerminated() public view returns (bool) {
@@ -604,7 +536,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     /// @notice Check if currently in milestone period
     /// @param _id Milestone id
-    function isTimeWithinMilestone(uint _id) public view returns (bool) {
+    function isTimeWithinMilestone(uint16 _id) public view returns (bool) {
         Milestone memory milestone = getMilestone(_id);
         return _getNow() >= milestone.startDate && _getNow() < milestone.endDate;
     }
@@ -638,7 +570,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      * @return stateNumber -> that is power of 2 from 2^0 to 2^7.
      * @dev It will be used in modifier to check if current state is allowed for function execution
      */
-    function getProjectStateValue() public view returns (uint256 stateNumber) {
+    function getProjectStateValue() public view returns (uint24 stateNumber) {
         if (isCanceledBeforeFundraiserStart()) {
             return getCanceledProjectStateValue();
         } else if (isTimeBeforeFundraiser() && !isEmergencyTerminated()) {
@@ -683,13 +615,13 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     }
 
     /// @notice Check if milestone can be terminated
-    function canTerminateMilestoneStream(uint256 _milestoneId) public view returns (bool) {
+    function canTerminateMilestoneStream(uint16 _milestoneId) public view returns (bool) {
         Milestone memory milestone = getMilestone(_milestoneId);
         return milestone.streamOngoing && milestone.endDate - getTerminationWindow() <= _getNow();
     }
 
     /// @notice Check if milestone can be terminated by Gelato automation
-    function canGelatoTerminateMilestoneStream(uint256 _milestoneId) public view returns (bool) {
+    function canGelatoTerminateMilestoneStream(uint16 _milestoneId) public view returns (bool) {
         Milestone memory milestone = getMilestone(_milestoneId);
         return
             milestone.streamOngoing &&
@@ -698,7 +630,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     }
 
     /// @notice get seed amount dedicated to the milestone
-    function getMilestoneSeedAmount(uint256 _milestoneId) public view returns (uint256) {
+    function getMilestoneSeedAmount(uint16 _milestoneId) public view returns (uint256) {
         uint256 memInvAmount = memMilestoneInvestments[_milestoneId];
         return
             (memInvAmount * getMilestone(_milestoneId).intervalSeedPortion) /
@@ -706,9 +638,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     }
 
     /// @notice Calculate the real funds allocation for the milestone
-    function getMilestoneTotalAllocation(uint _milestoneId) public view returns (uint256) {
+    function getMilestoneTotalAllocation(uint16 _milestoneId) public view returns (uint256) {
         uint256 memInvAmount = memMilestoneInvestments[_milestoneId];
-        uint totalPercentage = getMilestone(_milestoneId).intervalSeedPortion +
+        uint48 totalPercentage = getMilestone(_milestoneId).intervalSeedPortion +
             getMilestone(_milestoneId).intervalStreamingPortion;
         uint256 subt = memInvAmount * totalPercentage;
         return subt / getPercentageDivider();
@@ -718,8 +650,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      * @notice Function calculates the amount that is used by the creator
      */
     function getFundsUsed() public view returns (uint256) {
-        uint256 milestoneId = getCurrentMilestoneId();
-        uint256 currentState = getProjectStateValue();
+        uint16 milestoneId = getCurrentMilestoneId();
+        uint24 currentState = getProjectStateValue();
 
         if (
             currentState == getCanceledProjectStateValue() ||
@@ -735,7 +667,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             currentState == getTerminatedByGelatoStateValue()
         ) {
             uint256 creatorFunds = 0;
-            for (uint256 i = 0; i <= milestoneId; i++) {
+            for (uint16 i = 0; i <= milestoneId; i++) {
                 creatorFunds += getMilestone(i).paidAmount;
             }
             return creatorFunds;
@@ -746,20 +678,18 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         }
     }
 
-    function getMilestoneDuration(uint256 _milestoneId) public view returns (uint256) {
+    function getMilestoneDuration(uint16 _milestoneId) public view returns (uint256) {
         Milestone memory milestone = getMilestone(_milestoneId);
         return milestone.endDate - milestone.startDate;
     }
 
-    function getMilestonesWithInvestment(
-        address _investor
-    ) public view returns (uint256[] memory) {
+    function getMilestonesWithInvestment(address _investor) public view returns (uint16[] memory) {
         return milestonesWithInvestment[_investor];
     }
 
     function getInvestorTokensAllocation(
         address _investor,
-        uint256 _milestoneId
+        uint16 _milestoneId
     ) public view returns (uint256) {
         return
             (_getMemoizedInvestorInvestment(_investor, _milestoneId) *
@@ -774,8 +704,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     function getUsedInvestmentsData(
         address _investor
     ) public view returns (uint256 alreadyAllocated, uint256 allocationFlowRate) {
-        uint256 milestoneId = getCurrentMilestoneId();
-        uint256 currentState = getProjectStateValue();
+        uint16 milestoneId = getCurrentMilestoneId();
+        uint24 currentState = getProjectStateValue();
 
         // If no milestone is ongoing, always return 0
         if (
@@ -789,7 +719,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             return (0, 0);
         } else if (isStateAnyMilestoneOngoing()) {
             uint256 previousMilestonesAllocation = 0;
-            for (uint256 i = 0; i < milestoneId; i++) {
+            for (uint16 i = 0; i < milestoneId; i++) {
                 previousMilestonesAllocation += getInvestorTokensAllocation(_investor, i);
             }
 
@@ -803,7 +733,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         ) {
             uint48 milestoneStartDate = getMilestone(milestoneId).startDate;
             uint256 previousMilestonesAllocation = 0;
-            for (uint256 i = 0; i < milestoneId; i++) {
+            for (uint16 i = 0; i < milestoneId; i++) {
                 previousMilestonesAllocation += getInvestorTokensAllocation(_investor, i);
             }
 
@@ -819,10 +749,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             return (previousMilestonesAllocation, 0);
         } else if (currentState == getSuccessfullyEndedStateValue()) {
             // Return all investment
-            uint256[] memory milestonesIds = getMilestonesWithInvestment(_investor);
+            uint16[] memory milestonesIds = getMilestonesWithInvestment(_investor);
             uint256 totalInvestment = 0;
-            for (uint256 i = 0; i < milestonesIds.length; i++) {
-                uint256 milestone = milestonesIds[i];
+            for (uint16 i = 0; i < milestonesIds.length; i++) {
+                uint16 milestone = milestonesIds[i];
                 totalInvestment += getInvestedAmount(_investor, milestone);
             }
             return (totalInvestment, 0);
@@ -835,64 +765,12 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         return getProjectStateValue() & getAnyMilestoneOngoingStateValue() != 0;
     }
 
-    function getCurrentMilestoneId() public view virtual returns (uint256) {
+    function getCurrentMilestoneId() public view virtual returns (uint16) {
         return currentMilestone;
     }
 
     function getCfaId() public pure returns (bytes32) {
         return CFA_ID;
-    }
-
-    function getPercentageDivider() public pure returns (uint256) {
-        return PERCENTAGE_DIVIDER;
-    }
-
-    function getCanceledProjectStateValue() public pure returns (uint256) {
-        return CANCELED_PROJECT_STATE_VALUE;
-    }
-
-    function getBeforeFundraiserStateValue() public pure returns (uint256) {
-        return BEFORE_FUNDRAISER_STATE_VALUE;
-    }
-
-    function getFundraiserOngoingStateValue() public pure returns (uint256) {
-        return FUNDRAISER_ONGOING_STATE_VALUE;
-    }
-
-    function getFailedFundraiserStateValue() public pure returns (uint256) {
-        return FAILED_FUNDRAISER_STATE_VALUE;
-    }
-
-    function getFundraiserEndedNoMilestonesOngoingStateValue() public pure returns (uint256) {
-        return FUNDRAISER_ENDED_NO_MILESTONES_ONGOING_STATE_VALUE;
-    }
-
-    function getMilestonesOngoingBeforeLastStateValue() public pure returns (uint256) {
-        return MILESTONES_ONGOING_BEFORE_LAST_STATE_VALUE;
-    }
-
-    function getLastMilestoneOngoingStateValue() public pure returns (uint256) {
-        return LAST_MILESTONE_ONGOING_STATE_VALUE;
-    }
-
-    function getTerminatedByVotingStateValue() public pure returns (uint256) {
-        return TERMINATED_BY_VOTING_STATE_VALUE;
-    }
-
-    function getTerminatedByGelatoStateValue() public pure returns (uint256) {
-        return TERMINATED_BY_GELATO_STATE_VALUE;
-    }
-
-    function getSuccessfullyEndedStateValue() public pure returns (uint256) {
-        return SUCCESSFULLY_ENDED_STATE_VALUE;
-    }
-
-    function getUnknownStateValue() public pure returns (uint256) {
-        return UNKNOWN_STATE_VALUE;
-    }
-
-    function getAnyMilestoneOngoingStateValue() public pure returns (uint256) {
-        return ANY_MILESTONE_ONGOING_STATE_VALUE;
     }
 
     function getEthAddress() public pure returns (address) {
@@ -969,28 +847,28 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     function getInvestedAmount(
         address _investor,
-        uint256 _milestoneId
+        uint16 _milestoneId
     ) public view returns (uint256) {
         return investedAmount[_investor][_milestoneId];
     }
 
-    function getMilestonesCount() public view returns (uint256) {
+    function getMilestonesCount() public view returns (uint16) {
         return milestoneCount;
     }
 
-    function getMilestone(uint256 _milestoneId) public view returns (Milestone memory) {
+    function getMilestone(uint16 _milestoneId) public view returns (Milestone memory) {
         return milestones[_milestoneId];
     }
 
-    function getInvestmentWithdrawPercentageFee() public view returns (uint256) {
+    function getInvestmentWithdrawPercentageFee() public view returns (uint32) {
         return investmentWithdrawFee;
     }
 
-    function getSoftCapMultiplier() public view returns (uint256) {
+    function getSoftCapMultiplier() public view returns (uint16) {
         return softCapMultiplier;
     }
 
-    function getHardCapMultiplier() public view returns (uint256) {
+    function getHardCapMultiplier() public view returns (uint16) {
         return hardCapMultiplier;
     }
 
@@ -998,7 +876,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         return getMaximumWeightDivisor();
     }
 
-    function getMilestonesPortionLeft(uint256 _milestoneId) public view returns (uint256) {
+    function getMilestonesPortionLeft(uint16 _milestoneId) public view returns (uint48) {
         return memMilestonePortions[_milestoneId];
     }
 
@@ -1020,10 +898,10 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      * @dev Used only by the frontend
      */
     function getMemoizedInvestmentsList() public view returns (uint256[] memory) {
-        uint256 listValuesCount = getMilestonesCount();
+        uint16 listValuesCount = getMilestonesCount();
         uint256[] memory investmentsList = new uint256[](listValuesCount);
 
-        for (uint i = 0; i < listValuesCount; i++) {
+        for (uint16 i = 0; i < listValuesCount; i++) {
             investmentsList[i] = memMilestoneInvestments[i];
         }
         return investmentsList;
@@ -1068,9 +946,9 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     function _getMemoizedInvestorInvestment(
         address _investor,
-        uint256 _milestoneId
+        uint16 _milestoneId
     ) public view returns (uint256) {
-        uint256[] memory milestonesIds = getMilestonesWithInvestment(_investor);
+        uint16[] memory milestonesIds = getMilestonesWithInvestment(_investor);
 
         // Calculate the real balance
         if (milestonesIds.length == 0) {
@@ -1094,16 +972,14 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             // Because in previous condition we checked if investments were made to the milestone id,
             // we can be sure that findUpperBound function will return the value greater than element of length of the array,
             /// @dev not using milestonesIds variable because findUpperBound works only with storage variables.
-            uint256 largerMilestoneIndex = milestonesWithInvestment[_investor].findUpperBound(
-                _milestoneId
-            );
+            uint16 largerMilestoneIndex = milestonesIds.findUpperBound(_milestoneId);
 
             if (largerMilestoneIndex == milestonesIds.length) {
                 // If length of an array was returned, it means
                 // no milestone id in the array is greater than the current one.
                 // Get the last value on milestonesIds array, because all the milestones after it
                 // have the same tokens amount.
-                uint256 lastMilestone = milestonesIds[milestonesIds.length - 1];
+                uint16 lastMilestone = milestonesIds[milestonesIds.length - 1];
                 return memInvestorInvestments[_investor][lastMilestone];
             } else if (
                 largerMilestoneIndex == 0 && _milestoneId < milestonesIds[largerMilestoneIndex]
@@ -1119,7 +995,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
                 // the index that is higher by 1 array element. That is we need to subtract 1, to get the right index
                 // When we have the right index, we can return the tokens amount
                 // This condition can be met when looking for tokens amount in past milestones
-                uint256 milestoneIdWithInvestment = milestonesIds[largerMilestoneIndex - 1];
+                uint16 milestoneIdWithInvestment = milestonesIds[largerMilestoneIndex - 1];
                 return memInvestorInvestments[_investor][milestoneIdWithInvestment];
             }
         }
@@ -1130,7 +1006,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     }
 
     /// @notice Update value memMilestoneInvestments value, to make sure it doesn't return zero by mistake
-    function _updateMemInvestment(uint256 _milestoneId) internal {
+    function _updateMemInvestment(uint16 _milestoneId) internal {
         uint256 memInvAmount = memMilestoneInvestments[_milestoneId];
         if (memInvAmount == 0 && _milestoneId > 0) {
             memMilestoneInvestments[_milestoneId] = memMilestoneInvestments[_milestoneId - 1];
@@ -1142,7 +1018,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      * @param _milestoneId Milestone index to claim funds for
      */
     function _claim(
-        uint256 _milestoneId
+        uint16 _milestoneId
     )
         internal
         onlyCreator
@@ -1215,7 +1091,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
             // NOTE: we are not checking for existing flow here, because such existance would violate our contract rules
             // At this point, there should be no active stream to the creator's account so it's safe to open a new one
-            uint leftStreamDuration = milestone.endDate - _getNow();
+            uint256 leftStreamDuration = uint256(milestone.endDate) - _getNow();
             int96 flowRate = int96(int256(owedAmount / leftStreamDuration));
 
             cfaV1Lib.createFlow(getCreator(), acceptedToken, flowRate);
@@ -1228,7 +1104,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         @param _milestoneId Milestone index to terminate the stream for
      */
     function _terminateMilestoneStream(
-        uint256 _milestoneId
+        uint16 _milestoneId
     ) internal canTerminateMilestoneFinal(_milestoneId) {
         (uint256 timestamp, int96 flowRate, , ) = cfaV1Lib.cfa.getFlow(
             acceptedToken,
@@ -1247,7 +1123,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     /// @notice After stream was terminated, transfer left funds to the creator or only update paid amount value.
     function _afterStreamTermination(
-        uint256 _milestoneId,
+        uint16 _milestoneId,
         uint256 streamedAmount,
         bool _finalTermination
     ) internal {
@@ -1283,17 +1159,14 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
      * @notice Meaning, for initial fundraiser with the goal to achieve soft cap
      * @notice the index would be 0 and returned coefficient shall be 100% (PERCENTAGE_DIVIDER)
      */
-    function _investToMilestone(
-        address _investor,
-        uint256 _milestoneId,
-        uint256 _amount
-    ) internal {
-        uint256 investmentCoefficient = memMilestonePortions[_milestoneId];
+    function _investToMilestone(address _investor, uint16 _milestoneId, uint256 _amount) internal {
+        // Update memMilestoneInvestments mapping if investor invests before the stream is opened
+        // All cases (except milestone 0) are handled in _claim() function because milestone 0
+        // is the only milestone where investments can be made before stream is opened
+        // Fundraiser doesn't count as stream is not opened there
+        _updateMemInvestment(_milestoneId);
 
-        if (memMilestoneInvestments[_milestoneId] == 0 && _milestoneId > 0) {
-            memMilestoneInvestments[_milestoneId] = memMilestoneInvestments[_milestoneId - 1];
-        }
-
+        uint48 investmentCoefficient = memMilestonePortions[_milestoneId];
         uint256 scaledInvestment = (_amount * getPercentageDivider()) / investmentCoefficient;
 
         memMilestoneInvestments[_milestoneId] += scaledInvestment;
@@ -1310,6 +1183,70 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         memInvestorInvestments[_investor][_milestoneId] =
             _getMemoizedInvestorInvestment(_investor, _milestoneId) +
             scaledInvestment;
+
+        bool successfulTransfer = acceptedToken.transferFrom(_investor, address(this), _amount);
+        if (!successfulTransfer) revert InvestmentPool__SuperTokenTransferFailed();
+    }
+
+    function _unpledgeFromMilestone(
+        address _investor,
+        uint16 _milestoneId,
+        uint256 _amount
+    ) internal {
+        uint48 investmentCoefficient = memMilestonePortions[_milestoneId];
+
+        // Update storage variables
+        memMilestoneInvestments[_milestoneId] -=
+            (_amount * getPercentageDivider()) /
+            investmentCoefficient;
+        investedAmount[_investor][_milestoneId] = 0;
+        totalInvestedAmount -= _amount;
+
+        milestonesWithInvestment[_investor].pop();
+        memInvestorInvestments[_investor][_milestoneId] = 0;
+
+        // Apply fee for withdrawal during the same period as invested (milestone or fundraiser)
+        uint256 amountToTransfer = (_amount * (100 - getInvestmentWithdrawPercentageFee())) / 100;
+
+        bool successfulTransfer = acceptedToken.transfer(_investor, amountToTransfer);
+        if (!successfulTransfer) revert InvestmentPool__SuperTokenTransferFailed();
+    }
+
+    function _totalRefundAmount(
+        address _investor,
+        uint16 _terminationMilestoneId
+    ) internal returns (uint256) {
+        uint256 tokensOwned;
+        uint16[] memory milestonesIds = getMilestonesWithInvestment(_investor);
+        // Total project portion that is left (Not amount for creator)
+        uint48 actualProjectLeft = _getEarlyTerminationProjectLeftPortion(_terminationMilestoneId);
+
+        for (uint16 i = 0; i < milestonesIds.length; i++) {
+            uint16 milestoneId = milestonesIds[i];
+
+            uint256 investment = getInvestedAmount(_investor, milestoneId);
+            investedAmount[_investor][milestoneId] = 0;
+
+            if (milestoneId > _terminationMilestoneId) {
+                tokensOwned += investment;
+            } else {
+                // It means milestoneId <= currentMilestoneId
+                // After project stop milestones don't change.
+                uint48 investmentCoef = memMilestonePortions[milestoneId];
+
+                uint256 investmentLeft = _getUnburnedAmountForInvestment(
+                    investment,
+                    actualProjectLeft,
+                    investmentCoef
+                );
+
+                tokensOwned += investmentLeft;
+            }
+        }
+
+        if (tokensOwned == 0) revert InvestmentPool__NoMoneyInvested();
+
+        return tokensOwned;
     }
 
     /**
@@ -1318,8 +1255,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
 
     /// @notice Get the total project PORTION percentage. It shouldn't be confused with total investment percentage that is left.
     function _getEarlyTerminationProjectLeftPortion(
-        uint256 _terminationMilestoneId
-    ) internal view returns (uint256) {
+        uint16 _terminationMilestoneId
+    ) internal view returns (uint48) {
         /**
          * @dev Creator always has rights to get the seed amount for the termination milestone,
          * @dev even after termination this is to prevent project kills by whale investors.
@@ -1327,7 +1264,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
          */
 
         Milestone memory terminationMilestone = getMilestone(_terminationMilestoneId);
-        uint256 milestonePortion = memMilestonePortions[_terminationMilestoneId];
+        uint48 milestonePortion = memMilestonePortions[_terminationMilestoneId];
         uint256 tokensReserved;
 
         if (terminationMilestone.paidAmount > 0) {
@@ -1336,14 +1273,14 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
             tokensReserved = getMilestoneSeedAmount(_terminationMilestoneId);
         }
 
-        uint256 totalMilestones = getMilestonesCount();
+        uint16 totalMilestones = getMilestonesCount();
         uint256 leftAllocation;
-        for (uint256 i = getCurrentMilestoneId(); i < totalMilestones; i++) {
+        for (uint16 i = _terminationMilestoneId; i < totalMilestones; i++) {
             leftAllocation += getMilestoneTotalAllocation(i);
         }
 
         /// @dev Example: 25% - (60$ * 25% / 300$) = 20%
-        return milestonePortion - (((tokensReserved * milestonePortion) / leftAllocation));
+        return milestonePortion - uint48((tokensReserved * milestonePortion) / leftAllocation);
     }
 
     function _getNow() internal view virtual returns (uint256) {
@@ -1355,8 +1292,8 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     /// @notice Get amount that belongs to the investor
     function _getUnburnedAmountForInvestment(
         uint256 _investmentAmount,
-        uint256 _actualProjectLeft,
-        uint _investmentCoef
+        uint48 _actualProjectLeft,
+        uint48 _investmentCoef
     ) internal pure returns (uint256) {
         return (_investmentAmount * _actualProjectLeft) / _investmentCoef;
     }
@@ -1444,7 +1381,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
         // to ensure that the CREATOR wouldn't get too much money
 
         (uint256 timestamp, int96 flowRate) = abi.decode(cbdata, (uint256, int96));
-        uint256 currentMilestoneIndex = getCurrentMilestoneId();
+        uint16 currentMilestoneIndex = getCurrentMilestoneId();
         bool finalTermination = canTerminateMilestoneStream(currentMilestoneIndex);
 
         // TODO: handle overstream case in-between milestones
@@ -1467,7 +1404,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     /// @return canExec : whether Gelato should execute the task.
     /// @return execPayload :  data that executors should use for the execution.
     function gelatoChecker() public view returns (bool canExec, bytes memory execPayload) {
-        uint256 milestoneId = getCurrentMilestoneId();
+        uint16 milestoneId = getCurrentMilestoneId();
         canExec = canGelatoTerminateMilestoneStream(milestoneId);
         execPayload = abi.encodeCall(this.gelatoTerminateMilestoneStream, (milestoneId));
     }
@@ -1502,7 +1439,7 @@ contract InvestmentPool is IInitializableInvestmentPool, SuperAppBase, Context, 
     /// @notice Function is called by gelato automation, when conditions are met
     /// @notice Function is not restricted to gelato ops sender, because it checks if conditions are met
     function gelatoTerminateMilestoneStream(
-        uint256 _milestoneId
+        uint16 _milestoneId
     ) public canGelatoTerminateMilestoneFinal(_milestoneId) {
         _cancelDuringMilestones();
         gelatoTask = bytes32("");

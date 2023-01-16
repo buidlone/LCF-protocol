@@ -21,14 +21,14 @@ contract DistributionPoolMockForIntegration is IInitializableDistributionPool {
     function lockTokens() external {}
 
     function allocateTokens(
-        uint256 _milestoneId,
+        uint16 _milestoneId,
         address _investor,
         uint256 _investmentWeight,
         uint256 _weightDivisor,
         uint256 _allocationCoefficient
     ) external {}
 
-    function removeTokensAllocation(uint256 _milestoneId, address _investor) external {}
+    function removeTokensAllocation(uint16 _milestoneId, address _investor) external {}
 
     function claimAllocation() external {}
 
@@ -40,7 +40,7 @@ contract DistributionPoolMockForIntegration is IInitializableDistributionPool {
 
     function getAllocatedAmount(
         address _investor,
-        uint256 _milestoneId
+        uint16 _milestoneId
     ) public view returns (uint256) {}
 
     function getAllocationData(address _investor) public view returns (uint256, uint256) {}
@@ -51,9 +51,9 @@ contract DistributionPoolMockForIntegration is IInitializableDistributionPool {
 
     function getMilestonesWithAllocation(
         address _investor
-    ) public view returns (uint256[] memory) {}
+    ) public view returns (uint16[] memory) {}
 
-    function getPercentageDivider() public pure returns (uint256) {}
+    function getPercentageDivider() public view returns (uint48) {}
 
     function getInvestmentPool() public view returns (address) {}
 
@@ -62,4 +62,20 @@ contract DistributionPoolMockForIntegration is IInitializableDistributionPool {
     function getLockedTokens() public view returns (uint256) {}
 
     function getTotalAllocatedTokens() public view returns (uint256) {}
+
+    function getCanceledProjectStateValue() external view returns (uint24) {}
+
+    function getBeforeFundraiserStateValue() external view returns (uint24) {}
+
+    function getFundraiserOngoingStateValue() external view returns (uint24) {}
+
+    function getFailedFundraiserStateValue() external view returns (uint24) {}
+
+    function getFundraiserEndedNoMilestonesOngoingStateValue() external view returns (uint24) {}
+
+    function getTerminatedByVotingStateValue() external view returns (uint24) {}
+
+    function getTerminatedByGelatoStateValue() external view returns (uint24) {}
+
+    function getSuccessfullyEndedStateValue() external view returns (uint24) {}
 }

@@ -31,17 +31,17 @@ let formated20Percent: BigNumber;
 let formated70Percent: BigNumber;
 
 // Project state values
-let canceledProjectStateValue: BigNumber;
-let beforeFundraiserStateValue: BigNumber;
-let fundraiserOngoingStateValue: BigNumber;
-let failedFundraiserStateValue: BigNumber;
-let fundraiserEndedNoMilestonesOngoingStateValue: BigNumber;
-let milestonesOngoingBeforeLastStateValue: BigNumber;
-let lastMilestoneOngoingStateValue: BigNumber;
-let terminatedByVotingStateValue: BigNumber;
-let terminatedByGelatoStateValue: BigNumber;
-let successfullyEndedStateValue: BigNumber;
-let unknownStateValue: BigNumber;
+let canceledProjectStateValue: number;
+let beforeFundraiserStateValue: number;
+let fundraiserOngoingStateValue: number;
+let failedFundraiserStateValue: number;
+let fundraiserEndedNoMilestonesOngoingStateValue: number;
+let milestonesOngoingBeforeLastStateValue: number;
+let lastMilestoneOngoingStateValue: number;
+let terminatedByVotingStateValue: number;
+let terminatedByGelatoStateValue: number;
+let successfullyEndedStateValue: number;
+let unknownStateValue: number;
 
 const formatPercentage = (percent: BigNumberish): BigNumber => {
     return percentageDivider.mul(percent).div(100);
@@ -55,7 +55,7 @@ const getConstantVariablesFromContract = async () => {
     await createProject();
 
     percentageDivider = await distributionPool.getPercentageDivider();
-    await defineProjectStateByteValues(investmentPool);
+    await defineStateValues(investmentPool);
 };
 
 const createProject = async () => {
@@ -108,7 +108,7 @@ const createProject = async () => {
     await buidl1Token.connect(creator).approve(distributionPool.address, constants.MaxUint256);
 };
 
-const defineProjectStateByteValues = async (investment: InvestmentPoolMockForIntegration) => {
+const defineStateValues = async (investment: InvestmentPoolMockForIntegration) => {
     canceledProjectStateValue = await investment.getCanceledProjectStateValue();
     beforeFundraiserStateValue = await investment.getBeforeFundraiserStateValue();
     fundraiserOngoingStateValue = await investment.getFundraiserOngoingStateValue();

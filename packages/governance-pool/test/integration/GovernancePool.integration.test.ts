@@ -61,13 +61,13 @@ let adminRole: string;
 let creationRes: ContractTransaction;
 
 // Percentages (in divider format)
-let percentageDivider: BigNumber = BigNumber.from(0);
-let formated5Percent: BigNumber;
-let formated20Percent: BigNumber;
-let formated70Percent: BigNumber;
+let percentageDivider: number = 0;
+let formated5Percent: number;
+let formated20Percent: number;
+let formated70Percent: number;
 
-const formatPercentage = (percent: BigNumberish): BigNumber => {
-    return percentageDivider.mul(percent).div(100);
+const formatPercentage = (percent: number): number => {
+    return (percentageDivider * percent) / 100;
 };
 
 const dateToSeconds = (date: string): number => {
@@ -389,7 +389,7 @@ describe("Investment Pool integration with Governance Pool and Distribution Pool
 
             await investmentPool.setTimestamp(dateToSeconds("2100/09/15"));
             const softCapMultiplier = await investmentPool.getSoftCapMultiplier();
-            const votesAgainst = softCapMultiplier.mul(investedAmount).mul(2).div(3);
+            const votesAgainst = investedAmount.mul(softCapMultiplier).mul(2).div(3);
 
             await votingToken.connect(investorA).setApprovalForAll(governancePool.address, true);
             await expect(governancePool.connect(investorA).voteAgainst(votesAgainst)).to.emit(

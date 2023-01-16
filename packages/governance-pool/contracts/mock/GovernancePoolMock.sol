@@ -11,7 +11,7 @@ import {VotingToken} from "../VotingToken.sol";
 contract GovernancePoolMock is GovernancePool {
     function getMemActiveTokens(
         address _investor,
-        uint256 _milestoneId
+        uint16 _milestoneId
     ) public view returns (uint256) {
         return memActiveTokens[_investor][_milestoneId];
     }

@@ -10,14 +10,14 @@ interface IDistributionPool {
     function lockTokens() external;
 
     function allocateTokens(
-        uint256 _milestoneId,
+        uint16 _milestoneId,
         address _investor,
         uint256 _investmentWeight,
         uint256 _weightDivisor,
         uint256 _allocationCoefficient
     ) external;
 
-    function removeTokensAllocation(uint256 _milestoneId, address _investor) external;
+    function removeTokensAllocation(uint16 _milestoneId, address _investor) external;
 
     function claimAllocation() external;
 
@@ -29,7 +29,7 @@ interface IDistributionPool {
 
     function getAllocatedAmount(
         address _investor,
-        uint256 _milestoneId
+        uint16 _milestoneId
     ) external view returns (uint256);
 
     function getAllocationData(address _investor) external view returns (uint256, uint256);
@@ -40,9 +40,9 @@ interface IDistributionPool {
 
     function getMilestonesWithAllocation(
         address _investor
-    ) external view returns (uint256[] memory);
+    ) external view returns (uint16[] memory);
 
-    function getPercentageDivider() external pure returns (uint256);
+    function getPercentageDivider() external view returns (uint48);
 
     function getInvestmentPool() external view returns (address);
 
@@ -53,6 +53,22 @@ interface IDistributionPool {
     function didCreatorLockTokens() external view returns (bool);
 
     function getTotalAllocatedTokens() external view returns (uint256);
+
+    function getCanceledProjectStateValue() external view returns (uint24);
+
+    function getBeforeFundraiserStateValue() external view returns (uint24);
+
+    function getFundraiserOngoingStateValue() external view returns (uint24);
+
+    function getFailedFundraiserStateValue() external view returns (uint24);
+
+    function getFundraiserEndedNoMilestonesOngoingStateValue() external view returns (uint24);
+
+    function getTerminatedByVotingStateValue() external view returns (uint24);
+
+    function getTerminatedByGelatoStateValue() external view returns (uint24);
+
+    function getSuccessfullyEndedStateValue() external view returns (uint24);
 }
 
 interface IInitializableDistributionPool is IDistributionPool {

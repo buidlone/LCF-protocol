@@ -15,16 +15,16 @@ contract GovernancePoolMockForIntegration is IInitializableGovernancePool {
         address _votingToken,
         IInvestmentPool _investmentPool,
         uint8 _threshold,
-        uint256 _votestWithdrawFee
+        uint32 _votestWithdrawFee
     ) external payable {}
 
-    function mintVotingTokens(uint256 _milestoneId, address _investor, uint256 _amount) external {}
+    function mintVotingTokens(uint16 _milestoneId, address _investor, uint256 _amount) external {}
 
     function voteAgainst(uint256 _amount) external {}
 
     function retractVotes(uint256 _retractAmount) external {}
 
-    function burnVotes(uint256 _milestoneId, address _investor) external {}
+    function burnVotes(uint16 _milestoneId, address _investor) external {}
 
     function transferVotes(address _recipient, uint256 _amount) external {}
 
@@ -37,7 +37,7 @@ contract GovernancePoolMockForIntegration is IInitializableGovernancePool {
     function thresholdReached(uint256 _investorVotesCount) external view returns (bool) {}
 
     function getActiveVotes(
-        uint256 _milestoneId,
+        uint16 _milestoneId,
         address _account
     ) external view returns (uint256) {}
 
@@ -51,15 +51,13 @@ contract GovernancePoolMockForIntegration is IInitializableGovernancePool {
 
     function getVotesPercentageThreshold() external view returns (uint8) {}
 
-    function getVotesWithdrawPercentageFee() external view returns (uint256) {}
+    function getVotesWithdrawPercentageFee() external view returns (uint32) {}
 
-    function getFundraiserOngoingStateValue() external pure returns (uint256) {}
+    function getFundraiserOngoingStateValue() external pure returns (uint24) {}
 
-    function getMilestonesOngoingBeforeLastStateValue() external pure returns (uint256) {}
+    function getMilestonesOngoingBeforeLastStateValue() external pure returns (uint24) {}
 
-    function getLastMilestoneOngoingStateValue() external pure returns (uint256) {}
-
-    function getAnyMilestoneOngoingStateValue() external pure returns (uint256) {}
+    function getAnyMilestoneOngoingStateValue() external pure returns (uint24) {}
 
     function getInvestmentPool() external view returns (address) {}
 
@@ -71,10 +69,10 @@ contract GovernancePoolMockForIntegration is IInitializableGovernancePool {
 
     function getTotalLockedAmount() external view returns (uint256) {}
 
-    function getMilestonesWithVotes(address _investor) external view returns (uint256[] memory) {}
+    function getMilestonesWithVotes(address _investor) external view returns (uint16[] memory) {}
 
     function getTokensMinted(
         address _investor,
-        uint256 _milestoneId
+        uint16 _milestoneId
     ) external view returns (uint256) {}
 }
