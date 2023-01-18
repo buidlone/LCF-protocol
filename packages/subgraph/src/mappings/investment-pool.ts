@@ -9,9 +9,19 @@ import {
     ClaimFunds as ClaimedFundsEvent,
     TerminateStream as TerminatedStreamEvent,
 } from "../../generated/InvestmentPool/InvestmentPool";
-import {Project, Milestone} from "../../generated/schema";
+import {ERC20 as ERC20Contract} from "../../generated/templates/ERC20/ERC20";
+import {
+    Project,
+    Governance,
+    Distribution,
+    Milestone,
+    AcceptedSuperToken,
+    ProjectToken,
+    VotingToken,
+} from "../../generated/schema";
 
 export function handleInitialized(event: InitializedEvent): void {
+    // Get investment pool contract
     const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(event.address);
     const milestonesCount = ipContract.getMilestonesCount().toI32();
     let milestoneIds: string[] = [];
@@ -28,14 +38,17 @@ export function handleInitialized(event: InitializedEvent): void {
 
     // Loop through each milestone and create a new milestone entity with the data
     for (let milestoneId = 0; milestoneId < milestonesCount; milestoneId++) {
+        // Get project entity
         const id: string = `${projectId}-${milestoneId.toString()}`;
         let milestone = Milestone.load(id);
         if (milestone) return;
 
+        // Create new milestone entity
         milestone = new Milestone(id);
         milestone.project = projectId;
         milestone.milestoneId = milestoneId;
 
+        // Assign milestone data from IP smart contract
         const milestoneIdBI: BigInt = BigInt.fromI32(milestoneId);
         const milestoneData = ipContract.getMilestone(milestoneIdBI);
         milestone.startTime = milestoneData.startDate.toI32();
@@ -44,6 +57,7 @@ export function handleInitialized(event: InitializedEvent): void {
         milestone.seedPercentagePortion = milestoneData.intervalSeedPortion;
         milestone.streamPercentagePortion = milestoneData.intervalStreamingPortion;
 
+        // Set default values
         milestone.seedFundsAllocation = BigInt.fromI32(0);
         milestone.streamFundsAllocation = BigInt.fromI32(0);
         milestone.isSeedAllocationPaid = false;
@@ -59,6 +73,23 @@ export function handleInitialized(event: InitializedEvent): void {
     // Add all milestones to project entity
     project.milestones = milestoneIds;
     project.save();
+
+    // Get accepted super token entity
+    const acceptedTokenAddress = ipContract.getAcceptedToken();
+    const acceptedTokenId: string = acceptedTokenAddress.toHexString();
+    let acceptedToken = AcceptedSuperToken.load(acceptedTokenId);
+    if (acceptedToken) return;
+
+    // Create accepted super token entity
+    const acceptedTokenContract = ERC20Contract.bind(acceptedTokenAddress);
+    acceptedToken = new AcceptedSuperToken(acceptedTokenId);
+    acceptedToken.name = acceptedTokenContract.name();
+    acceptedToken.symbol = acceptedTokenContract.symbol();
+    acceptedToken.decimals = acceptedTokenContract.decimals();
+    acceptedToken.save();
+
+    // Get new governance entity
+    // TODO add governance entity
 }
 
 export function handleInvested(event: InvestEvent): void {
