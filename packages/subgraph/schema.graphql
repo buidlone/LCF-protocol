@@ -202,12 +202,6 @@ type ProjectToken @entity(immutable: true) {
     Example: 18
     """
     decimals: Int!
-
-    """
-    The number of tokens that creator locked in distribution pool as rewards for investors
-    Specified in wei [10^18 ETH]
-    """
-    lockedAmount: BigInt!
 }
 
 """

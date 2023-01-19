@@ -100,6 +100,8 @@ templates:
       entities:
         - VotingToken
       eventHandlers:
+        # eventHandlers required option, so we define event, but we don't actually need to index the erc1155
+        # We will only use this template to bind ERC1155 tokens and request needed details
         - event: TransferSingle(indexed address,indexed address,indexed address,uint256,uint256)
           handler: handleTransfer
       file: ./src/mappings/voting-token.ts
@@ -120,7 +122,7 @@ templates:
         - AcceptedSuperToken
         - ProjectToken
       eventHandlers:
-        # Event is defined, but we don't actually need to index the erc20
+        # eventHandlers required option, so we define event, but we don't actually need to index the erc20
         # We will only use this template to bind ERC20 tokens and request needed details
         - event: Transfer(indexed address,indexed address,uint256)
           handler: handleTransfer

@@ -1,4 +1,4 @@
-import {Address, BigInt, log} from "@graphprotocol/graph-ts";
+import {Address, BigInt, DataSourceContext} from "@graphprotocol/graph-ts";
 import {
     InvestmentPool as InvestmentPoolContract,
     Initialized as InitializedEvent,
@@ -10,15 +10,8 @@ import {
     TerminateStream as TerminatedStreamEvent,
 } from "../../generated/InvestmentPool/InvestmentPool";
 import {ERC20 as ERC20Contract} from "../../generated/templates/ERC20/ERC20";
-import {
-    Project,
-    Governance,
-    Distribution,
-    Milestone,
-    AcceptedSuperToken,
-    ProjectToken,
-    VotingToken,
-} from "../../generated/schema";
+import {DistributionPool, GovernancePool} from "../../generated/templates";
+import {Project, Milestone, AcceptedSuperToken} from "../../generated/schema";
 
 export function handleInitialized(event: InitializedEvent): void {
     // Get investment pool contract
@@ -88,8 +81,16 @@ export function handleInitialized(event: InitializedEvent): void {
     acceptedToken.decimals = acceptedTokenContract.decimals();
     acceptedToken.save();
 
-    // Get new governance entity
-    // TODO add governance entity
+    // Start indexing distribution pool contract
+    const distributionPoolAddress = ipContract.getDistributionPool();
+    DistributionPool.create(distributionPoolAddress);
+
+    // Start indexing governance pool contract and pass the supply cap
+    const governancePoolAddress = ipContract.getGovernancePool();
+    const maxSupplyCap = ipContract.getVotingTokensSupplyCap();
+    let context = new DataSourceContext();
+    context.setBigInt("supplyCap", maxSupplyCap);
+    GovernancePool.createWithContext(governancePoolAddress, context);
 }
 
 export function handleInvested(event: InvestEvent): void {
