@@ -1,4 +1,4 @@
-import {Address, BigInt, DataSourceContext} from "@graphprotocol/graph-ts";
+import {Address, BigInt, dataSource, log} from "@graphprotocol/graph-ts";
 import {
     InvestmentPool as InvestmentPoolContract,
     Initialized as InitializedEvent,
@@ -10,34 +10,44 @@ import {
     TerminateStream as TerminatedStreamEvent,
 } from "../../generated/InvestmentPool/InvestmentPool";
 import {ERC20 as ERC20Contract} from "../../generated/templates/ERC20/ERC20";
-import {DistributionPool, GovernancePool} from "../../generated/templates";
-import {Project, Milestone, AcceptedSuperToken} from "../../generated/schema";
+import {Project, Milestone, AcceptedSuperToken, ProjectFactory} from "../../generated/schema";
 
 export function handleInitialized(event: InitializedEvent): void {
     // Get investment pool contract
     const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(event.address);
     const milestonesCount = ipContract.getMilestonesCount().toI32();
-    let milestoneIds: string[] = [];
 
-    // Get project entity
+    // Get context from investment pool
+    const context = dataSource.context();
+    const creator = context.getBytes("creator");
+    const projectFactoryId = context.getBytes("investmentPoolFactoryAddress").toHexString();
+    const governanceId = context.getBytes("governancePoolAddress").toHexString();
+    const distributionId = context.getBytes("distributionPoolAddress").toHexString();
+
+    // Get project entity. Shouldn't exist yet
     const projectId: string = event.address.toHexString();
     let project = Project.load(projectId);
-    if (project) return;
+    if (project) {
+        log.error("Project already exists: {}", [projectId]);
+        return;
+    }
 
     // Create new project entity
     project = new Project(projectId);
-    project.creator = ipContract.getCreator();
-    project.percentageDivider = ipContract.getPercentageDivider();
 
     // Loop through each milestone and create a new milestone entity with the data
+    let milestoneIds: string[] = [];
     for (let milestoneId = 0; milestoneId < milestonesCount; milestoneId++) {
-        // Get project entity
-        const id: string = `${projectId}-${milestoneId.toString()}`;
-        let milestone = Milestone.load(id);
-        if (milestone) return;
+        // Get milestone entity
+        const milestoneFullId: string = `${projectId}-${milestoneId.toString()}`;
+        let milestone = Milestone.load(milestoneFullId);
+        if (milestone) {
+            log.error("Milestone already exists: {}", [milestoneFullId]);
+            return;
+        }
 
         // Create new milestone entity
-        milestone = new Milestone(id);
+        milestone = new Milestone(milestoneFullId);
         milestone.project = projectId;
         milestone.milestoneId = milestoneId;
 
@@ -60,37 +70,35 @@ export function handleInitialized(event: InitializedEvent): void {
 
         milestone.save();
 
-        milestoneIds.push(id);
+        milestoneIds.push(milestoneFullId);
     }
-
-    // Add all milestones to project entity
-    project.milestones = milestoneIds;
-    project.save();
 
     // Get accepted super token entity
     const acceptedTokenAddress = ipContract.getAcceptedToken();
     const acceptedTokenId: string = acceptedTokenAddress.toHexString();
     let acceptedToken = AcceptedSuperToken.load(acceptedTokenId);
-    if (acceptedToken) return;
+    if (!acceptedToken) {
+        /**
+         * @notice Create accepted super token entity if it doesn't exist
+         * @notice Multiple projects can accept the same super token
+         */
+        const acceptedTokenContract = ERC20Contract.bind(acceptedTokenAddress);
+        acceptedToken = new AcceptedSuperToken(acceptedTokenId);
+        acceptedToken.name = acceptedTokenContract.name();
+        acceptedToken.symbol = acceptedTokenContract.symbol();
+        acceptedToken.decimals = acceptedTokenContract.decimals();
+        acceptedToken.save();
+    }
 
-    // Create accepted super token entity
-    const acceptedTokenContract = ERC20Contract.bind(acceptedTokenAddress);
-    acceptedToken = new AcceptedSuperToken(acceptedTokenId);
-    acceptedToken.name = acceptedTokenContract.name();
-    acceptedToken.symbol = acceptedTokenContract.symbol();
-    acceptedToken.decimals = acceptedTokenContract.decimals();
-    acceptedToken.save();
-
-    // Start indexing distribution pool contract
-    const distributionPoolAddress = ipContract.getDistributionPool();
-    DistributionPool.create(distributionPoolAddress);
-
-    // Start indexing governance pool contract and pass the supply cap
-    const governancePoolAddress = ipContract.getGovernancePool();
-    const maxSupplyCap = ipContract.getVotingTokensSupplyCap();
-    let context = new DataSourceContext();
-    context.setBigInt("supplyCap", maxSupplyCap);
-    GovernancePool.createWithContext(governancePoolAddress, context);
+    // Add all project details
+    project.factory = projectFactoryId;
+    project.governacePool = governanceId;
+    project.distributionPool = distributionId;
+    project.creator = creator;
+    project.milestones = milestoneIds;
+    project.acceptedToken = acceptedTokenId;
+    project.percentageDivider = ipContract.getPercentageDivider();
+    project.save();
 }
 
 export function handleInvested(event: InvestEvent): void {
@@ -107,15 +115,22 @@ function updateSeedAndStreamAllocations(contractAddress: Address): void {
     // Get project entity
     const projectId: string = contractAddress.toHexString();
     const project = Project.load(projectId);
-    if (!project) return;
+    if (!project) {
+        log.error("Project doesn't exist: {}", [projectId]);
+        return;
+    }
 
+    // Get memoized investments list
     const memoizedInvestments: BigInt[] = ipContract.getMilestonesInvestmentsListForFormula();
     const milestones: string[] = project.milestones;
 
     // Loop through each milestone and update the seed and stream allocations
     for (let i = 0; i < milestones.length; i++) {
         let milestone = Milestone.load(milestones[i]);
-        if (!milestone) return;
+        if (!milestone) {
+            log.error("Milestone doesn't exist: {}", [milestones[i]]);
+            return;
+        }
 
         const milestoneIdBI: BigInt = BigInt.fromI32(milestone.milestoneId);
         // Find the memoized investment
@@ -138,7 +153,10 @@ export function handleCanceled(event: CancelEvent): void {
     // Get project entity
     const projectId: string = event.address.toHexString();
     const project = Project.load(projectId);
-    if (!project) return;
+    if (!project) {
+        log.error("Project doesn't exist: {}", [projectId]);
+        return;
+    }
 
     // If project was canceled before the fundraiser started, no data needs to be updated
     const canceledBefore = ipContract.isCanceledBeforeFundraiserStart();
@@ -146,8 +164,12 @@ export function handleCanceled(event: CancelEvent): void {
 
     // After canceling the project, milestone id stays the same
     const milestoneIdBI: BigInt = ipContract.getCurrentMilestoneId();
-    let milestone = Milestone.load(`${projectId}-${milestoneIdBI.toString()}`);
-    if (!milestone) return;
+    const milestoneFullId: string = `${projectId}-${milestoneIdBI.toString()}`;
+    let milestone = Milestone.load(milestoneFullId);
+    if (!milestone) {
+        log.error("Milestone doesn't exist: {}", [milestoneFullId]);
+        return;
+    }
 
     // Update milestone data
     const milestoneData = ipContract.getMilestone(milestoneIdBI);
@@ -168,12 +190,19 @@ export function handleClaimedFunds(event: ClaimedFundsEvent): void {
     // Get project entity
     const projectId: string = event.address.toHexString();
     const project = Project.load(projectId);
-    if (!project) return;
+    if (!project) {
+        log.error("Project doesn't exist: {}", [projectId]);
+        return;
+    }
 
     // Find the milestone entity
     const milestoneIdBI: BigInt = event.params.milestoneId;
-    let milestone = Milestone.load(`${projectId}-${milestoneIdBI.toString()}`);
-    if (!milestone) return;
+    const milestoneFullId: string = `${projectId}-${milestoneIdBI.toString()}`;
+    let milestone = Milestone.load(milestoneFullId);
+    if (!milestone) {
+        log.error("Milestone doesn't exist: {}", [milestoneFullId]);
+        return;
+    }
 
     // Update milestone data from the event data passed in
     const isSeedAllocationPaid = event.params.gotSeedFunds;
@@ -195,13 +224,19 @@ export function handleTerminatedStream(event: TerminatedStreamEvent): void {
     // Get project entity
     const projectId: string = event.address.toHexString();
     const project = Project.load(projectId);
-    if (!project) return;
+    if (!project) {
+        log.error("Project doesn't exist: {}", [projectId]);
+        return;
+    }
 
     // Find the milestone entity
     const milestoneIdBI: BigInt = event.params.milestoneId;
-    let milestone = Milestone.load(`${projectId}-${milestoneIdBI.toString()}`);
-    if (!milestone) return;
-
+    const milestoneFullId: string = `${projectId}-${milestoneIdBI.toString()}`;
+    let milestone = Milestone.load(milestoneFullId);
+    if (!milestone) {
+        log.error("Milestone doesn't exist: {}", [milestoneFullId]);
+        return;
+    }
     // Update milestone data from the smart contract
     const milestoneData = ipContract.getMilestone(milestoneIdBI);
     milestone.isTotalAllocationPaid = milestoneData.paid;
@@ -212,7 +247,7 @@ export function handleTerminatedStream(event: TerminatedStreamEvent): void {
 }
 
 /**
- * Find the memoized investment for the milestone.
+ * @notice Find the memoized investment for the milestone.
  * If the milestone has no investment, find the last investment before the milestone.
  * If there is no investment before the milestone, return 0.
  * @param investmentsList memoized investments list

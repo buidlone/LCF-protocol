@@ -1,4 +1,20 @@
 """
+Project factory represents a factory contract that is used for creating new project smart contracts
+"""
+type ProjectFactory @entity(immutable: true) {
+    """
+    Investment Pool Factory address
+    Example: 0x1234567890abcdef1234567890abcdef1234567890
+    """
+    id: ID!
+
+    """
+    List of all projects that were created by this factory
+    """
+    projects: [Project!]! @derivedFrom(field: "factory")
+}
+
+"""
 Project entity represents project (investment pool) that was created by a creator
 """
 type Project @entity(immutable: true) {
@@ -9,22 +25,44 @@ type Project @entity(immutable: true) {
     id: ID!
 
     """
+    Project factory entity that was used for creating this project
+    """
+    factory: ProjectFactory!
+
+    """
     Wallet address of the project creator
     """
     creator: Bytes!
+
+    """
+    Governance Pool entity reponsible for voting process
+    """
+    governacePool: Governance!
+
+    """
+    Distribution Pool entity reponsible for distribution of rewards
+    """
+    distributionPool: Distribution!
+
+    # Milestones are not derived from Milestone entity
+    # It is more efficient to have them stored directly on the Project entity
+    # as we will need to loop through all milestones when updating milestone details
+    """
+    List of milestones
+    """
+    milestones: [Milestone!]!
+
+    """
+    Token that is used for getting the investments from the investors
+    These tokens are transferred to the investment pool on investment
+    """
+    acceptedToken: AcceptedSuperToken!
 
     """
     Holds the number that is used as dividor to calculate the seed and stream allocation funds
     This number represents the 100% of portion
     """
     percentageDivider: BigInt!
-
-    # Milestones are not derived from Milestone entity
-    # It is more efficient to have them stored directly on the Project entity
-    """
-    List of milestones
-    """
-    milestones: [Milestone!]!
 }
 
 """
@@ -36,6 +74,11 @@ type Governance @entity {
     Example: 0x1234567890abcdef1234567890abcdef1234567890
     """
     id: ID!
+
+    """
+    Project that this governance pool belongs to
+    """
+    project: Project!
 
     """
     Voting token id that is used for voting
@@ -52,6 +95,11 @@ type Distribution @entity {
     Example: 0x1234567890abcdef1234567890abcdef1234567890
     """
     id: ID!
+
+    """
+    Project that this distribution pool belongs to
+    """
+    project: Project!
 
     """
     Project token that is used for distribution of rewards

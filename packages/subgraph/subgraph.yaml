@@ -7,12 +7,40 @@ schema:
 
 dataSources:
   - kind: ethereum/contract
+    name: InvestmentPoolFactory
+    network: goerli
+    source:
+      address: "0x03888f1f06dB059ae2A8E4bEDE0e035A6DE05AeF"
+      abi: InvestmentPoolFactory
+      startBlock: 8100000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      abis:
+        - name: InvestmentPoolFactory
+          file: ./abis/InvestmentPoolFactory.json
+        - name: InvestmentPool
+          file: ./abis/InvestmentPool.json
+        - name: GovernancePool
+          file: ./abis/GovernancePool.json
+        - name: DistributionPool
+          file: ./abis/DistributionPool.json
+        - name: VotingToken
+          file: ./abis/VotingToken.json
+      entities:
+        - ProjectFactory
+      eventHandlers:
+        - event: Created(indexed address,indexed address,address,address,uint8)
+          handler: handleCreated
+      file: ./src/mappings/investment-pool-factory.ts
+
+templates:
+  - kind: ethereum/contract
     name: InvestmentPool
     network: goerli
     source:
-      address: "0x3601dA4962b60f8CAdAe63DFc1896f4aCc37658F"
       abi: InvestmentPool
-      startBlock: 8100000
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
@@ -42,7 +70,6 @@ dataSources:
           handler: handleTerminatedStream
       file: ./src/mappings/investment-pool.ts
 
-templates:
   - kind: ethereum/contract
     name: GovernancePool
     network: goerli
