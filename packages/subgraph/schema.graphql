@@ -1,26 +1,115 @@
+"""
+Project factory represents a factory contract that is used for creating new project smart contracts
+"""
+type ProjectFactory @entity(immutable: true) {
+    """
+    Investment Pool Factory address
+    Example: 0x1234567890abcdef1234567890abcdef1234567890
+    """
+    id: ID!
+
+    """
+    List of all projects that were created by this factory
+    """
+    projects: [Project!]! @derivedFrom(field: "factory")
+}
+
+"""
+Project entity represents project (investment pool) that was created by a creator
+"""
 type Project @entity(immutable: true) {
     """
     Investment Pool address
     Example: 0x1234567890abcdef1234567890abcdef1234567890
     """
     id: ID!
+
+    """
+    Project factory entity that was used for creating this project
+    """
+    factory: ProjectFactory!
+
     """
     Wallet address of the project creator
     """
     creator: Bytes!
+
+    """
+    Governance Pool entity reponsible for voting process
+    """
+    governacePool: Governance!
+
+    """
+    Distribution Pool entity reponsible for distribution of rewards
+    """
+    distributionPool: Distribution!
+
+    # Milestones are not derived from Milestone entity
+    # It is more efficient to have them stored directly on the Project entity
+    # as we will need to loop through all milestones when updating milestone details
+    """
+    List of milestones
+    """
+    milestones: [Milestone!]!
+
+    """
+    Token that is used for getting the investments from the investors
+    These tokens are transferred to the investment pool on investment
+    """
+    acceptedToken: AcceptedSuperToken!
+
     """
     Holds the number that is used as dividor to calculate the seed and stream allocation funds
     This number represents the 100% of portion
     """
     percentageDivider: BigInt!
-    # Milestones are not derived from Milestone entity
-    # It is more efficient to have them stored directly on the Project entity
-    """
-    List of milestones
-    """
-    milestones: [Milestone!]!
 }
 
+"""
+Governance entity represents governance pool, which is responsible for voting process
+"""
+type Governance @entity {
+    """
+    Governance Pool address
+    Example: 0x1234567890abcdef1234567890abcdef1234567890
+    """
+    id: ID!
+
+    """
+    Project that this governance pool belongs to
+    """
+    project: Project!
+
+    """
+    Voting token id that is used for voting
+    """
+    votingToken: VotingToken!
+}
+
+"""
+Distribution entity represents distribution pool, which is responsible for distribution of rewards
+"""
+type Distribution @entity {
+    """
+    Distribution Pool address
+    Example: 0x1234567890abcdef1234567890abcdef1234567890
+    """
+    id: ID!
+
+    """
+    Project that this distribution pool belongs to
+    """
+    project: Project!
+
+    """
+    Project token that is used for distribution of rewards
+    """
+    projectToken: ProjectToken!
+}
+
+"""
+Milestone entity represents a single milestone of a project
+"""
 type Milestone @entity {
     """
     Unique ID for all milestone entities
@@ -28,66 +117,166 @@ type Milestone @entity {
     Example: 0x1234567890abcdef1234567890abcdef1234567890-1
     """
     id: ID!
+
     # TODO: decide if we want to store the project address here
     """
     The project that this milestone belongs to
     """
     project: Project!
+
     """
     The milestone ID for the project
     """
     milestoneId: Int!
+
     """
     Timestamp when the milestone starts
     Specified in seconds
     """
     startTime: Int!
+
     """
     Timestamp when the milestone ends
     Specified in seconds
     """
     endTime: Int!
+
     """
     Duration from the start to the end of the milestone
     Specified in seconds
     """
     duration: Int!
+
     """
     The amount of funds that will be transferred to the creator on milestone start.
     Specified in wei [10^18 ETH]
     """
     seedFundsAllocation: BigInt!
+
     """
     The amount of funds that will be transferred to the creator throughout this milestone.
     Specified in wei [10^18 ETH]
     """
     streamFundsAllocation: BigInt!
+
     """
     Portion of funds transferred for creator on milestone start.
     Represents the percentage part, where percentage divider is 100%
     """
     seedPercentagePortion: BigInt!
+
     """
     Portion of funds transferred for creator throughout this milestone.
     Represents the percentage part, where percentage divider is 100%
     """
     streamPercentagePortion: BigInt!
+
     """
     Describes if seed allocation was transferred for the creator
     """
     isSeedAllocationPaid: Boolean!
+
     """
     Describes if total allocation was transferred for the creator
     """
     isTotalAllocationPaid: Boolean!
+
     """
     Describes if stream for the creator is currently opened
     """
     isStreamOngoing: Boolean!
+
     """
     Amount of funds that was transferred for the creator.
     If stream is opened and active, this value will not change on every seconds.
     Only after the stream is closed, this value will be updated.
     """
     paidAmount: BigInt!
+}
+
+"""
+SuperToken that is accepted by the project as investment
+"""
+type AcceptedSuperToken @entity(immutable: true) {
+    """
+    Super token address
+    Example: 0x8aE68021f6170E5a766bE613cEA0d75236ECCa9a
+    """
+    id: ID!
+
+    """
+    Token symbol
+    Example: fUSDCx
+    """
+    symbol: String!
+
+    """
+    Token name
+    Example: Super fUSDC Fake Token (fUSDCx)
+    """
+    name: String!
+
+    """
+    Token decimals
+    Example: 18
+    """
+    decimals: Int!
+}
+
+"""
+ERC20 project token that is used as rewards for the project investors
+"""
+type ProjectToken @entity(immutable: true) {
+    """
+    ERC20 token address
+    Example: 0x4090edE451b5Fe11AfCC1d823aED08EE8A60a73D
+    """
+    id: ID!
+
+    """
+    Token symbol
+    Example: BDL1
+    """
+    symbol: String!
+
+    """
+    Token name
+    Example: Buidl1
+    """
+    name: String!
+
+    """
+    Token decimals
+    Example: 18
+    """
+    decimals: Int!
+}
+
+"""
+ERC1155 token that is used as votes for the project governance
+"""
+type VotingToken @entity {
+    """
+    ERC1155 token id that is investment pool address converted to a number
+    Example below is 0x1234567890abcdef1234567890abcdef1234567890 address converted to a strigified number
+    Example: 26605825358829505721434779085324195740956759586960
+    """
+    id: ID!
+
+    """
+    Address of the voting token contract
+    """
+    address: Bytes!
+
+    """
+    The current number of tokens that have been minted and are in circulation
+    Specified in wei [10^18 ETH]
+    """
+    currentSupply: BigInt!
+
+    """
+    The maximum number of tokens that can be minted if the project is successful and reaches the hard cap
+    Specified in wei [10^18 ETH]
+    """
+    supplyCap: BigInt!
 }

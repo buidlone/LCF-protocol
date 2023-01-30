@@ -1,26 +1,58 @@
 specVersion: 0.0.4
 description: buidl1 subgraph
 repository: https://github.com/buidlone/LCF-protocol
+
 schema:
   file: ./schema.graphql
+
 dataSources:
   - kind: ethereum/contract
-    name: InvestmentPool
+    name: InvestmentPoolFactory
     network: goerli
     source:
-      address: "0x3601dA4962b60f8CAdAe63DFc1896f4aCc37658F"
-      abi: InvestmentPool
+      address: "0x03888f1f06dB059ae2A8E4bEDE0e035A6DE05AeF"
+      abi: InvestmentPoolFactory
       startBlock: 8100000
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.6
       language: wasm/assemblyscript
+      abis:
+        - name: InvestmentPoolFactory
+          file: ./abis/InvestmentPoolFactory.json
+        - name: InvestmentPool
+          file: ./abis/InvestmentPool.json
+        - name: GovernancePool
+          file: ./abis/GovernancePool.json
+        - name: DistributionPool
+          file: ./abis/DistributionPool.json
+        - name: VotingToken
+          file: ./abis/VotingToken.json
       entities:
-        - Project
-        - Milestone
+        - ProjectFactory
+      eventHandlers:
+        - event: Created(indexed address,indexed address,address,address,uint8)
+          handler: handleCreated
+      file: ./src/mappings/investment-pool-factory.ts
+
+templates:
+  - kind: ethereum/contract
+    name: InvestmentPool
+    network: goerli
+    source:
+      abi: InvestmentPool
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
       abis:
         - name: InvestmentPool
           file: ./abis/InvestmentPool.json
+        - name: ERC20
+          file: ./abis/ERC20.json
+      entities:
+        - Project
+        - Milestone
       eventHandlers:
         - event: Initialized(uint8)
           handler: handleInitialized
@@ -37,3 +69,88 @@ dataSources:
         - event: TerminateStream(uint256)
           handler: handleTerminatedStream
       file: ./src/mappings/investment-pool.ts
+
+  - kind: ethereum/contract
+    name: GovernancePool
+    network: goerli
+    source:
+      abi: GovernancePool
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      abis:
+        - name: GovernancePool
+          file: ./abis/GovernancePool.json
+        - name: VotingToken
+          file: ./abis/VotingToken.json
+      entities:
+        - Governance
+      eventHandlers:
+        - event: Initialized(uint8)
+          handler: handleInitialized
+      file: ./src/mappings/governance-pool.ts
+
+  - kind: ethereum/contract
+    name: DistributionPool
+    network: goerli
+    source:
+      abi: DistributionPool
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      abis:
+        - name: DistributionPool
+          file: ./abis/DistributionPool.json
+        - name: ERC20
+          file: ./abis/ERC20.json
+      entities:
+        - Distribution
+      eventHandlers:
+        - event: Initialized(uint8)
+          handler: handleInitialized
+      file: ./src/mappings/distribution-pool.ts
+
+  - kind: ethereum/contract
+    name: VotingToken
+    network: goerli
+    source:
+      abi: VotingToken
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      abis:
+        - name: VotingToken
+          file: ./abis/VotingToken.json
+      entities:
+        - VotingToken
+      eventHandlers:
+        # eventHandlers required option, so we define event, but we don't actually need to index the erc1155
+        # We will only use this template to bind ERC1155 tokens and request needed details
+        - event: TransferSingle(indexed address,indexed address,indexed address,uint256,uint256)
+          handler: handleTransfer
+      file: ./src/mappings/voting-token.ts
+
+  - kind: ethereum/contract
+    name: ERC20
+    network: goerli
+    source:
+      abi: ERC20
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.6
+      language: wasm/assemblyscript
+      abis:
+        - name: ERC20
+          file: ./abis/ERC20.json
+      entities:
+        - AcceptedSuperToken
+        - ProjectToken
+      eventHandlers:
+        # eventHandlers required option, so we define event, but we don't actually need to index the erc20
+        # We will only use this template to bind ERC20 tokens and request needed details
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleTransfer
+      file: ./src/mappings/erc20-token.ts

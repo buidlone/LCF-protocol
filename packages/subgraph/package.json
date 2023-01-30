@@ -8,10 +8,10 @@
     "codegen": "graph codegen",
     "build": "graph build",
     "test": "graph test",
-    "deploy": "graph deploy --node https://api.studio.thegraph.com/deploy/ investment-pool",
-    "create-local": "graph create --node http://localhost:8020/ investment-pool",
-    "remove-local": "graph remove --node http://localhost:8020/ investment-pool",
-    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 investment-pool"
+    "deploy": "graph deploy --node https://api.studio.thegraph.com/deploy/ buidl1-dev",
+    "create-local": "graph create --node http://localhost:8020/ buidl1-dev",
+    "remove-local": "graph remove --node http://localhost:8020/ buidl1-dev",
+    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 buidl1-dev"
   },
   "keywords": [],
   "author": "",
