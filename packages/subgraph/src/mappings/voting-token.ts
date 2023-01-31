@@ -22,7 +22,7 @@ export function handleTransfer(event: TransferSingleEvent): void {
 function updateCurrentSupply(tokenId: string, amount: BigInt, action: string): void {
     let votingToken = VotingToken.load(tokenId);
     if (!votingToken) {
-        log.error("Voting token doesn't exist: {}", [tokenId]);
+        log.critical("Voting token doesn't exist: {}", [tokenId]);
         return;
     }
 

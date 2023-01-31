@@ -17,7 +17,7 @@ type ProjectFactory @entity(immutable: true) {
 """
 Project entity represents project (investment pool) that was created by a creator
 """
-type Project @entity(immutable: true) {
+type Project @entity {
     """
     Investment Pool address
     Example: 0x1234567890abcdef1234567890abcdef1234567890
@@ -30,9 +30,48 @@ type Project @entity(immutable: true) {
     factory: ProjectFactory!
 
     """
+    Investments that were made to this project by the investors
+    """
+    investments: [ProjectInvestment!]! @derivedFrom(field: "project")
+
+    """
     Wallet address of the project creator
     """
     creator: Bytes!
+
+    """
+    The minimum amount of funds that needs be invested in the project, for the project to be considered as funded
+    Specified in wei [10^18 ETH]
+    """
+    softCap: BigInt!
+
+    """
+    The maximum amount of funds that can be invested in the project
+    Specified in wei [10^18 ETH]
+    """
+    hardCap: BigInt!
+
+    """
+    The amount of funds that was invested in the project so far
+    Specified in wei [10^18 ETH]
+    """
+    totalInvested: BigInt!
+
+    """
+    Multiplier that is used for calculating investment weight and voting power UNTIL soft cap is reached
+    """
+    softCapMultiplier: Int!
+
+    """
+    Multiplier that is used for calculating investment weight and voting power AFTER soft cap is reached
+    """
+    hardCapMultiplier: Int!
+
+    """
+    The maximum weight divisor that is used for calculating investment weight and voting power
+    This number represents the 100% of weight
+    """
+    maximumWeightDivisor: BigInt!
 
     """
     Governance Pool entity reponsible for voting process
@@ -53,6 +92,24 @@ type Project @entity(immutable: true) {
     milestones: [Milestone!]!
 
     """
+    Timestamp when the fundraiser starts
+    Specified in seconds
+    """
+    fundraiserStartTime: Int!
+
+    """
+    Timestamp when the fundraiser ends
+    Specified in seconds
+    """
+    fundraiserEndTime: Int!
+
+    """
+    Duration from the first milestone start to the last milestone end
+    Specified in seconds
+    """
+    duration: Int!
+
+    """
     Token that is used for getting the investments from the investors
     These tokens are transferred to the investment pool on investment
     """
@@ -63,6 +120,11 @@ type Project @entity(immutable: true) {
     This number represents the 100% of portion
     """
     percentageDivider: BigInt!
+
+    """
+    Number of unique investors that invested in the project
+    """
+    investorsQuantity: Int!
 }
 
 """
@@ -105,6 +167,12 @@ type Distribution @entity {
     Project token that is used for distribution of rewards
     """
     projectToken: ProjectToken!
+
+    """
+    The amount of tokens that was locked in the distribution pool by the project creator
+    Specified in wei [10^18 ETH]
+    """
+    lockedTokens: BigInt!
 }
 
 """
@@ -113,7 +181,7 @@ Milestone entity represents a single milestone of a project
 type Milestone @entity {
     """
     Unique ID for all milestone entities
-    Is created from the investment pool address, dash and the milestoneId value
+    Combination of the investment pool address and milestoneId value separated by dash
     Example: 0x1234567890abcdef1234567890abcdef1234567890-1
     """
     id: ID!
@@ -192,6 +260,59 @@ type Milestone @entity {
     Only after the stream is closed, this value will be updated.
     """
     paidAmount: BigInt!
+}
+
+"""
+Investor entity represents a single investor, who can invest in multiple projects
+"""
+type Investor @entity {
+    """
+    Investor address
+    example: 0x1234567890abcdef1234567890abcdef1234567890
+    """
+    id: ID!
+
+    projectInvestments: [ProjectInvestment!]! @derivedFrom(field: "investor")
+}
+
+type ProjectInvestment @entity {
+    """
+    Combination of the investment pool address and investor address separated by dash
+    Example: 0x1234567890abcdef1234567890abcdef1234567890-0x1234567890abcdef1234567890abcdef1234567890
+    """
+    id: ID!
+
+    """
+    Investor, who invested in the project
+    """
+    investor: Investor!
+
+    """
+    Project that the investor invested in
+    """
+    project: Project!
+
+    """
+    Amount of funds that was invested by the investor
+    Specified in wei [10^18 ETH]
+    """
+    investedAmount: BigInt!
+
+    """
+    Amount of tokens that is allocated for the investor
+    This amount will be fully available for the investor after the project is finished
+    """
+    allocatedProjectTokens: BigInt!
+
+    # votesAgainst: BigInt!
+
+    # unusedActiveVotes: BigInt!
+
+    # votingTokensBalance: BigInt!
+
+    # claimedProjectTokens: BigInt!
+
+    # !!! currentAllocatedProjectTokens + flowrate
 }
 
 """

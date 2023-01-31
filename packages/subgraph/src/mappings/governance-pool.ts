@@ -17,14 +17,14 @@ export function handleInitialized(event: InitializedEvent): void {
     const governanceId: string = event.address.toHexString();
     let governance = Governance.load(governanceId);
     if (governance) {
-        log.error("Governance already exists: {}", [governanceId]);
+        log.critical("Governance already exists: {}", [governanceId]);
         return;
     }
 
     // Get voting token entity
     let votingToken = VotingToken.load(votingTokenId);
     if (votingToken) {
-        log.error("Voting token already exists: {}", [votingTokenId]);
+        log.critical("Voting token already exists: {}", [votingTokenId]);
         return;
     }
 
@@ -44,7 +44,7 @@ export function handleInitialized(event: InitializedEvent): void {
     // Add governance to project
     const project = Project.load(projectId);
     if (!project) {
-        log.error("Project doesn't exist: {}", [projectId]);
+        log.critical("Project doesn't exist: {}", [projectId]);
         return;
     }
     project.governacePool = governanceId;
