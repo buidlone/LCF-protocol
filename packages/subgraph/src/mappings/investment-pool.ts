@@ -9,6 +9,7 @@ import {
     ClaimFunds as ClaimedFundsEvent,
     TerminateStream as TerminatedStreamEvent,
 } from "../../generated/InvestmentPool/InvestmentPool";
+import {DistributionPool as DistributionPoolContract} from "../../generated/templates/InvestmentPool/DistributionPool";
 import {ERC20 as ERC20Contract} from "../../generated/templates/ERC20/ERC20";
 import {
     Project,
@@ -116,18 +117,18 @@ export function handleInitialized(event: InitializedEvent): void {
     project.distributionPool = distributionId;
     project.creator = creator;
     project.milestones = milestoneIds;
+    project.milestonesCount = ipContract.getMilestonesCount().toI32();
+    project.currentMilestone = milestoneIds[0];
     project.fundraiserStartTime = ipContract.getFundraiserStartTime().toI32();
     project.fundraiserEndTime = ipContract.getFundraiserEndTime().toI32();
     project.duration = projectEndTime - projectStartTime;
     project.acceptedToken = acceptedTokenId;
     project.percentageDivider = ipContract.getPercentageDivider();
-    project.investorsQuantity = 0;
+    project.investorsCount = 0;
     project.save();
 }
 
 export function handleInvested(event: InvestEvent): void {
-    const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(event.address);
-
     // Get project entity
     const projectId: string = event.address.toHexString();
     const project = Project.load(projectId);
@@ -136,7 +137,11 @@ export function handleInvested(event: InvestEvent): void {
         return;
     }
 
-    updateMilestoneInfo(project, ipContract);
+    const dpContract: DistributionPoolContract = DistributionPoolContract.bind(
+        Address.fromString(project.distributionPool)
+    );
+
+    updateMilestoneInfo(project);
 
     const investor = getInvestor(event.params.caller);
     const projectInvestmentId = `${projectId}-${investor.id}`;
@@ -149,12 +154,15 @@ export function handleInvested(event: InvestEvent): void {
         projectInvestment.project = projectId;
         projectInvestment.investedAmount = BigInt.fromI32(0);
         projectInvestment.allocatedProjectTokens = BigInt.fromI32(0);
+        projectInvestment.votesAgainst = BigInt.fromI32(0);
+        projectInvestment.claimedProjectTokens = BigInt.fromI32(0);
 
         // Update the number of investors
-        project.investorsQuantity = project.investorsQuantity + 1;
+        project.investorsCount = project.investorsCount + 1;
     }
 
     // Update investor invested amount
+    projectInvestment.allocatedProjectTokens = dpContract.getAllocatedTokens(event.params.caller);
     projectInvestment.investedAmount = projectInvestment.investedAmount.plus(event.params.amount);
     projectInvestment.save();
 
@@ -164,8 +172,6 @@ export function handleInvested(event: InvestEvent): void {
 }
 
 export function handleUnpledged(event: UnpledgeEvent): void {
-    const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(event.address);
-
     // Get project entity
     const projectId: string = event.address.toHexString();
     const project = Project.load(projectId);
@@ -174,7 +180,11 @@ export function handleUnpledged(event: UnpledgeEvent): void {
         return;
     }
 
-    updateMilestoneInfo(project, ipContract);
+    const dpContract: DistributionPoolContract = DistributionPoolContract.bind(
+        Address.fromString(project.distributionPool)
+    );
+
+    updateMilestoneInfo(project);
 
     const investor = getInvestor(event.params.caller);
     const projectInvestmentId = `${projectId}-${investor.id}`;
@@ -188,9 +198,12 @@ export function handleUnpledged(event: UnpledgeEvent): void {
     if (projectInvestment.investedAmount.minus(event.params.amount).equals(BigInt.fromI32(0))) {
         // If investor has no more investments in this project, delete the project investment entity
         store.remove("ProjectInvestment", projectInvestmentId);
-        project.investorsQuantity = project.investorsQuantity - 1;
+        project.investorsCount = project.investorsCount - 1;
     } else {
-        // Update investor invested amount
+        // Update investor's details
+        projectInvestment.allocatedProjectTokens = dpContract.getAllocatedTokens(
+            event.params.caller
+        );
         projectInvestment.investedAmount = projectInvestment.investedAmount.minus(
             event.params.amount
         );
@@ -212,7 +225,11 @@ function getInvestor(investorAddress: Address): Investor {
     return investor;
 }
 
-function updateMilestoneInfo(project: Project, ipContract: InvestmentPoolContract): void {
+function updateMilestoneInfo(project: Project): void {
+    const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(
+        Address.fromString(project.id)
+    );
+
     // Get memoized investments list
     const memoizedInvestments: BigInt[] = ipContract.getMilestonesInvestmentsListForFormula();
     const milestones: string[] = project.milestones;
@@ -270,7 +287,6 @@ export function handleCanceled(event: CancelEvent): void {
     milestone.isTotalAllocationPaid = milestoneData.paid;
     milestone.isStreamOngoing = milestoneData.streamOngoing;
     milestone.paidAmount = milestoneData.paidAmount;
-
     milestone.save();
 }
 
@@ -299,17 +315,18 @@ export function handleClaimedFunds(event: ClaimedFundsEvent): void {
     }
 
     // Update milestone data from the event data passed in
-    const isSeedAllocationPaid = event.params.gotSeedFunds;
-    const isTotalAllocationPaid = event.params.gotStreamAmount;
-    const isStreamOngoing = event.params.openedStream;
-    milestone.isSeedAllocationPaid = isSeedAllocationPaid;
-    milestone.isTotalAllocationPaid = isTotalAllocationPaid;
-    milestone.isStreamOngoing = isStreamOngoing;
-
     const paidAmount = ipContract.getMilestone(milestoneIdBI).paidAmount;
     milestone.paidAmount = paidAmount;
-
+    milestone.isSeedAllocationPaid = event.params.gotSeedFunds;
+    milestone.isTotalAllocationPaid = event.params.gotStreamAmount;
+    milestone.isStreamOngoing = event.params.openedStream;
     milestone.save();
+
+    // Update current milestone id
+    const currentMilestone = ipContract.getCurrentMilestoneId().toString();
+    const newMilestoneId: string = `${projectId}-${currentMilestone}`;
+    project.currentMilestone = newMilestoneId;
+    project.save();
 }
 
 export function handleTerminatedStream(event: TerminatedStreamEvent): void {

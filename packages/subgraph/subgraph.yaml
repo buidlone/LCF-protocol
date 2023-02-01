@@ -48,6 +48,8 @@ templates:
       abis:
         - name: InvestmentPool
           file: ./abis/InvestmentPool.json
+        - name: DistributionPool
+          file: ./abis/DistributionPool.json
         - name: ERC20
           file: ./abis/ERC20.json
       entities:
@@ -89,6 +91,10 @@ templates:
       eventHandlers:
         - event: Initialized(uint8)
           handler: handleInitialized
+        - event: VoteAgainstProject(indexed address,uint256)
+          handler: handleVotedAgainst
+        - event: RetractVotes(indexed address,uint256)
+          handler: handleRetractedVotes
       file: ./src/mappings/governance-pool.ts
 
   - kind: ethereum/contract
@@ -114,6 +120,8 @@ templates:
           handler: handleAllocated
         - event: RemovedAllocation(indexed address,uint256)
           handler: handleRemovedAllocation
+        - event: Claimed(indexed address,uint256)
+          handler: handleClaimed
       file: ./src/mappings/distribution-pool.ts
 
   - kind: ethereum/contract

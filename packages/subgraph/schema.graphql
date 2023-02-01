@@ -92,6 +92,16 @@ type Project @entity {
     milestones: [Milestone!]!
 
     """
+    The amount of milestones that the project has in total
+    """
+    milestonesCount: Int!
+
+    """
+    Current active milestone
+    """
+    currentMilestone: Milestone!
+
+    """
     Timestamp when the fundraiser starts
     Specified in seconds
     """
@@ -124,7 +134,7 @@ type Project @entity {
     """
     Number of unique investors that invested in the project
     """
-    investorsQuantity: Int!
+    investorsCount: Int!
 }
 
 """
@@ -146,6 +156,11 @@ type Governance @entity {
     Voting token id that is used for voting
     """
     votingToken: VotingToken!
+
+    """
+    Votes that were casted by the investors against the project
+    """
+    totalVotesAgainst: BigInt!
 }
 
 """
@@ -169,10 +184,11 @@ type Distribution @entity {
     projectToken: ProjectToken!
 
     """
-    The amount of tokens that was locked in the distribution pool by the project creator
+    The amount of tokens that was locked in the distribution pool by the project creator and
+    will be distributed to the investors as rewards
     Specified in wei [10^18 ETH]
     """
-    lockedTokens: BigInt!
+    lockedTokensForRewards: BigInt!
 }
 
 """
@@ -304,15 +320,17 @@ type ProjectInvestment @entity {
     """
     allocatedProjectTokens: BigInt!
 
-    # votesAgainst: BigInt!
+    """
+    Votes that were casted by the investor against the project
+    Specified in wei [10^18 ETH]
+    """
+    votesAgainst: BigInt!
 
-    # unusedActiveVotes: BigInt!
-
-    # votingTokensBalance: BigInt!
-
-    # claimedProjectTokens: BigInt!
-
-    # !!! currentAllocatedProjectTokens + flowrate
+    """
+    Amount of project tokens that were already claimed by the investor
+    Specified in wei [10^18 ETH]
+    """
+    claimedProjectTokens: BigInt!
 }
 
 """

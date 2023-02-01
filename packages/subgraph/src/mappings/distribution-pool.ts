@@ -4,6 +4,7 @@ import {
     Initialized as InitializedEvent,
     Allocated as AllocatedEvent,
     RemovedAllocation as RemovedAllocationEvent,
+    Claimed as ClaimedEvent,
 } from "../../generated/templates/DistributionPool/DistributionPool";
 import {ERC20 as ERC20Contract} from "../../generated/templates/ERC20/ERC20";
 import {Project, Distribution, ProjectToken, ProjectInvestment} from "../../generated/schema";
@@ -46,7 +47,7 @@ export function handleInitialized(event: InitializedEvent): void {
     distribution = new Distribution(distributionId);
     distribution.project = projectId;
     distribution.projectToken = projectTokenId;
-    distribution.lockedTokens = dpContract.getLockedTokens();
+    distribution.lockedTokensForRewards = dpContract.getLockedTokens();
     distribution.save();
 
     // Add distribution to project
@@ -60,42 +61,31 @@ export function handleInitialized(event: InitializedEvent): void {
 }
 
 export function handleAllocated(event: AllocatedEvent): void {
-    updateAllocationInfo(event.address, event.params.investor);
+    // Currently allocation is updated in investment pool when investment is performed
 }
 
 export function handleRemovedAllocation(event: RemovedAllocationEvent): void {
-    updateAllocationInfo(event.address, event.params.investor);
+    // Currently allocation is updated in investment pool when investment is unpledged
 }
 
-function updateAllocationInfo(distributionAddress: Address, investorAddress: Address): void {
-    const dpContract: DistributionPoolContract =
-        DistributionPoolContract.bind(distributionAddress);
-
+export function handleClaimed(event: ClaimedEvent): void {
     // Get distribution entity
-    const distributionId: string = distributionAddress.toHexString();
+    const distributionId: string = event.address.toHexString();
     let distribution = Distribution.load(distributionId);
     if (!distribution) {
-        log.critical("Distribution pool doesn't exist: {}", [distributionId]);
+        log.critical("Distribution pool doesn't exists: {}", [distributionId]);
         return;
     }
 
-    // Get project entity
-    const projectId = distribution.project;
-    const project = Project.load(projectId);
-    if (!project) {
-        log.critical("Project doesn't exist: {}", [projectId]);
-        return;
-    }
-
-    // Get project investment entity
-    const projectInvestmentId = `${projectId}-${investorAddress.toHexString()}`;
-    const projectInvestment = ProjectInvestment.load(projectInvestmentId);
+    const projectInvestmentId = `${distribution.project}-${event.params.investor.toHexString()}`;
+    let projectInvestment = ProjectInvestment.load(projectInvestmentId);
     if (!projectInvestment) {
-        log.critical("Project investment doesn't exist: {}", [projectInvestmentId]);
+        log.critical("Project investment doesn't exists: {}", [projectInvestmentId]);
         return;
     }
 
-    // Update project investment allocated tokens amount
-    projectInvestment.allocatedProjectTokens = dpContract.getAllocatedTokens(investorAddress);
+    projectInvestment.claimedProjectTokens = projectInvestment.claimedProjectTokens.plus(
+        event.params.tokensAmount
+    );
     projectInvestment.save();
 }
