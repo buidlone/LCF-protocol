@@ -10,7 +10,7 @@ dataSources:
     name: InvestmentPoolFactory
     network: goerli
     source:
-      address: "0x03888f1f06dB059ae2A8E4bEDE0e035A6DE05AeF"
+      address: "0xD53124C3d78b589C1484B7b165Ae814bEaFfFFe9"
       abi: InvestmentPoolFactory
       startBlock: 8100000
     mapping:
@@ -48,6 +48,8 @@ templates:
       abis:
         - name: InvestmentPool
           file: ./abis/InvestmentPool.json
+        - name: DistributionPool
+          file: ./abis/DistributionPool.json
         - name: ERC20
           file: ./abis/ERC20.json
       entities:
@@ -85,10 +87,14 @@ templates:
         - name: VotingToken
           file: ./abis/VotingToken.json
       entities:
-        - Governance
+        - GovernancePool
       eventHandlers:
         - event: Initialized(uint8)
           handler: handleInitialized
+        - event: VoteAgainstProject(indexed address,uint256)
+          handler: handleVotedAgainst
+        - event: RetractVotes(indexed address,uint256)
+          handler: handleRetractedVotes
       file: ./src/mappings/governance-pool.ts
 
   - kind: ethereum/contract
@@ -106,10 +112,16 @@ templates:
         - name: ERC20
           file: ./abis/ERC20.json
       entities:
-        - Distribution
+        - DistributionPool
       eventHandlers:
         - event: Initialized(uint8)
           handler: handleInitialized
+        - event: Allocated(indexed address,uint256)
+          handler: handleAllocated
+        - event: RemovedAllocation(indexed address,uint256)
+          handler: handleRemovedAllocation
+        - event: Claimed(indexed address,uint256)
+          handler: handleClaimed
       file: ./src/mappings/distribution-pool.ts
 
   - kind: ethereum/contract
