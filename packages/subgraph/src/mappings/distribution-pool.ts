@@ -1,4 +1,4 @@
-import {Address, BigInt, dataSource, log} from "@graphprotocol/graph-ts";
+import {dataSource} from "@graphprotocol/graph-ts";
 import {
     DistributionPool as DistributionPoolContract,
     Initialized as InitializedEvent,
@@ -7,10 +7,10 @@ import {
     Claimed as ClaimedEvent,
 } from "../../generated/templates/DistributionPool/DistributionPool";
 import {ERC20 as ERC20Contract} from "../../generated/templates/ERC20/ERC20";
-import {Project, Distribution, ProjectToken, ProjectInvestment} from "../../generated/schema";
+import {Project, DistributionPool, ProjectToken, ProjectInvestment} from "../../generated/schema";
 
 export function handleInitialized(event: InitializedEvent): void {
-    // Get distribution pool contract
+    // Get distributionPool pool contract
     const dpContract: DistributionPoolContract = DistributionPoolContract.bind(event.address);
 
     // Get context from investment pool
@@ -35,28 +35,24 @@ export function handleInitialized(event: InitializedEvent): void {
         projectToken.save();
     }
 
-    // Get distribution entity
-    const distributionId: string = event.address.toHexString();
-    let distribution = Distribution.load(distributionId);
-    if (distribution) {
-        log.critical("Distribution already exists: {}", [distributionId]);
-        return;
-    }
+    // Get distributionPool entity
+    const distributionPoolId: string = event.address.toHexString();
+    let distributionPool = DistributionPool.load(distributionPoolId);
+    if (distributionPool)
+        throw new Error("DistributionPool already exists: " + distributionPoolId);
 
-    // Create new distribution entity
-    distribution = new Distribution(distributionId);
-    distribution.project = projectId;
-    distribution.projectToken = projectTokenId;
-    distribution.lockedTokensForRewards = dpContract.getLockedTokens();
-    distribution.save();
+    // Create new distributionPool entity
+    distributionPool = new DistributionPool(distributionPoolId);
+    distributionPool.project = projectId;
+    distributionPool.projectToken = projectTokenId;
+    distributionPool.lockedTokensForRewards = dpContract.getLockedTokens();
+    distributionPool.save();
 
-    // Add distribution to project
+    // Add distributionPool to project
     const project = Project.load(projectId);
-    if (!project) {
-        log.critical("Project doesn't exist: {}", [projectId]);
-        return;
-    }
-    project.distributionPool = distributionId;
+    if (!project) throw new Error("Project doesn't exist: " + projectId);
+
+    project.distributionPool = distributionPoolId;
     project.save();
 }
 
@@ -69,20 +65,18 @@ export function handleRemovedAllocation(event: RemovedAllocationEvent): void {
 }
 
 export function handleClaimed(event: ClaimedEvent): void {
-    // Get distribution entity
-    const distributionId: string = event.address.toHexString();
-    let distribution = Distribution.load(distributionId);
-    if (!distribution) {
-        log.critical("Distribution pool doesn't exists: {}", [distributionId]);
-        return;
-    }
+    // Get distributionPool entity
+    const distributionPoolId: string = event.address.toHexString();
+    let distributionPool = DistributionPool.load(distributionPoolId);
+    if (!distributionPool)
+        throw new Error("DistributionPool doesn't exists: " + distributionPoolId);
 
-    const projectInvestmentId = `${distribution.project}-${event.params.investor.toHexString()}`;
+    const projectInvestmentId = `${
+        distributionPool.project
+    }-${event.params.investor.toHexString()}`;
     let projectInvestment = ProjectInvestment.load(projectInvestmentId);
-    if (!projectInvestment) {
-        log.critical("Project investment doesn't exists: {}", [projectInvestmentId]);
-        return;
-    }
+    if (!projectInvestment)
+        throw new Error("Project investment doesn't exists: " + projectInvestmentId);
 
     projectInvestment.claimedProjectTokens = projectInvestment.claimedProjectTokens.plus(
         event.params.tokensAmount

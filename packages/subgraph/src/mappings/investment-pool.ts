@@ -1,4 +1,4 @@
-import {Address, BigInt, dataSource, log, store} from "@graphprotocol/graph-ts";
+import {Address, BigInt, dataSource, store} from "@graphprotocol/graph-ts";
 import {
     InvestmentPool as InvestmentPoolContract,
     Initialized as InitializedEvent,
@@ -28,16 +28,13 @@ export function handleInitialized(event: InitializedEvent): void {
     const context = dataSource.context();
     const creator = context.getBytes("creator");
     const projectFactoryId = context.getBytes("investmentPoolFactoryAddress").toHexString();
-    const governanceId = context.getBytes("governancePoolAddress").toHexString();
-    const distributionId = context.getBytes("distributionPoolAddress").toHexString();
+    const governancePoolId = context.getBytes("governancePoolAddress").toHexString();
+    const distributionPoolId = context.getBytes("distributionPoolAddress").toHexString();
 
     // Get project entity. Shouldn't exist yet
     const projectId: string = event.address.toHexString();
     let project = Project.load(projectId);
-    if (project) {
-        log.critical("Project already exists: {}", [projectId]);
-        return;
-    }
+    if (project) throw new Error("Project already exists: " + projectId);
 
     // Create new project entity
     project = new Project(projectId);
@@ -50,10 +47,7 @@ export function handleInitialized(event: InitializedEvent): void {
         // Get milestone entity
         const milestoneFullId: string = `${projectId}-${milestoneId.toString()}`;
         let milestone = Milestone.load(milestoneFullId);
-        if (milestone) {
-            log.critical("Milestone already exists: {}", [milestoneFullId]);
-            return;
-        }
+        if (milestone) throw new Error("Milestone already exists: " + milestoneFullId);
 
         // Create new milestone entity
         milestone = new Milestone(milestoneFullId);
@@ -113,8 +107,8 @@ export function handleInitialized(event: InitializedEvent): void {
     project.softCapMultiplier = ipContract.getSoftCapMultiplier().toI32();
     project.hardCapMultiplier = ipContract.getHardCapMultiplier().toI32();
     project.maximumWeightDivisor = ipContract.getMaximumWeightDivisor();
-    project.governacePool = governanceId;
-    project.distributionPool = distributionId;
+    project.governacePool = governancePoolId;
+    project.distributionPool = distributionPoolId;
     project.creator = creator;
     project.milestones = milestoneIds;
     project.milestonesCount = ipContract.getMilestonesCount().toI32();
@@ -132,10 +126,7 @@ export function handleInvested(event: InvestEvent): void {
     // Get project entity
     const projectId: string = event.address.toHexString();
     const project = Project.load(projectId);
-    if (!project) {
-        log.critical("Project doesn't exist: {}", [projectId]);
-        return;
-    }
+    if (!project) throw new Error("Project doesn't exist: " + projectId);
 
     const dpContract: DistributionPoolContract = DistributionPoolContract.bind(
         Address.fromString(project.distributionPool)
@@ -175,10 +166,7 @@ export function handleUnpledged(event: UnpledgeEvent): void {
     // Get project entity
     const projectId: string = event.address.toHexString();
     const project = Project.load(projectId);
-    if (!project) {
-        log.critical("Project doesn't exist: {}", [projectId]);
-        return;
-    }
+    if (!project) throw new Error("Project doesn't exist: " + projectId);
 
     const dpContract: DistributionPoolContract = DistributionPoolContract.bind(
         Address.fromString(project.distributionPool)
@@ -190,10 +178,8 @@ export function handleUnpledged(event: UnpledgeEvent): void {
     const projectInvestmentId = `${projectId}-${investor.id}`;
     let projectInvestment = ProjectInvestment.load(projectInvestmentId);
 
-    if (!projectInvestment) {
-        log.critical("Project investment doesn't exist: {}", [projectInvestmentId]);
-        return;
-    }
+    if (!projectInvestment)
+        throw new Error("Project investment doesn't exist: " + projectInvestmentId);
 
     if (projectInvestment.investedAmount.minus(event.params.amount).equals(BigInt.fromI32(0))) {
         // If investor has no more investments in this project, delete the project investment entity
@@ -238,10 +224,7 @@ function updateMilestoneInfo(project: Project): void {
     // Loop through each milestone and update the seed and stream allocations
     for (let i = 0; i < milestones.length; i++) {
         let milestone = Milestone.load(milestones[i]);
-        if (!milestone) {
-            log.critical("Milestone doesn't exist: {}", [milestones[i]]);
-            return;
-        }
+        if (!milestone) throw new Error("Milestone doesn't exist: " + milestones[i]);
 
         const milestoneIdBI: BigInt = BigInt.fromI32(milestone.milestoneId);
         // Find the memoized investment
@@ -264,10 +247,7 @@ export function handleCanceled(event: CancelEvent): void {
     // Get project entity
     const projectId: string = event.address.toHexString();
     const project = Project.load(projectId);
-    if (!project) {
-        log.critical("Project doesn't exist: {}", [projectId]);
-        return;
-    }
+    if (!project) throw new Error("Project doesn't exist: " + projectId);
 
     // If project was canceled before the fundraiser started, no data needs to be updated
     const canceledBefore = ipContract.isCanceledBeforeFundraiserStart();
@@ -277,10 +257,7 @@ export function handleCanceled(event: CancelEvent): void {
     const milestoneIdBI: BigInt = ipContract.getCurrentMilestoneId();
     const milestoneFullId: string = `${projectId}-${milestoneIdBI.toString()}`;
     let milestone = Milestone.load(milestoneFullId);
-    if (!milestone) {
-        log.critical("Milestone doesn't exist: {}", [milestoneFullId]);
-        return;
-    }
+    if (!milestone) throw new Error("Milestone doesn't exist: " + milestoneFullId);
 
     // Update milestone data
     const milestoneData = ipContract.getMilestone(milestoneIdBI);
@@ -300,19 +277,13 @@ export function handleClaimedFunds(event: ClaimedFundsEvent): void {
     // Get project entity
     const projectId: string = event.address.toHexString();
     const project = Project.load(projectId);
-    if (!project) {
-        log.critical("Project doesn't exist: {}", [projectId]);
-        return;
-    }
+    if (!project) throw new Error("Project doesn't exist: " + projectId);
 
     // Find the milestone entity
     const milestoneIdBI: BigInt = event.params.milestoneId;
     const milestoneFullId: string = `${projectId}-${milestoneIdBI.toString()}`;
     let milestone = Milestone.load(milestoneFullId);
-    if (!milestone) {
-        log.critical("Milestone doesn't exist: {}", [milestoneFullId]);
-        return;
-    }
+    if (!milestone) throw new Error("Milestone doesn't exist: " + milestoneFullId);
 
     // Update milestone data from the event data passed in
     const paidAmount = ipContract.getMilestone(milestoneIdBI).paidAmount;
@@ -335,19 +306,14 @@ export function handleTerminatedStream(event: TerminatedStreamEvent): void {
     // Get project entity
     const projectId: string = event.address.toHexString();
     const project = Project.load(projectId);
-    if (!project) {
-        log.critical("Project doesn't exist: {}", [projectId]);
-        return;
-    }
+    if (!project) throw new Error("Project doesn't exist: " + projectId);
 
     // Find the milestone entity
     const milestoneIdBI: BigInt = event.params.milestoneId;
     const milestoneFullId: string = `${projectId}-${milestoneIdBI.toString()}`;
     let milestone = Milestone.load(milestoneFullId);
-    if (!milestone) {
-        log.critical("Milestone doesn't exist: {}", [milestoneFullId]);
-        return;
-    }
+    if (!milestone) throw new Error("Milestone doesn't exist: " + milestoneFullId);
+
     // Update milestone data from the smart contract
     const milestoneData = ipContract.getMilestone(milestoneIdBI);
     milestone.isTotalAllocationPaid = milestoneData.paid;

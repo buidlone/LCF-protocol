@@ -1,11 +1,15 @@
-import {Address, BigInt, dataSource, log} from "@graphprotocol/graph-ts";
+import {Address, BigInt, dataSource} from "@graphprotocol/graph-ts";
 import {
-    GovernancePool as GovernancePoolContract,
     Initialized as InitializedEvent,
     VoteAgainstProject as VoteAgainstEvent,
     RetractVotes as RetractVotesEvent,
 } from "../../generated/templates/GovernancePool/GovernancePool";
-import {Project, Governance, VotingToken, ProjectInvestment} from "../../generated/schema";
+import {Project, GovernancePool, VotingToken, ProjectInvestment} from "../../generated/schema";
+
+enum VotingAction {
+    VoteAgainst,
+    RetractVotes,
+}
 
 export function handleInitialized(event: InitializedEvent): void {
     // Get context from investment pool
@@ -15,20 +19,14 @@ export function handleInitialized(event: InitializedEvent): void {
     const votingTokenId = context.getString("votingTokenId");
     const votingTokenAddress = context.getBytes("votingTokenAddress");
 
-    // Get governance entity
-    const governanceId: string = event.address.toHexString();
-    let governance = Governance.load(governanceId);
-    if (governance) {
-        log.critical("Governance already exists: {}", [governanceId]);
-        return;
-    }
+    // Get governancePool entity
+    const governancePoolId: string = event.address.toHexString();
+    let governancePool = GovernancePool.load(governancePoolId);
+    if (governancePool) throw new Error("GovernancePool already exists: " + governancePoolId);
 
     // Get voting token entity
     let votingToken = VotingToken.load(votingTokenId);
-    if (votingToken) {
-        log.critical("Voting token already exists: {}", [votingTokenId]);
-        return;
-    }
+    if (votingToken) throw new Error("Voting token already exists: " + votingTokenId);
 
     // Create project token entity
     votingToken = new VotingToken(votingTokenId);
@@ -37,59 +35,68 @@ export function handleInitialized(event: InitializedEvent): void {
     votingToken.supplyCap = votesSupplyCap;
     votingToken.save();
 
-    // Create new governance entity
-    governance = new Governance(governanceId);
-    governance.project = projectId;
-    governance.votingToken = votingTokenId;
-    governance.totalVotesAgainst = BigInt.fromI32(0);
-    governance.save();
+    // Create new governancePool entity
+    governancePool = new GovernancePool(governancePoolId);
+    governancePool.project = projectId;
+    governancePool.votingToken = votingTokenId;
+    governancePool.totalVotesAgainst = BigInt.fromI32(0);
+    governancePool.save();
 
-    // Add governance to project
+    // Add governancePool to project
     const project = Project.load(projectId);
-    if (!project) {
-        log.critical("Project doesn't exist: {}", [projectId]);
-        return;
-    }
-    project.governacePool = governanceId;
+    if (!project) throw new Error("Project doesn't exist: " + projectId);
+
+    project.governacePool = governancePoolId;
     project.save();
 }
 
 export function handleVotedAgainst(event: VoteAgainstEvent): void {
-    updateVotesInfo(event.address, event.params.investor, event.params.amount, "vote_against");
+    updateVotesInfo(
+        event.address,
+        event.params.investor,
+        event.params.amount,
+        VotingAction.VoteAgainst
+    );
 }
 
 export function handleRetractedVotes(event: RetractVotesEvent): void {
-    updateVotesInfo(event.address, event.params.investor, event.params.amount, "retract_votes");
+    updateVotesInfo(
+        event.address,
+        event.params.investor,
+        event.params.amount,
+        VotingAction.RetractVotes
+    );
 }
 
 function updateVotesInfo(
-    governanceAddress: Address,
+    governancePoolAddress: Address,
     investorAddress: Address,
     amount: BigInt,
-    action: string
+    action: VotingAction
 ): void {
-    // Get governance pool entity
-    const governanceId: string = governanceAddress.toHexString();
-    let governance = Governance.load(governanceId);
-    if (!governance) {
-        log.critical("Governance pool doesn't exists: {}", [governanceId]);
-        return;
-    }
+    // Get governancePool pool entity
+    const governancePoolId: string = governancePoolAddress.toHexString();
+    let governancePool = GovernancePool.load(governancePoolId);
+    if (!governancePool)
+        throw new Error("GovernancePool pool doesn't exists: " + governancePoolId);
 
-    const projectInvestmentId = `${governance.project}-${investorAddress.toHexString()}`;
+    const projectInvestmentId = `${governancePool.project}-${investorAddress.toHexString()}`;
     const projectInvestment = ProjectInvestment.load(projectInvestmentId);
-    if (!projectInvestment) {
-        log.critical("Project investment doesn't exists: {}", [projectInvestmentId]);
-        return;
-    }
+    if (!projectInvestment)
+        throw new Error("Project investment doesn't exists: " + projectInvestmentId);
 
     // Update details
-    if (action === "vote_against") {
-        governance.totalVotesAgainst = governance.totalVotesAgainst.plus(amount);
-        projectInvestment.votesAgainst = projectInvestment.votesAgainst.plus(amount);
-    } else {
-        governance.totalVotesAgainst = governance.totalVotesAgainst.minus(amount);
-        projectInvestment.votesAgainst = projectInvestment.votesAgainst.minus(amount);
+    switch (action) {
+        case VotingAction.VoteAgainst:
+            governancePool.totalVotesAgainst = governancePool.totalVotesAgainst.plus(amount);
+            projectInvestment.votesAgainst = projectInvestment.votesAgainst.plus(amount);
+            break;
+
+        case VotingAction.RetractVotes:
+            governancePool.totalVotesAgainst = governancePool.totalVotesAgainst.minus(amount);
+            projectInvestment.votesAgainst = projectInvestment.votesAgainst.minus(amount);
+            break;
     }
-    governance.save();
+
+    governancePool.save();
 }

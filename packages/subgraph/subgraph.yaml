@@ -87,7 +87,7 @@ templates:
         - name: VotingToken
           file: ./abis/VotingToken.json
       entities:
-        - Governance
+        - GovernancePool
       eventHandlers:
         - event: Initialized(uint8)
           handler: handleInitialized
@@ -112,7 +112,7 @@ templates:
         - name: ERC20
           file: ./abis/ERC20.json
       entities:
-        - Distribution
+        - DistributionPool
       eventHandlers:
         - event: Initialized(uint8)
           handler: handleInitialized

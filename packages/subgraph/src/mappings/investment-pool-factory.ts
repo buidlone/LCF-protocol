@@ -1,8 +1,5 @@
-import {Address, BigInt, DataSourceContext, log} from "@graphprotocol/graph-ts";
-import {
-    InvestmentPoolFactory as InvestmentPoolFactoryContract,
-    Created as CreatedEvent,
-} from "../../generated/InvestmentPoolFactory/InvestmentPoolFactory";
+import {DataSourceContext} from "@graphprotocol/graph-ts";
+import {Created as CreatedEvent} from "../../generated/InvestmentPoolFactory/InvestmentPoolFactory";
 import {InvestmentPool as InvestmentPoolContract} from "../../generated/templates/InvestmentPool/InvestmentPool";
 import {GovernancePool as GovernancePoolContract} from "../../generated/templates/GovernancePool/GovernancePool";
 import {DistributionPool as DistributionPoolContract} from "../../generated/templates/DistributionPool/DistributionPool";

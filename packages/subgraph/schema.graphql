@@ -76,12 +76,12 @@ type Project @entity {
     """
     Governance Pool entity reponsible for voting process
     """
-    governacePool: Governance!
+    governacePool: GovernancePool!
 
     """
     Distribution Pool entity reponsible for distribution of rewards
     """
-    distributionPool: Distribution!
+    distributionPool: DistributionPool!
 
     # Milestones are not derived from Milestone entity
     # It is more efficient to have them stored directly on the Project entity
@@ -140,7 +140,7 @@ type Project @entity {
 """
 Governance entity represents governance pool, which is responsible for voting process
 """
-type Governance @entity {
+type GovernancePool @entity {
     """
     Governance Pool address
     Example: 0x1234567890abcdef1234567890abcdef1234567890
@@ -164,9 +164,9 @@ type Governance @entity {
 }
 
 """
-Distribution entity represents distribution pool, which is responsible for distribution of rewards
+DistributionPool entity represents distribution pool, which is responsible for distribution of rewards
 """
-type Distribution @entity {
+type DistributionPool @entity {
     """
     Distribution Pool address
     Example: 0x1234567890abcdef1234567890abcdef1234567890
