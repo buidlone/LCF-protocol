@@ -107,7 +107,7 @@ export function handleInitialized(event: InitializedEvent): void {
     project.softCapMultiplier = ipContract.getSoftCapMultiplier().toI32();
     project.hardCapMultiplier = ipContract.getHardCapMultiplier().toI32();
     project.maximumWeightDivisor = ipContract.getMaximumWeightDivisor();
-    project.governacePool = governancePoolId;
+    project.governancePool = governancePoolId;
     project.distributionPool = distributionPoolId;
     project.creator = creator;
     project.milestones = milestoneIds;

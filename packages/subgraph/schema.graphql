@@ -76,7 +76,7 @@ type Project @entity {
     """
     Governance Pool entity reponsible for voting process
     """
-    governacePool: GovernancePool!
+    governancePool: GovernancePool!
 
     """
     Distribution Pool entity reponsible for distribution of rewards

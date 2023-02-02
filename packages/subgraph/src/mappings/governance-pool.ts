@@ -46,7 +46,7 @@ export function handleInitialized(event: InitializedEvent): void {
     const project = Project.load(projectId);
     if (!project) throw new Error("Project doesn't exist: " + projectId);
 
-    project.governacePool = governancePoolId;
+    project.governancePool = governancePoolId;
     project.save();
 }
 
