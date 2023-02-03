@@ -1,8 +1,10 @@
 import {DataSourceContext} from "@graphprotocol/graph-ts";
-import {Created as CreatedEvent} from "../../generated/InvestmentPoolFactory/InvestmentPoolFactory";
+import {
+    Created as CreatedEvent,
+    InvestmentPoolFactory as InvestmentPoolFactoryContract,
+} from "../../generated/InvestmentPoolFactory/InvestmentPoolFactory";
 import {InvestmentPool as InvestmentPoolContract} from "../../generated/templates/InvestmentPool/InvestmentPool";
 import {GovernancePool as GovernancePoolContract} from "../../generated/templates/GovernancePool/GovernancePool";
-import {DistributionPool as DistributionPoolContract} from "../../generated/templates/DistributionPool/DistributionPool";
 import {
     DistributionPool,
     GovernancePool,
@@ -10,23 +12,16 @@ import {
     VotingToken,
 } from "../../generated/templates";
 import {ProjectFactory} from "../../generated/schema";
+import {getOrInitProjectFactory} from "../mappingHelpers";
 
 export function handleCreated(event: CreatedEvent): void {
+    const projectFactory = getOrInitProjectFactory(event.address);
+
     // Get details from event params
     const investmentPoolAddress = event.params.ipContract;
     const governancePoolAddress = event.params.gpContract;
     const distributionPoolAddress = event.params.dpContract;
     const creator = event.params.creator;
-
-    // Get project factory entity
-    const projectFactoryId: string = event.address.toHexString();
-    let projectFactory = ProjectFactory.load(projectFactoryId);
-
-    if (!projectFactory) {
-        // Create new project factory entity
-        projectFactory = new ProjectFactory(projectFactoryId);
-        projectFactory.save();
-    }
 
     // Get details from contracts
     const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(investmentPoolAddress);
@@ -37,12 +32,12 @@ export function handleCreated(event: CreatedEvent): void {
 
     // Create data source context
     let context = new DataSourceContext();
-    context.setBytes("investmentPoolFactoryAddress", event.address);
-    context.setBytes("investmentPoolAddress", investmentPoolAddress);
-    context.setBytes("governancePoolAddress", governancePoolAddress);
-    context.setBytes("distributionPoolAddress", distributionPoolAddress);
-    context.setBytes("creator", creator);
-    context.setBytes("votingTokenAddress", votingTokenAddress);
+    context.setString("investmentPoolFactoryAddress", event.address.toHex());
+    context.setString("investmentPoolAddress", investmentPoolAddress.toHex());
+    context.setString("governancePoolAddress", governancePoolAddress.toHex());
+    context.setString("distributionPoolAddress", distributionPoolAddress.toHex());
+    context.setString("creator", creator.toHex());
+    context.setString("votingTokenAddress", votingTokenAddress.toHex());
     context.setString("votingTokenId", votingTokenId);
     context.setBigInt("votesSupplyCap", votesSupplyCap);
 

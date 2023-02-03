@@ -1,6 +1,6 @@
-import {BigInt} from "@graphprotocol/graph-ts";
+import {BigInt, BigDecimal} from "@graphprotocol/graph-ts";
 import {TransferSingle as TransferSingleEvent} from "../../generated/templates/VotingToken/VotingToken";
-import {VotingToken} from "../../generated/schema";
+import {GovernancePool, VotingToken} from "../../generated/schema";
 
 enum TokenAction {
     Mint,
@@ -28,6 +28,11 @@ function updateCurrentSupply(tokenId: string, amount: BigInt, action: TokenActio
     let votingToken = VotingToken.load(tokenId);
     if (!votingToken) throw new Error("Voting token doesn't exist: " + tokenId);
 
+    // Get governancePool entity
+    const governancePoolId: string = votingToken.governancePool;
+    let governancePool = GovernancePool.load(governancePoolId);
+    if (!governancePool) throw new Error("GovernancePool doesn't exists: " + governancePoolId);
+
     switch (action) {
         case TokenAction.Mint:
             votingToken.currentSupply = votingToken.currentSupply.plus(amount);
@@ -38,5 +43,13 @@ function updateCurrentSupply(tokenId: string, amount: BigInt, action: TokenActio
             break;
     }
 
+    // Update total percentage against
+    // Formula: totalVotesAgainst * 100 / currentSupply
+    governancePool.totalPercentageAgainst = BigDecimal.fromString(
+        governancePool.totalVotesAgainst.toString()
+    )
+        .times(BigDecimal.fromString("100"))
+        .div(BigDecimal.fromString(votingToken.currentSupply.toString()));
+    governancePool.save();
     votingToken.save();
 }

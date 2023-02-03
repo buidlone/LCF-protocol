@@ -1,5 +1,6 @@
-import {Address, BigInt, dataSource} from "@graphprotocol/graph-ts";
+import {Address, BigDecimal, BigInt, dataSource} from "@graphprotocol/graph-ts";
 import {
+    GovernancePool as GovernancePoolContract,
     Initialized as InitializedEvent,
     VoteAgainstProject as VoteAgainstEvent,
     RetractVotes as RetractVotesEvent,
@@ -12,12 +13,14 @@ enum VotingAction {
 }
 
 export function handleInitialized(event: InitializedEvent): void {
+    const gpContract: GovernancePoolContract = GovernancePoolContract.bind(event.address);
+
     // Get context from investment pool
     const context = dataSource.context();
     const votesSupplyCap = context.getBigInt("votesSupplyCap");
-    const projectId = context.getBytes("investmentPoolAddress").toHexString();
+    const projectId = context.getString("investmentPoolAddress");
     const votingTokenId = context.getString("votingTokenId");
-    const votingTokenAddress = context.getBytes("votingTokenAddress");
+    const votingTokenAddress = context.getString("votingTokenAddress");
 
     // Get governancePool entity
     const governancePoolId: string = event.address.toHexString();
@@ -30,7 +33,8 @@ export function handleInitialized(event: InitializedEvent): void {
 
     // Create project token entity
     votingToken = new VotingToken(votingTokenId);
-    votingToken.address = votingTokenAddress;
+    votingToken.governancePool = governancePoolId;
+    votingToken.address = Address.fromString(votingTokenAddress);
     votingToken.currentSupply = BigInt.fromI32(0);
     votingToken.supplyCap = votesSupplyCap;
     votingToken.save();
@@ -40,6 +44,13 @@ export function handleInitialized(event: InitializedEvent): void {
     governancePool.project = projectId;
     governancePool.votingToken = votingTokenId;
     governancePool.totalVotesAgainst = BigInt.fromI32(0);
+    governancePool.totalPercentageAgainst = BigDecimal.fromString("0");
+    governancePool.votesPercentageThreshold = BigDecimal.fromString(
+        gpContract.getVotesPercentageThreshold().toString()
+    );
+    governancePool.withdrawalPercentageFee = BigDecimal.fromString(
+        gpContract.getVotesWithdrawPercentageFee().toString()
+    );
     governancePool.save();
 
     // Add governancePool to project
@@ -80,6 +91,11 @@ function updateVotesInfo(
     if (!governancePool)
         throw new Error("GovernancePool pool doesn't exists: " + governancePoolId);
 
+    // Get voting token entity
+    const votingTokenId = governancePool.votingToken;
+    let votingToken = VotingToken.load(votingTokenId);
+    if (!votingToken) throw new Error("Voting token doesn't exists: " + votingTokenId);
+
     const projectInvestmentId = `${governancePool.project}-${investorAddress.toHexString()}`;
     const projectInvestment = ProjectInvestment.load(projectInvestmentId);
     if (!projectInvestment)
@@ -98,5 +114,12 @@ function updateVotesInfo(
             break;
     }
 
+    // Update total percentage against
+    // Formula: totalVotesAgainst * 100 / currentSupply
+    governancePool.totalPercentageAgainst = BigDecimal.fromString(
+        governancePool.totalVotesAgainst.toString()
+    )
+        .times(BigDecimal.fromString("100"))
+        .div(BigDecimal.fromString(votingToken.currentSupply.toString()));
     governancePool.save();
 }

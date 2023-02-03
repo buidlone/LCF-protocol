@@ -1,4 +1,4 @@
-import {dataSource} from "@graphprotocol/graph-ts";
+import {BigInt, dataSource, Address} from "@graphprotocol/graph-ts";
 import {
     DistributionPool as DistributionPoolContract,
     Initialized as InitializedEvent,
@@ -15,7 +15,7 @@ export function handleInitialized(event: InitializedEvent): void {
 
     // Get context from investment pool
     const context = dataSource.context();
-    const projectId = context.getBytes("investmentPoolAddress").toHexString();
+    const projectId = context.getString("investmentPoolAddress");
 
     // Get project token entity
     const projectTokenAddress = dpContract.getToken();
@@ -46,6 +46,7 @@ export function handleInitialized(event: InitializedEvent): void {
     distributionPool.project = projectId;
     distributionPool.projectToken = projectTokenId;
     distributionPool.lockedTokensForRewards = dpContract.getLockedTokens();
+    distributionPool.totalAllocatedTokens = BigInt.fromI32(0);
     distributionPool.save();
 
     // Add distributionPool to project
@@ -57,11 +58,24 @@ export function handleInitialized(event: InitializedEvent): void {
 }
 
 export function handleAllocated(event: AllocatedEvent): void {
-    // Currently allocation is updated in investment pool when investment is performed
+    updateAllocationInfo(event.address);
 }
 
 export function handleRemovedAllocation(event: RemovedAllocationEvent): void {
-    // Currently allocation is updated in investment pool when investment is unpledged
+    updateAllocationInfo(event.address);
+}
+
+function updateAllocationInfo(dpAddress: Address): void {
+    const dpContract: DistributionPoolContract = DistributionPoolContract.bind(dpAddress);
+
+    // Get distribution pool contract
+    const distributionPoolId: string = dpAddress.toHexString();
+    const distributionPool = DistributionPool.load(distributionPoolId);
+    if (!distributionPool)
+        throw new Error("Distribution pool doesn't exist: " + distributionPoolId);
+
+    distributionPool.totalAllocatedTokens = dpContract.getTotalAllocatedTokens();
+    distributionPool.save();
 }
 
 export function handleClaimed(event: ClaimedEvent): void {
