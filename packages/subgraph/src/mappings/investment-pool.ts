@@ -24,25 +24,24 @@ import {
     getOrInitAcceptedSuperToken,
     getOrInitInvestor,
     getOrInitProjectInvestment,
+    getOrInitMilestone,
 } from "../mappingHelpers";
 
 export function handleInitialized(event: InitializedEvent): void {
-    // Initialize project entity
-    const project = getOrInitProject(event.address);
+    // INITIALIZATION
+    getOrInitProject(event.address);
 }
 
 export function handleInvested(event: InvestEvent): void {
     const project = getOrInitProject(event.address);
+    updateMilestoneInfo(project);
 
     const dpContract: DistributionPoolContract = DistributionPoolContract.bind(
         Address.fromString(project.distributionPool)
     );
 
-    updateMilestoneInfo(project);
-
+    // Update project investment details
     const projectInvestment = getOrInitProjectInvestment(event.address, event.params.caller);
-
-    // Update investor invested amount
     projectInvestment.allocatedProjectTokens = dpContract.getAllocatedTokens(event.params.caller);
     projectInvestment.investedAmount = projectInvestment.investedAmount.plus(event.params.amount);
     projectInvestment.save();
@@ -53,28 +52,19 @@ export function handleInvested(event: InvestEvent): void {
 }
 
 export function handleUnpledged(event: UnpledgeEvent): void {
-    // Get project entity
-    const projectId: string = event.address.toHexString();
-    const project = Project.load(projectId);
-    if (!project) throw new Error("Project doesn't exist: " + projectId);
+    const project = getOrInitProject(event.address);
+    updateMilestoneInfo(project);
 
     const dpContract: DistributionPoolContract = DistributionPoolContract.bind(
         Address.fromString(project.distributionPool)
     );
 
-    updateMilestoneInfo(project);
-
-    const investor = getOrInitInvestor(event.params.caller);
-    const projectInvestmentId = `${projectId}-${investor.id}`;
-    let projectInvestment = ProjectInvestment.load(projectInvestmentId);
-
-    if (!projectInvestment)
-        throw new Error("Project investment doesn't exist: " + projectInvestmentId);
+    const projectInvestment = getOrInitProjectInvestment(event.address, event.params.caller);
 
     if (projectInvestment.investedAmount.minus(event.params.amount).equals(BigInt.fromI32(0))) {
         // If investor has no more investments in this project, delete the project investment entity
-        store.remove("ProjectInvestment", projectInvestmentId);
-        project.investorsCount = project.investorsCount - 1;
+        store.remove("ProjectInvestment", projectInvestment.id);
+        project.investorsCount -= 1;
     } else {
         // Update investor's details
         projectInvestment.allocatedProjectTokens = dpContract.getAllocatedTokens(
@@ -103,12 +93,13 @@ function updateMilestoneInfo(project: Project): void {
 
     // Loop through each milestone and update the seed and stream allocations
     for (let i = 0; i < milestones.length; i++) {
-        let milestone = Milestone.load(milestones[i]);
-        if (!milestone) throw new Error("Milestone doesn't exist: " + milestones[i]);
+        const milestone = getOrInitMilestone(Address.fromString(project.id), BigInt.fromI32(i));
 
-        const milestoneIdBI: BigInt = BigInt.fromI32(milestone.milestoneId);
         // Find the memoized investment
-        const memMilestoneInvestment: BigInt = findInvestment(memoizedInvestments, milestoneIdBI);
+        const memMilestoneInvestment: BigInt = findInvestment(
+            memoizedInvestments,
+            BigInt.fromI32(i)
+        );
 
         milestone.seedFundsAllocation = memMilestoneInvestment
             .times(milestone.seedPercentagePortion)
@@ -124,81 +115,62 @@ function updateMilestoneInfo(project: Project): void {
 export function handleCanceled(event: CancelEvent): void {
     const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(event.address);
 
-    // Get project entity
-    const projectId: string = event.address.toHexString();
-    const project = Project.load(projectId);
-    if (!project) throw new Error("Project doesn't exist: " + projectId);
-
     // If project was canceled before the fundraiser started, no data needs to be updated
     const canceledBefore = ipContract.isCanceledBeforeFundraiserStart();
-    if (canceledBefore) return;
+    if (!canceledBefore) {
+        // After canceling the project, milestone id stays the same
+        const milestoneIdBI: BigInt = ipContract.getCurrentMilestoneId();
+        const milestoneData = ipContract.getMilestone(milestoneIdBI);
 
-    // After canceling the project, milestone id stays the same
-    const milestoneIdBI: BigInt = ipContract.getCurrentMilestoneId();
-    const milestoneFullId: string = `${projectId}-${milestoneIdBI.toString()}`;
-    let milestone = Milestone.load(milestoneFullId);
-    if (!milestone) throw new Error("Milestone doesn't exist: " + milestoneFullId);
-
-    // Update milestone data
-    const milestoneData = ipContract.getMilestone(milestoneIdBI);
-    milestone.isTotalAllocationPaid = milestoneData.paid;
-    milestone.isStreamOngoing = milestoneData.streamOngoing;
-    milestone.paidAmount = milestoneData.paidAmount;
-    milestone.save();
+        // Update milestone data
+        const milestone = getOrInitMilestone(event.address, milestoneIdBI);
+        milestone.isTotalAllocationPaid = milestoneData.paid;
+        milestone.isStreamOngoing = milestoneData.streamOngoing;
+        milestone.paidAmount = milestoneData.paidAmount;
+        milestone.save();
+    }
 }
 
 export function handleRefunded(event: RefundedEvent): void {
-    // Does not change milestone information
+    // Currently not needed as no data changes after refunding
 }
 
 export function handleClaimedFunds(event: ClaimedFundsEvent): void {
     const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(event.address);
 
     // Get project entity
-    const projectId: string = event.address.toHexString();
-    const project = Project.load(projectId);
-    if (!project) throw new Error("Project doesn't exist: " + projectId);
+    const project = getOrInitProject(event.address);
 
-    // Find the milestone entity
     const milestoneIdBI: BigInt = event.params.milestoneId;
-    const milestoneFullId: string = `${projectId}-${milestoneIdBI.toString()}`;
-    let milestone = Milestone.load(milestoneFullId);
-    if (!milestone) throw new Error("Milestone doesn't exist: " + milestoneFullId);
+    const milestoneData = ipContract.getMilestone(milestoneIdBI);
 
     // Update milestone data from the event data passed in
-    const paidAmount = ipContract.getMilestone(milestoneIdBI).paidAmount;
-    milestone.paidAmount = paidAmount;
+    const milestone = getOrInitMilestone(event.address, milestoneIdBI);
+    milestone.paidAmount = milestoneData.paidAmount;
     milestone.isSeedAllocationPaid = event.params.gotSeedFunds;
     milestone.isTotalAllocationPaid = event.params.gotStreamAmount;
     milestone.isStreamOngoing = event.params.openedStream;
     milestone.save();
 
     // Update current milestone id
-    const currentMilestone = ipContract.getCurrentMilestoneId().toString();
-    const newMilestoneId: string = `${projectId}-${currentMilestone}`;
-    project.currentMilestone = newMilestoneId;
+    const currentMilestone = ipContract.getCurrentMilestoneId();
+    const newCurrentMilestone = getOrInitMilestone(event.address, currentMilestone);
+    project.currentMilestone = newCurrentMilestone.id;
     project.save();
 }
 
 export function handleTerminatedStream(event: TerminatedStreamEvent): void {
     const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(event.address);
 
-    // Get project entity
-    const projectId: string = event.address.toHexString();
-    const project = Project.load(projectId);
-    if (!project) throw new Error("Project doesn't exist: " + projectId);
-
-    // Find the milestone entity
     const milestoneIdBI: BigInt = event.params.milestoneId;
-    const milestoneFullId: string = `${projectId}-${milestoneIdBI.toString()}`;
-    let milestone = Milestone.load(milestoneFullId);
-    if (!milestone) throw new Error("Milestone doesn't exist: " + milestoneFullId);
-
-    // Update milestone data from the smart contract
     const milestoneData = ipContract.getMilestone(milestoneIdBI);
+
+    // Update milestone data from the event data passed in
+    const milestone = getOrInitMilestone(event.address, milestoneIdBI);
+    milestone.paidAmount = milestoneData.paidAmount;
+    milestone.isSeedAllocationPaid = milestoneData.seedAmountPaid;
     milestone.isTotalAllocationPaid = milestoneData.paid;
     milestone.isStreamOngoing = milestoneData.streamOngoing;
-    milestone.paidAmount = milestoneData.paidAmount;
 
     milestone.save();
 }

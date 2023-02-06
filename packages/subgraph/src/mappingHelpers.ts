@@ -1,16 +1,20 @@
-import {dataSource, Address, BigInt, ethereum} from "@graphprotocol/graph-ts";
+import {dataSource, Address, BigInt, ethereum, BigDecimal} from "@graphprotocol/graph-ts";
 import {
     ProjectFactory,
     Project,
-    Milestone,
-    AcceptedSuperToken,
-    ProjectInvestment,
-    Investor,
     GovernancePool,
     DistributionPool,
+    Milestone,
+    Investor,
+    ProjectInvestment,
+    AcceptedSuperToken,
+    ProjectToken,
+    VotingToken,
 } from "../generated/schema";
 import {InvestmentPoolFactory as InvestmentPoolFactoryContract} from "../generated/InvestmentPoolFactory/InvestmentPoolFactory";
 import {InvestmentPool as InvestmentPoolContract} from "../generated/templates/InvestmentPool/InvestmentPool";
+import {GovernancePool as GovernancePoolContract} from "../generated/templates/GovernancePool/GovernancePool";
+import {DistributionPool as DistributionPoolContract} from "../generated/templates/DistributionPool/DistributionPool";
 import {ERC20 as ERC20Contract} from "../generated/templates/ERC20/ERC20";
 
 export function getOrInitProjectFactory(projectFactoryAddress: Address): ProjectFactory {
@@ -37,35 +41,33 @@ export function getOrInitProjectFactory(projectFactoryAddress: Address): Project
 }
 
 export function getOrInitProject(projectAddress: Address): Project {
-    // Get project entity. Shouldn't exist yet
-    const projectId: string = projectAddress.toHex();
+    const projectId = projectAddress.toHex();
     let project = Project.load(projectId);
 
     if (!project) {
+        const context = dataSource.context();
         const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(projectAddress);
-        project = new Project(projectId);
 
         let milestoneIds: string[] = [];
         const milestonesCount = ipContract.getMilestonesCount().toI32();
-
         // Loop through each milestone and create a new milestone entity with the data
         for (let milestoneId = 0; milestoneId < milestonesCount; milestoneId++) {
-            const milestone = getOrInitMilestone(projectAddress, milestoneId);
+            const milestone = getOrInitMilestone(projectAddress, BigInt.fromI32(milestoneId));
             milestoneIds.push(milestone.id);
         }
 
-        let projectStartTime: BigInt = getOrInitMilestone(projectAddress, 0).startTime;
-        let projectEndTime: BigInt = getOrInitMilestone(
+        const acceptedSuperToken = getOrInitAcceptedSuperToken(ipContract.getAcceptedToken());
+        const projectStartTime: BigInt = getOrInitMilestone(
             projectAddress,
-            milestonesCount - 1
+            BigInt.fromI32(0)
+        ).startTime;
+        const projectEndTime: BigInt = getOrInitMilestone(
+            projectAddress,
+            BigInt.fromI32(milestonesCount - 1)
         ).endTime;
 
-        const context = dataSource.context();
-        const acceptedSuperToken = getOrInitAcceptedSuperToken(
-            Address.fromString(project.acceptedToken)
-        );
-
         // Add all project details
+        project = new Project(projectId);
         project.factory = context.getString("investmentPoolFactoryAddress");
         project.softCap = ipContract.getSoftCap();
         project.hardCap = ipContract.getHardCap();
@@ -91,15 +93,56 @@ export function getOrInitProject(projectAddress: Address): Project {
     return project;
 }
 
-export function getOrInitGovernancePool(): GovernancePool {
+export function getOrInitGovernancePool(governancePoolAddress: Address): GovernancePool {
+    const governancePoolId = governancePoolAddress.toHex();
+    let governancePool = GovernancePool.load(governancePoolId);
+
+    if (!governancePool) {
+        const context = dataSource.context();
+        const gpContract: GovernancePoolContract =
+            GovernancePoolContract.bind(governancePoolAddress);
+
+        const votingToken = getOrInitVotingToken(context.getString("votingTokenId"));
+        // Create new governancePool entity
+        governancePool = new GovernancePool(governancePoolId);
+        governancePool.project = context.getString("investmentPoolAddress");
+        governancePool.votingToken = votingToken.id;
+        governancePool.totalVotesAgainst = BigInt.fromI32(0);
+        governancePool.totalPercentageAgainst = BigDecimal.fromString("0");
+        governancePool.votesPercentageThreshold = BigDecimal.fromString(
+            gpContract.getVotesPercentageThreshold().toString()
+        );
+        governancePool.withdrawalPercentageFee = BigDecimal.fromString(
+            gpContract.getVotesWithdrawPercentageFee().toString()
+        );
+        governancePool.save();
+    }
+
     return governancePool;
 }
 
-export function getOrInitDistributionPool(): DistributionPool {
+export function getOrInitDistributionPool(distributionPoolAddress: Address): DistributionPool {
+    const distributionPoolId = distributionPoolAddress.toHex();
+    let distributionPool = DistributionPool.load(distributionPoolId);
+    if (!distributionPool) {
+        const context = dataSource.context();
+        const dpContract: DistributionPoolContract =
+            DistributionPoolContract.bind(distributionPoolAddress);
+
+        const projectToken = getOrInitProjectToken(dpContract.getToken());
+
+        // Create new distributionPool entity
+        distributionPool = new DistributionPool(distributionPoolId);
+        distributionPool.project = context.getString("investmentPoolAddress");
+        distributionPool.projectToken = projectToken.id;
+        distributionPool.lockedTokensForRewards = dpContract.getLockedTokens();
+        distributionPool.totalAllocatedTokens = BigInt.fromI32(0);
+        distributionPool.save();
+    }
+
     return distributionPool;
 }
-
-export function getOrInitMilestone(projectAddress: Address, milestoneId: number): Milestone {
+export function getOrInitMilestone(projectAddress: Address, milestoneId: BigInt): Milestone {
     const projectId = projectAddress.toHex();
     const milestoneFullId: string = `${projectId}-${milestoneId.toString()}`;
     let milestone = Milestone.load(milestoneFullId);
@@ -108,14 +151,13 @@ export function getOrInitMilestone(projectAddress: Address, milestoneId: number)
         const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(
             Address.fromString(projectId)
         );
+        const milestoneData = ipContract.getMilestone(milestoneId);
 
         // Create new milestone entity
         milestone = new Milestone(milestoneFullId);
-        const milestoneIdBI: BigInt = BigInt.fromI32(milestoneId);
-        const milestoneData = ipContract.getMilestone(milestoneIdBI);
-
         milestone.project = projectId;
-        milestone.milestoneId = milestoneId;
+        // number type cannot be assigned to i32 type so we need to convert it
+        milestone.milestoneId = milestoneId.toI32();
         milestone.startTime = milestoneData.startDate;
         milestone.endTime = milestoneData.endDate;
         milestone.duration = milestone.endTime.minus(milestone.startTime);
@@ -169,7 +211,7 @@ export function getOrInitProjectInvestment(
         projectInvestment.save();
 
         // Update the number of investors
-        project.investorsCount = project.investorsCount + 1;
+        project.investorsCount += 1;
         project.save();
     }
 
@@ -178,16 +220,13 @@ export function getOrInitProjectInvestment(
 
 export function getOrInitAcceptedSuperToken(acceptedTokenAddress: Address): AcceptedSuperToken {
     // Get accepted super token entity
-    const acceptedTokenId: string = acceptedTokenAddress.toHex();
+    const acceptedTokenId = acceptedTokenAddress.toHex();
     let acceptedToken = AcceptedSuperToken.load(acceptedTokenId);
 
     if (!acceptedToken) {
         const acceptedTokenContract = ERC20Contract.bind(acceptedTokenAddress);
 
-        /**
-         * @notice Create accepted super token entity if it doesn't exist
-         * @notice Multiple projects can accept the same super token
-         */
+        /** @notice Multiple projects can accept the same super token*/
         acceptedToken = new AcceptedSuperToken(acceptedTokenId);
         acceptedToken.name = acceptedTokenContract.name();
         acceptedToken.symbol = acceptedTokenContract.symbol();
@@ -196,4 +235,47 @@ export function getOrInitAcceptedSuperToken(acceptedTokenAddress: Address): Acce
     }
 
     return acceptedToken;
+}
+
+export function getOrInitProjectToken(projectTokenAddress: Address): ProjectToken {
+    const projectTokenId: string = projectTokenAddress.toHex();
+    let projectToken = ProjectToken.load(projectTokenId);
+
+    if (!projectToken) {
+        const projectTokenContract = ERC20Contract.bind(projectTokenAddress);
+
+        /** @notice Multiple projects can use the same project token for rewards */
+        projectToken = new ProjectToken(projectTokenId);
+        projectToken.name = projectTokenContract.name();
+        projectToken.symbol = projectTokenContract.symbol();
+        projectToken.decimals = projectTokenContract.decimals();
+        projectToken.save();
+    }
+    return projectToken;
+}
+
+export function getOrInitVotingToken(votingTokenId: string): VotingToken {
+    let votingToken = VotingToken.load(votingTokenId);
+
+    if (!votingToken) {
+        const context = dataSource.context();
+        const investmentPoolAddress = context.getString("investmentPoolAddress");
+        const governancePoolAddress = context.getString("governancePoolAddress");
+        const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(
+            Address.fromString(investmentPoolAddress)
+        );
+        const gpContract: GovernancePoolContract = GovernancePoolContract.bind(
+            Address.fromString(governancePoolAddress)
+        );
+
+        // Create project token entity
+        votingToken = new VotingToken(votingTokenId);
+        votingToken.governancePool = governancePoolAddress;
+        votingToken.address = gpContract.getVotingTokenAddress();
+        votingToken.currentSupply = BigInt.fromI32(0);
+        votingToken.supplyCap = ipContract.getVotingTokensSupplyCap();
+        votingToken.save();
+    }
+
+    return votingToken;
 }

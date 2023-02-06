@@ -1,6 +1,7 @@
-import {BigInt, BigDecimal} from "@graphprotocol/graph-ts";
+import {BigInt, BigDecimal, Address} from "@graphprotocol/graph-ts";
 import {TransferSingle as TransferSingleEvent} from "../../generated/templates/VotingToken/VotingToken";
 import {GovernancePool, VotingToken} from "../../generated/schema";
+import {getOrInitGovernancePool, getOrInitVotingToken} from "../mappingHelpers";
 
 enum TokenAction {
     Mint,
@@ -13,25 +14,20 @@ export function handleTransfer(event: TransferSingleEvent): void {
     const tokenId = event.params.id;
     const amount = event.params.value;
 
-    if (fromAddress.toHexString() == "0x0000000000000000000000000000000000000000") {
+    if (fromAddress.toHex() == Address.zero().toHex()) {
         // Mint
         updateCurrentSupply(tokenId.toString(), amount, TokenAction.Mint);
     }
 
-    if (toAddress.toHexString() == "0x0000000000000000000000000000000000000000") {
+    if (toAddress.toHex() == Address.zero().toHex()) {
         // Burn
         updateCurrentSupply(tokenId.toString(), amount, TokenAction.Burn);
     }
 }
 
 function updateCurrentSupply(tokenId: string, amount: BigInt, action: TokenAction): void {
-    let votingToken = VotingToken.load(tokenId);
-    if (!votingToken) throw new Error("Voting token doesn't exist: " + tokenId);
-
-    // Get governancePool entity
-    const governancePoolId: string = votingToken.governancePool;
-    let governancePool = GovernancePool.load(governancePoolId);
-    if (!governancePool) throw new Error("GovernancePool doesn't exists: " + governancePoolId);
+    const votingToken = getOrInitVotingToken(tokenId);
+    const governancePool = getOrInitGovernancePool(Address.fromString(votingToken.governancePool));
 
     switch (action) {
         case TokenAction.Mint:
@@ -51,5 +47,6 @@ function updateCurrentSupply(tokenId: string, amount: BigInt, action: TokenActio
         .times(BigDecimal.fromString("100"))
         .div(BigDecimal.fromString(votingToken.currentSupply.toString()));
     governancePool.save();
+
     votingToken.save();
 }
