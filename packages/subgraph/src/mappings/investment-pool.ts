@@ -44,10 +44,12 @@ export function handleInvested(event: InvestEvent): void {
     const projectInvestment = getOrInitProjectInvestment(event.address, event.params.caller);
     projectInvestment.allocatedProjectTokens = dpContract.getAllocatedTokens(event.params.caller);
     projectInvestment.investedAmount = projectInvestment.investedAmount.plus(event.params.amount);
+    projectInvestment.singleInvestmentsCount += 1;
     projectInvestment.save();
 
     // Update total invested amount
     project.totalInvested = project.totalInvested.plus(event.params.amount);
+    project.isSoftCapReached = project.totalInvested >= project.softCap;
     project.save();
 }
 
@@ -61,7 +63,7 @@ export function handleUnpledged(event: UnpledgeEvent): void {
 
     const projectInvestment = getOrInitProjectInvestment(event.address, event.params.caller);
 
-    if (projectInvestment.investedAmount.minus(event.params.amount).equals(BigInt.fromI32(0))) {
+    if (projectInvestment.singleInvestmentsCount - 1 == 0) {
         // If investor has no more investments in this project, delete the project investment entity
         store.remove("ProjectInvestment", projectInvestment.id);
         project.investorsCount -= 1;
@@ -73,11 +75,13 @@ export function handleUnpledged(event: UnpledgeEvent): void {
         projectInvestment.investedAmount = projectInvestment.investedAmount.minus(
             event.params.amount
         );
+        projectInvestment.singleInvestmentsCount -= 1;
         projectInvestment.save();
     }
 
     // Update project info
     project.totalInvested = project.totalInvested.minus(event.params.amount);
+    project.isSoftCapReached = project.totalInvested >= project.softCap;
     project.save();
 }
 
@@ -115,9 +119,15 @@ function updateMilestoneInfo(project: Project): void {
 export function handleCanceled(event: CancelEvent): void {
     const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(event.address);
 
+    const project = getOrInitProject(event.address);
+    project.isCanceledBeforeFundraiserStart = ipContract.isCanceledBeforeFundraiserStart();
+    project.isCanceledDuringMilestones = ipContract.isCanceledDuringMilestones();
+    project.emergencyTerminationTime = ipContract.getEmergencyTerminationTimestamp();
+    project.isEmergencyTerminated = ipContract.isEmergencyTerminated();
+    project.save();
+
     // If project was canceled before the fundraiser started, no data needs to be updated
-    const canceledBefore = ipContract.isCanceledBeforeFundraiserStart();
-    if (!canceledBefore) {
+    if (!project.isCanceledBeforeFundraiserStart) {
         // After canceling the project, milestone id stays the same
         const milestoneIdBI: BigInt = ipContract.getCurrentMilestoneId();
         const milestoneData = ipContract.getMilestone(milestoneIdBI);

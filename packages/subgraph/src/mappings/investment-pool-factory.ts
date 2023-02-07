@@ -7,12 +7,10 @@ import {
     InvestmentPool,
     VotingToken,
 } from "../../generated/templates";
+import {ProjectFactory} from "../../generated/schema";
 import {getOrInitProjectFactory} from "../mappingHelpers";
 
 export function handleCreated(event: CreatedEvent): void {
-    // INITIALIZATION
-    getOrInitProjectFactory(event.address);
-
     // Get details from event params
     const investmentPoolAddress = event.params.ipContract;
     const governancePoolAddress = event.params.gpContract;
@@ -24,6 +22,13 @@ export function handleCreated(event: CreatedEvent): void {
     const votingTokenAddress = gpContract.getVotingTokenAddress();
     /** @notice investment id is used in ERC1155 voting token as project id */
     const votingTokenId = gpContract.getInvestmentPoolId();
+
+    if (ProjectFactory.load(event.address.toHex()) === null) {
+        VotingToken.create(votingTokenAddress);
+    }
+
+    // INITIALIZATION
+    getOrInitProjectFactory(event.address);
 
     // Create data source context
     let context = new DataSourceContext();
@@ -38,5 +43,4 @@ export function handleCreated(event: CreatedEvent): void {
     InvestmentPool.createWithContext(investmentPoolAddress, context);
     GovernancePool.createWithContext(governancePoolAddress, context);
     DistributionPool.createWithContext(distributionPoolAddress, context);
-    VotingToken.create(votingTokenAddress);
 }

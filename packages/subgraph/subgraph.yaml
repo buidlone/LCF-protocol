@@ -124,6 +124,8 @@ templates:
           handler: handleRemovedAllocation
         - event: Claimed(indexed address,uint256)
           handler: handleClaimed
+        - event: LockedTokens()
+          handler: handleLockedTokens
       file: ./src/mappings/distribution-pool.ts
 
   - kind: ethereum/contract

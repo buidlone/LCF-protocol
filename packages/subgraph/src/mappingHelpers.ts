@@ -71,6 +71,7 @@ export function getOrInitProject(projectAddress: Address): Project {
         project.factory = context.getString("investmentPoolFactoryAddress");
         project.softCap = ipContract.getSoftCap();
         project.hardCap = ipContract.getHardCap();
+        project.isSoftCapReached = false;
         project.totalInvested = BigInt.fromI32(0);
         project.softCapMultiplier = ipContract.getSoftCapMultiplier().toI32();
         project.hardCapMultiplier = ipContract.getHardCapMultiplier().toI32();
@@ -87,6 +88,13 @@ export function getOrInitProject(projectAddress: Address): Project {
         project.acceptedToken = acceptedSuperToken.id;
         project.percentageDivider = ipContract.getPercentageDivider();
         project.investorsCount = 0;
+        project.isCanceledBeforeFundraiserStart = false;
+        project.emergencyTerminationTime = BigInt.fromI32(0);
+        project.isEmergencyTerminated = false;
+        project.isCanceledDuringMilestones = false;
+        project.investmentCancelationPercentageFee = ipContract
+            .getInvestmentWithdrawPercentageFee()
+            .toBigDecimal();
         project.save();
     }
 
@@ -112,9 +120,9 @@ export function getOrInitGovernancePool(governancePoolAddress: Address): Governa
         governancePool.votesPercentageThreshold = BigDecimal.fromString(
             gpContract.getVotesPercentageThreshold().toString()
         );
-        governancePool.withdrawalPercentageFee = BigDecimal.fromString(
-            gpContract.getVotesWithdrawPercentageFee().toString()
-        );
+        governancePool.votesWithdrawalPercentageFee = gpContract
+            .getVotesWithdrawPercentageFee()
+            .toBigDecimal();
         governancePool.save();
     }
 
@@ -137,6 +145,7 @@ export function getOrInitDistributionPool(distributionPoolAddress: Address): Dis
         distributionPool.projectToken = projectToken.id;
         distributionPool.lockedTokensForRewards = dpContract.getLockedTokens();
         distributionPool.totalAllocatedTokens = BigInt.fromI32(0);
+        distributionPool.didCreatorLockTokens = false;
         distributionPool.save();
     }
 
@@ -208,6 +217,7 @@ export function getOrInitProjectInvestment(
         projectInvestment.allocatedProjectTokens = BigInt.fromI32(0);
         projectInvestment.votesAgainst = BigInt.fromI32(0);
         projectInvestment.claimedProjectTokens = BigInt.fromI32(0);
+        projectInvestment.singleInvestmentsCount = 0;
         projectInvestment.save();
 
         // Update the number of investors

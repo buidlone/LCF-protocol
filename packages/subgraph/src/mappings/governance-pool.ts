@@ -72,11 +72,10 @@ function updateVotesInfo(
 
     // Update total percentage against
     // Formula: totalVotesAgainst * 100 / currentSupply
-    governancePool.totalPercentageAgainst = BigDecimal.fromString(
-        governancePool.totalVotesAgainst.toString()
-    )
+    governancePool.totalPercentageAgainst = governancePool.totalVotesAgainst
+        .toBigDecimal()
         .times(BigDecimal.fromString("100"))
-        .div(BigDecimal.fromString(votingToken.currentSupply.toString()));
+        .div(votingToken.currentSupply.toBigDecimal());
     governancePool.save();
 
     projectInvestment.save();

@@ -88,6 +88,11 @@ type Project @entity {
     hardCap: BigInt!
 
     """
+    Value that represents if total invested is more (or equal) to soft cap
+    """
+    isSoftCapReached: Boolean!
+
+    """
     The amount of funds that was invested in the project so far
     Specified in wei [10^18 ETH]
     """
@@ -171,6 +176,33 @@ type Project @entity {
     Number of unique investors that invested in the project
     """
     investorsCount: Int!
+
+    """
+    Is project canceled before the fundraiser start
+    """
+    isCanceledBeforeFundraiserStart: Boolean!
+
+    """
+    Is project canceled during the milestone period
+    """
+    isCanceledDuringMilestones: Boolean!
+
+    """
+    Timestamp when the project was canceled or treminated
+    """
+    emergencyTerminationTime: BigInt!
+
+    """
+    Is project canceled or terminated
+    """
+    isEmergencyTerminated: Boolean!
+
+    """
+    Percentage of investors investment that is going to be left in the investment pool as a fee from the investor
+    If invstor invests, but later on wants to cancel his investment, he will be charged with this fee
+    Specified in percentage [0.00-100.00]
+    """
+    investmentCancelationPercentageFee: BigDecimal!
 }
 
 """
@@ -212,10 +244,11 @@ type GovernancePool @entity {
     votesPercentageThreshold: BigDecimal!
 
     """
-    Percentage of investors votes that are going to be left in the governance pool as a fee from the investors votes
+    Percentage of investors votes that is going to be left in the governance pool as a fee from the investors votes
+    If investor votes against the project, but later on wants to retract the vote, the fee will be deducted from the vote
     Specified in percentage [0.00-100.00]
     """
-    withdrawalPercentageFee: BigDecimal!
+    votesWithdrawalPercentageFee: BigDecimal!
 }
 
 """
@@ -244,6 +277,11 @@ type DistributionPool @entity {
     Specified in wei [10^18 ETH]
     """
     lockedTokensForRewards: BigInt!
+
+    """
+    Did the creator transferred the tokens to distribution pool and locked them for rewards
+    """
+    didCreatorLockTokens: Boolean!
 
     """
     The amount of project tokens that is allocated for the investors as rewards
@@ -353,6 +391,9 @@ type Investor @entity {
     projectInvestments: [ProjectInvestment!]! @derivedFrom(field: "investor")
 }
 
+"""
+ProjectInvestment entity represents a full investment combined from all single investments of a single investor in a single project
+"""
 type ProjectInvestment @entity {
     """
     Combination of the investment pool address and investor address separated by dash
@@ -394,6 +435,71 @@ type ProjectInvestment @entity {
     Specified in wei [10^18 ETH]
     """
     claimedProjectTokens: BigInt!
+
+    """
+    All single investments that belong to this full investment
+    """
+    singleInvestments: [SingleInvestment!]! @derivedFrom(field: "fullInvestment")
+
+    """
+    Number of single investments that belong to this full investment
+    """
+    singleInvestmentsCount: Int!
+}
+
+"""
+SingleInvestment entity represents a single investment of a single investor in a single project
+"""
+type SingleInvestment @entity {
+    """
+    Combination of the investment pool address, investor address and investment ID separated by dash
+    Example: 0x1234567890abcdef1234567890abcdef1234567890-0x1234567890abcdef1234567890abcdef1234567890-1
+    """
+    id: ID!
+
+    """
+    Investment Id, which is number of investments made by the investor in the project - 1
+    Starts from 0
+    """
+    investmentId: Int!
+
+    """
+    Investor, who invested in the project
+    """
+    investor: Investor!
+
+    """
+    Full investment that this single investment belongs to
+    """
+    fullInvestment: ProjectInvestment!
+
+    """
+    Milestone that this investment was made for
+    """
+    milestone: Milestone!
+
+    """
+    Transaction hash of the investment
+    """
+    transactionHash: Bytes!
+
+    """
+    Amount of funds that was invested by the investor
+    Specified in wei [10^18 ETH]
+    """
+    investedAmount: BigInt!
+
+    """
+    Amount of voting tokens that governance pool minted for the investor
+    Specified in wei [10^18 ETH]
+    """
+    votingTokensMinted: BigInt!
+
+    """
+    Amount of project tokens that was allocated for the investor
+    Specified in wei [10^18 ETH]
+    """
+    allocatedProjectTokens: BigInt!
 }
 
 """

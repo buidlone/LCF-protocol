@@ -5,6 +5,7 @@ import {
     Allocated as AllocatedEvent,
     RemovedAllocation as RemovedAllocationEvent,
     Claimed as ClaimedEvent,
+    LockedTokens as LockedTokensEvent,
 } from "../../generated/templates/DistributionPool/DistributionPool";
 import {ERC20 as ERC20Contract} from "../../generated/templates/ERC20/ERC20";
 import {Project, DistributionPool, ProjectToken, ProjectInvestment} from "../../generated/schema";
@@ -48,4 +49,12 @@ export function handleClaimed(event: ClaimedEvent): void {
         event.params.tokensAmount
     );
     projectInvestment.save();
+}
+
+export function handleLockedTokens(event: LockedTokensEvent): void {
+    const dpContract: DistributionPoolContract = DistributionPoolContract.bind(event.address);
+
+    const distributionPool = getOrInitDistributionPool(event.address);
+    distributionPool.didCreatorLockTokens = dpContract.didCreatorLockTokens();
+    distributionPool.save();
 }
