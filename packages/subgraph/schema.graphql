@@ -198,6 +198,12 @@ type Project @entity {
     isEmergencyTerminated: Boolean!
 
     """
+    True if project is active OR was terminated by voting
+    False if project was terminated by gelato
+    """
+    isTerminatedByGelato: Boolean!
+
+    """
     Percentage of investors investment that is going to be left in the investment pool as a fee from the investor
     If invstor invests, but later on wants to cancel his investment, he will be charged with this fee
     Specified in percentage [0.00-100.00]

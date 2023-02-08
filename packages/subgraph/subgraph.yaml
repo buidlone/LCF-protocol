@@ -70,6 +70,8 @@ templates:
           handler: handleRefunded
         - event: TerminateStream(uint256)
           handler: handleTerminatedStream
+        - event: GelatoFeeTransfer(uint256,address)
+          handler: handleTerminatedByGelato
       file: ./src/mappings/investment-pool.ts
 
   - kind: ethereum/contract

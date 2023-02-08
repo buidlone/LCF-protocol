@@ -8,6 +8,7 @@ import {
     Cancel as CancelEvent,
     ClaimFunds as ClaimedFundsEvent,
     TerminateStream as TerminatedStreamEvent,
+    GelatoFeeTransfer as TerminatedByGelatoEvent,
 } from "../../generated/InvestmentPool/InvestmentPool";
 import {DistributionPool as DistributionPoolContract} from "../../generated/templates/InvestmentPool/DistributionPool";
 import {ERC20 as ERC20Contract} from "../../generated/templates/ERC20/ERC20";
@@ -200,6 +201,12 @@ export function handleTerminatedStream(event: TerminatedStreamEvent): void {
     milestone.isStreamOngoing = milestoneData.streamOngoing;
 
     milestone.save();
+}
+
+export function handleTerminatedByGelato(event: TerminatedByGelatoEvent): void {
+    const project = getOrInitProject(event.address);
+    project.isTerminatedByGelato = true;
+    project.save();
 }
 
 /**

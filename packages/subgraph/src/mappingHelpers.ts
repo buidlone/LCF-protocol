@@ -93,6 +93,7 @@ export function getOrInitProject(projectAddress: Address): Project {
         project.emergencyTerminationTime = BigInt.fromI32(0);
         project.isEmergencyTerminated = false;
         project.isCanceledDuringMilestones = false;
+        project.isTerminatedByGelato = false;
         project.investmentCancelationPercentageFee = ipContract
             .getInvestmentWithdrawPercentageFee()
             .toBigDecimal();
