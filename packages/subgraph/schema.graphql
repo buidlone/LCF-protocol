@@ -425,16 +425,16 @@ type ProjectInvestment @entity {
     allocatedProjectTokens: BigInt!
 
     """
-    Votes that were casted by the investor against the project
-    Specified in wei [10^18 ETH]
-    """
-    votesAgainst: BigInt!
-
-    """
     Amount of project tokens that were already claimed by the investor
     Specified in wei [10^18 ETH]
     """
     claimedProjectTokens: BigInt!
+
+    """
+    Votes that were casted by the investor against the project
+    Specified in wei [10^18 ETH]
+    """
+    votesAgainst: BigInt!
 
     """
     All single investments that belong to this full investment
@@ -458,15 +458,15 @@ type SingleInvestment @entity {
     id: ID!
 
     """
+    Investor, who invested in the project
+    """
+    investor: Investor!
+
+    """
     Investment Id, which is number of investments made by the investor in the project - 1
     Starts from 0
     """
     investmentId: Int!
-
-    """
-    Investor, who invested in the project
-    """
-    investor: Investor!
 
     """
     Full investment that this single investment belongs to
@@ -488,18 +488,6 @@ type SingleInvestment @entity {
     Specified in wei [10^18 ETH]
     """
     investedAmount: BigInt!
-
-    """
-    Amount of voting tokens that governance pool minted for the investor
-    Specified in wei [10^18 ETH]
-    """
-    votingTokensMinted: BigInt!
-
-    """
-    Amount of project tokens that was allocated for the investor
-    Specified in wei [10^18 ETH]
-    """
-    allocatedProjectTokens: BigInt!
 }
 
 """

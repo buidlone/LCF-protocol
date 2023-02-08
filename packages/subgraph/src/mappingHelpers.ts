@@ -1,4 +1,4 @@
-import {dataSource, Address, BigInt, ethereum, BigDecimal} from "@graphprotocol/graph-ts";
+import {dataSource, Address, BigInt, ethereum, BigDecimal, Bytes} from "@graphprotocol/graph-ts";
 import {
     ProjectFactory,
     Project,
@@ -7,6 +7,7 @@ import {
     Milestone,
     Investor,
     ProjectInvestment,
+    SingleInvestment,
     AcceptedSuperToken,
     ProjectToken,
     VotingToken,
@@ -226,6 +227,35 @@ export function getOrInitProjectInvestment(
     }
 
     return projectInvestment;
+}
+
+export function getOrInitSingleInvestment(
+    projectAddress: Address,
+    investorAddress: Address,
+    investmentId: BigInt
+): SingleInvestment {
+    const projectInvestment = getOrInitProjectInvestment(projectAddress, investorAddress);
+    const singleInvestmentId = `${projectAddress.toHex()}-${investorAddress.toHex()}-${investmentId.toString()}`;
+    let singleInvestment = SingleInvestment.load(singleInvestmentId);
+
+    if (!singleInvestment) {
+        const ipContract = InvestmentPoolContract.bind(projectAddress);
+        const milestone = getOrInitMilestone(projectAddress, ipContract.getCurrentMilestoneId());
+
+        singleInvestment = new SingleInvestment(singleInvestmentId);
+        singleInvestment.investor = investorAddress.toHex();
+        singleInvestment.investmentId = investmentId.toI32();
+        singleInvestment.fullInvestment = projectInvestment.id;
+        singleInvestment.milestone = milestone.id;
+        singleInvestment.transactionHash = Bytes.fromI32(0);
+        singleInvestment.investedAmount = BigInt.fromI32(0);
+
+        // Update the number of single investments
+        projectInvestment.singleInvestmentsCount += 1;
+        projectInvestment.save();
+    }
+
+    return singleInvestment;
 }
 
 export function getOrInitAcceptedSuperToken(acceptedTokenAddress: Address): AcceptedSuperToken {

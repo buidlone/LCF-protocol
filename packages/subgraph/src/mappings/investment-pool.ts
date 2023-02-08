@@ -25,6 +25,7 @@ import {
     getOrInitInvestor,
     getOrInitProjectInvestment,
     getOrInitMilestone,
+    getOrInitSingleInvestment,
 } from "../mappingHelpers";
 
 export function handleInitialized(event: InitializedEvent): void {
@@ -44,8 +45,16 @@ export function handleInvested(event: InvestEvent): void {
     const projectInvestment = getOrInitProjectInvestment(event.address, event.params.caller);
     projectInvestment.allocatedProjectTokens = dpContract.getAllocatedTokens(event.params.caller);
     projectInvestment.investedAmount = projectInvestment.investedAmount.plus(event.params.amount);
-    projectInvestment.singleInvestmentsCount += 1;
     projectInvestment.save();
+
+    const singleInvestment = getOrInitSingleInvestment(
+        event.address,
+        event.params.caller,
+        BigInt.fromI32(projectInvestment.singleInvestmentsCount)
+    );
+    singleInvestment.transactionHash = event.transaction.hash;
+    singleInvestment.investedAmount = event.params.amount;
+    singleInvestment.save();
 
     // Update total invested amount
     project.totalInvested = project.totalInvested.plus(event.params.amount);
@@ -62,6 +71,14 @@ export function handleUnpledged(event: UnpledgeEvent): void {
     );
 
     const projectInvestment = getOrInitProjectInvestment(event.address, event.params.caller);
+    const singleInvestment = getOrInitSingleInvestment(
+        event.address,
+        event.params.caller,
+        BigInt.fromI32(projectInvestment.singleInvestmentsCount - 1)
+    );
+
+    // No matter what, delete the single investment
+    store.remove("SingleInvestment", singleInvestment.id);
 
     if (projectInvestment.singleInvestmentsCount - 1 == 0) {
         // If investor has no more investments in this project, delete the project investment entity

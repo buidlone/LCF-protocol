@@ -2,13 +2,16 @@ import {Address, BigDecimal, BigInt, dataSource} from "@graphprotocol/graph-ts";
 import {
     GovernancePool as GovernancePoolContract,
     Initialized as InitializedEvent,
+    MintVotingTokens as MintedVotingTokensEvent,
     VoteAgainstProject as VoteAgainstEvent,
     RetractVotes as RetractVotesEvent,
 } from "../../generated/templates/GovernancePool/GovernancePool";
 import {Project, GovernancePool, VotingToken, ProjectInvestment} from "../../generated/schema";
 import {
+    getOrInitSingleInvestment,
     getOrInitGovernancePool,
     getOrInitProjectInvestment,
+    getOrInitProject,
     getOrInitVotingToken,
 } from "../mappingHelpers";
 
