@@ -70,6 +70,8 @@ templates:
           handler: handleRefunded
         - event: TerminateStream(uint256)
           handler: handleTerminatedStream
+        - event: GelatoFeeTransfer(uint256,address)
+          handler: handleTerminatedByGelato
       file: ./src/mappings/investment-pool.ts
 
   - kind: ethereum/contract
@@ -82,6 +84,8 @@ templates:
       apiVersion: 0.0.6
       language: wasm/assemblyscript
       abis:
+        - name: InvestmentPool
+          file: ./abis/InvestmentPool.json
         - name: GovernancePool
           file: ./abis/GovernancePool.json
         - name: VotingToken
@@ -122,6 +126,8 @@ templates:
           handler: handleRemovedAllocation
         - event: Claimed(indexed address,uint256)
           handler: handleClaimed
+        - event: LockedTokens()
+          handler: handleLockedTokens
       file: ./src/mappings/distribution-pool.ts
 
   - kind: ethereum/contract
