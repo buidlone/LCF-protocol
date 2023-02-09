@@ -246,7 +246,7 @@ export function getOrInitSingleInvestment(
         singleInvestment = new SingleInvestment(singleInvestmentId);
         singleInvestment.investor = investorAddress.toHex();
         singleInvestment.investmentId = investmentId.toI32();
-        singleInvestment.fullInvestment = projectInvestment.id;
+        singleInvestment.projectInvestment = projectInvestment.id;
         singleInvestment.milestone = milestone.id;
         singleInvestment.transactionHash = Bytes.fromI32(0);
         singleInvestment.investedAmount = BigInt.fromI32(0);
