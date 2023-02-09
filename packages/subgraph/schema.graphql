@@ -209,6 +209,11 @@ type Project @entity {
     Specified in percentage [0.00-100.00]
     """
     investmentCancelationPercentageFee: BigDecimal!
+
+    """
+    Number of investments that were made to the project
+    """
+    singleInvestmentsCount: Int!
 }
 
 """

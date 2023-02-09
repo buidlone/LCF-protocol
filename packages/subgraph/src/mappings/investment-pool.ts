@@ -59,6 +59,7 @@ export function handleInvested(event: InvestEvent): void {
 
     // Update total invested amount
     project.totalInvested = project.totalInvested.plus(event.params.amount);
+    project.singleInvestmentsCount += 1;
     project.isSoftCapReached = project.totalInvested >= project.softCap;
     project.save();
 }
@@ -99,6 +100,7 @@ export function handleUnpledged(event: UnpledgeEvent): void {
 
     // Update project info
     project.totalInvested = project.totalInvested.minus(event.params.amount);
+    project.singleInvestmentsCount -= 1;
     project.isSoftCapReached = project.totalInvested >= project.softCap;
     project.save();
 }

@@ -94,6 +94,7 @@ export function getOrInitProject(projectAddress: Address): Project {
         project.isEmergencyTerminated = false;
         project.isCanceledDuringMilestones = false;
         project.isTerminatedByGelato = false;
+        project.singleInvestmentsCount = 0;
         project.investmentCancelationPercentageFee = ipContract
             .getInvestmentWithdrawPercentageFee()
             .toBigDecimal();
