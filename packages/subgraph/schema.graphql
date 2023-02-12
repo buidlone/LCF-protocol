@@ -5,16 +5,19 @@ type ProjectFactory @entity(immutable: true) {
     """
     Investment Pool Factory address
     Example: 0x1234567890abcdef1234567890abcdef1234567890
+    Value is static
     """
     id: ID!
 
     """
     List of all projects that were created by this factory
+    Value is static
     """
     projects: [Project!]! @derivedFrom(field: "factory")
 
     """
     The maximum number of milestones that can be created for a project
+    Value is static
     """
     maxMilesonesCount: Int!
 
@@ -22,30 +25,35 @@ type ProjectFactory @entity(immutable: true) {
     Time, in which creator will be able to terminate stream.
     This window starts before milestone ends and it ends exactly at milestone end
     Specified in seconds
+    Value is static
     """
     terminationWindow: BigInt!
 
     """
     Minimum duration that milestone can have
     Specified in seconds
+    Value is static
     """
     minMilestoneDuration: BigInt!
 
     """
     Maximum duration that milestone can have
     Specified in seconds
+    Value is static
     """
     maxMilestoneDuration: BigInt!
 
     """
     Minimum duration that fundraiser can have
     Specified in seconds
+    Value is static
     """
     minFundraiserDuration: BigInt!
 
     """
     Maximum duration that fundraiser can have
     Specified in seconds
+    Value is static
     """
     maxFundraiserDuration: BigInt!
 }
@@ -57,70 +65,83 @@ type Project @entity {
     """
     Investment Pool address
     Example: 0x1234567890abcdef1234567890abcdef1234567890
+    Value is static
     """
     id: ID!
 
     """
     Project factory entity that was used for creating this project
+    Value is static
     """
     factory: ProjectFactory!
 
     """
     Investments that were made to this project by the investors
+    Value is dynamic
     """
     projectInvestments: [ProjectInvestment!]! @derivedFrom(field: "project")
 
     """
     Wallet address of the project creator
+    Value is static
     """
     creator: Bytes!
 
     """
     The minimum amount of funds that needs be invested in the project, for the project to be considered as funded
     Specified in wei [10^18 ETH]
+    Value is static
     """
     softCap: BigInt!
 
     """
     The maximum amount of funds that can be invested in the project
     Specified in wei [10^18 ETH]
+    Value is static
     """
     hardCap: BigInt!
 
     """
     Value that represents if total invested is more (or equal) to soft cap
+    Value is dynamic
     """
     isSoftCapReached: Boolean!
 
     """
     The amount of funds that was invested in the project so far
     Specified in wei [10^18 ETH]
+    Value is dynamic
     """
     totalInvested: BigInt!
 
     """
     Multiplier that is used for calculating investment weight and voting power UNTIL soft cap is reached
+    Value is static
     """
     softCapMultiplier: Int!
 
     """
     Multiplier that is used for calculating investment weight and voting power AFTER soft cap is reached
+    Value is static
     """
     hardCapMultiplier: Int!
 
     """
     The maximum weight divisor that is used for calculating investment weight and voting power
     This number represents the 100% of weight
+    Value is static
     """
     maximumWeightDivisor: BigInt!
 
     """
     Governance Pool entity reponsible for voting process
+    Value is static
     """
     governancePool: GovernancePool!
 
     """
     Distribution Pool entity reponsible for distribution of rewards
+    Value is static
     """
     distributionPool: DistributionPool!
 
@@ -129,77 +150,91 @@ type Project @entity {
     # as we will need to loop through all milestones when updating milestone details
     """
     List of milestones
+    Value is static
     """
     milestones: [Milestone!]!
 
     """
     The amount of milestones that the project has in total
+    Value is static
     """
     milestonesCount: Int!
 
     """
     Current active milestone
+    Value is dynamic
     """
     currentMilestone: Milestone!
 
     """
     Timestamp when the fundraiser starts
     Specified in seconds
+    Value is static
     """
     fundraiserStartTime: BigInt!
 
     """
     Timestamp when the fundraiser ends
     Specified in seconds
+    Value is static
     """
     fundraiserEndTime: BigInt!
 
     """
     Duration from the first milestone start to the last milestone end
     Specified in seconds
+    Value is static
     """
     duration: BigInt!
 
     """
     Token that is used for getting the investments from the investors
     These tokens are transferred to the investment pool on investment
+    Value is static
     """
     acceptedToken: AcceptedSuperToken!
 
     """
     Holds the number that is used as dividor to calculate the seed and stream allocation funds
     This number represents the 100% of portion
+    Value is static
     """
     percentageDivider: BigInt!
 
     """
     Number of unique investors that invested in the project
+    Value is dynamic
     """
     investorsCount: Int!
 
     """
     Is project canceled before the fundraiser start
+    Value is dynamic
     """
     isCanceledBeforeFundraiserStart: Boolean!
 
     """
     Is project canceled during the milestone period
+    Value is dynamic
     """
     isCanceledDuringMilestones: Boolean!
 
     """
     Timestamp when the project was canceled or treminated
+    Value is dynamic
     """
     emergencyTerminationTime: BigInt!
 
     """
     Is project canceled or terminated
+    Value is dynamic
     """
     isEmergencyTerminated: Boolean!
 
     """
     True if project is active OR was terminated by voting
     False if project was terminated by gelato
+    Value is dynamic
     """
     isTerminatedByGelato: Boolean!
 
@@ -207,13 +242,23 @@ type Project @entity {
     Percentage of investors investment that is going to be left in the investment pool as a fee from the investor
     If invstor invests, but later on wants to cancel his investment, he will be charged with this fee
     Specified in percentage [0.00-100.00]
+    Value is static
     """
     investmentCancelationPercentageFee: BigDecimal!
 
     """
     Number of investments that were made to the project
+    Value is dynamic
     """
     singleInvestmentsCount: Int!
+
+    """
+    Amount of tokens that was transfered to the creator (not including active stream)
+    Field updated on each milestone start (or project termination)
+    Specified in wei [10^18 ETH]
+    Value is dynamic
+    """
+    fundsUsedByCreator: BigInt!
 }
 
 """
@@ -223,34 +268,40 @@ type GovernancePool @entity {
     """
     Governance Pool address
     Example: 0x1234567890abcdef1234567890abcdef1234567890
+    Value is static
     """
     id: ID!
 
     """
     Project that this governance pool belongs to
+    Value is static
     """
     project: Project!
 
     """
     Voting token id that is used for voting
+    Value is static
     """
     votingToken: VotingToken!
 
     """
     Votes that were casted by the investors against the project
     Specified in wei [10^18 ETH]
+    Value is dynamic
     """
     totalVotesAgainst: BigInt!
 
     """
     Percentage of votes that were casted by the investors against the project
     Specified in percentage [0.00-100.00]
+    Value is dynamic
     """
     totalPercentageAgainst: BigDecimal!
 
     """
     Percentage of votes that are required for the project to be considered as failed
     Specified in percentage [0.00-100.00]
+    Value is static
     """
     votesPercentageThreshold: BigDecimal!
 
@@ -258,6 +309,7 @@ type GovernancePool @entity {
     Percentage of investors votes that is going to be left in the governance pool as a fee from the investors votes
     If investor votes against the project, but later on wants to retract the vote, the fee will be deducted from the vote
     Specified in percentage [0.00-100.00]
+    Value is static
     """
     votesWithdrawalPercentageFee: BigDecimal!
 }
@@ -269,16 +321,19 @@ type DistributionPool @entity {
     """
     Distribution Pool address
     Example: 0x1234567890abcdef1234567890abcdef1234567890
+    Value is static
     """
     id: ID!
 
     """
     Project that this distribution pool belongs to
+    Value is static
     """
     project: Project!
 
     """
     Project token that is used for distribution of rewards
+    Value is static
     """
     projectToken: ProjectToken!
 
@@ -286,11 +341,13 @@ type DistributionPool @entity {
     The amount of tokens that was locked in the distribution pool by the project creator and
     will be distributed to the investors as rewards
     Specified in wei [10^18 ETH]
+    Value is static
     """
     lockedTokensForRewards: BigInt!
 
     """
     Did the creator transferred the tokens to distribution pool and locked them for rewards
+    Value is dynamic
     """
     didCreatorLockTokens: Boolean!
 
@@ -298,6 +355,7 @@ type DistributionPool @entity {
     The amount of project tokens that is allocated for the investors as rewards
     Tokens are going to be unlocked during the project duration
     Specified in wei [10^18 ETH]
+    Value is dynamic
     """
     totalAllocatedTokens: BigInt!
 }
@@ -310,74 +368,87 @@ type Milestone @entity {
     Unique ID for all milestone entities
     Combination of the investment pool address and milestoneId value separated by dash
     Example: 0x1234567890abcdef1234567890abcdef1234567890-1
+    Value is static
     """
     id: ID!
 
     # TODO: decide if we want to store the project address here
     """
     The project that this milestone belongs to
+    Value is static
     """
     project: Project!
 
     """
     The milestone ID for the project
+    Value is static
     """
     milestoneId: Int!
 
     """
     Timestamp when the milestone starts
     Specified in seconds
+    Value is static
     """
     startTime: BigInt!
 
     """
     Timestamp when the milestone ends
     Specified in seconds
+    Value is static
     """
     endTime: BigInt!
 
     """
     Duration from the start to the end of the milestone
     Specified in seconds
+    Value is static
     """
     duration: BigInt!
 
     """
     The amount of funds that will be transferred to the creator on milestone start.
     Specified in wei [10^18 ETH]
+    Value is dynamic
     """
     seedFundsAllocation: BigInt!
 
     """
     The amount of funds that will be transferred to the creator throughout this milestone.
     Specified in wei [10^18 ETH]
+    Value is dynamic
     """
     streamFundsAllocation: BigInt!
 
     """
     Portion of funds transferred for creator on milestone start.
     Represents the percentage part, where percentage divider is 100%
+    Value is static
     """
     seedPercentagePortion: BigInt!
 
     """
     Portion of funds transferred for creator throughout this milestone.
     Represents the percentage part, where percentage divider is 100%
+    Value is static
     """
     streamPercentagePortion: BigInt!
 
     """
     Describes if seed allocation was transferred for the creator
+    Value is dynamic
     """
     isSeedAllocationPaid: Boolean!
 
     """
     Describes if total allocation was transferred for the creator
+    Value is dynamic
     """
     isTotalAllocationPaid: Boolean!
 
     """
     Describes if stream for the creator is currently opened
+    Value is dynamic
     """
     isStreamOngoing: Boolean!
 
@@ -385,6 +456,7 @@ type Milestone @entity {
     Amount of funds that was transferred for the creator.
     If stream is opened and active, this value will not change on every seconds.
     Only after the stream is closed, this value will be updated.
+    Value is dynamic
     """
     paidAmount: BigInt!
 }
@@ -396,9 +468,14 @@ type Investor @entity {
     """
     Investor address
     example: 0x1234567890abcdef1234567890abcdef1234567890
+    Value is static
     """
     id: ID!
 
+    """
+    Collection of all investments of the investor
+    Value is dynamic
+    """
     projectInvestments: [ProjectInvestment!]! @derivedFrom(field: "investor")
 }
 
@@ -409,22 +486,26 @@ type ProjectInvestment @entity {
     """
     Combination of the investment pool address and investor address separated by dash
     Example: 0x1234567890abcdef1234567890abcdef1234567890-0x1234567890abcdef1234567890abcdef1234567890
+    Value is static
     """
     id: ID!
 
     """
     Investor, who invested in the project
+    Value is static
     """
     investor: Investor!
 
     """
     Project that the investor invested in
+    Value is static
     """
     project: Project!
 
     """
     Amount of funds that was invested by the investor
     Specified in wei [10^18 ETH]
+    Value is dynamic
     """
     investedAmount: BigInt!
 
@@ -432,30 +513,87 @@ type ProjectInvestment @entity {
     Amount of tokens that is allocated for the investor
     This amount will be fully available for the investor after the project is finished
     Specified in wei [10^18 ETH]
+    Value is dynamic
     """
     allocatedProjectTokens: BigInt!
 
     """
     Amount of project tokens that were already claimed by the investor
     Specified in wei [10^18 ETH]
+    Value is dynamic
     """
     claimedProjectTokens: BigInt!
 
     """
     Votes that were casted by the investor against the project
     Specified in wei [10^18 ETH]
+    Value is dynamic
     """
     votesAgainst: BigInt!
 
     """
+    A list of votes balances
+    Each list item represents the amount of votes that user can still use during the milestone in index place
+    Example: [100, 200, 300]
+    100 votes can be used during the first milestone
+    If user didn't use any votes in first milestone, 200 votes can be used during the second milestone
+    If user didn't use any votes in second milestone, 300 votes can be used during the third milestone
+    If user for example votes with 50 tokens during the first milestone, then the list becomes [50, 150, 250]
+    If user for example votes with 50 tokens during the second milestone, then the list becomes [50, 100, 200]
+    If user for example votes with 50 tokens during the third milestone, then the list becomes [50, 100, 150]
+    On user voting, amount of votes that are used is subtracted from the index of current milestone and all the following milestones
+    Specifed in wei [10^18 ETH]
+    Value is dynamic
+    """
+    unusedActiveVotes: [BigInt!]!
+
+    """
     All single investments that belong to this full investment
+    Value is dynamic
     """
     singleInvestments: [SingleInvestment!]! @derivedFrom(field: "projectInvestment")
 
     """
     Number of single investments that belong to this full investment
+    Value is dynamic
     """
     singleInvestmentsCount: Int!
+
+    """
+    Describes if investor refunded the investment after project was terminated
+    False if not refunded or project is not terminated
+    True if refunded
+    Value is dynamic
+    """
+    isRefunded: Boolean!
+
+    """
+    Flowrate for each milestone at which the investors invesmtent is distributed to the creator
+    Specified in wei/sec [10^18 ETH/sec]
+    Value is dynamic
+    """
+    investmentFlowrates: [BigInt!]!
+
+    """
+    Investor funds that are going to be fully distributed to creator at the end of each milestone
+    Specified in wei [10^18 ETH]
+    Value is dynamic
+    """
+    investmentUsed: [BigInt!]!
+
+    """
+    Flowrate for each milestone at which the project tokens are distributed to the investor
+    Specified in wei/sec [10^18 ETH/sec]
+    Value is dynamic
+    """
+    projectTokenFlowrates: [BigInt!]!
+
+    """
+    Project tokens that are going to be fully distributed to investor at the end of each milestone
+    Specified in wei [10^18 ETH]
+    Value is dynamic
+    """
+    projectTokensDistributed: [BigInt!]!
 }
 
 """
@@ -465,38 +603,45 @@ type SingleInvestment @entity {
     """
     Combination of the investment pool address, investor address and investment ID separated by dash
     Example: 0x1234567890abcdef1234567890abcdef1234567890-0x1234567890abcdef1234567890abcdef1234567890-1
+    Value is static
     """
     id: ID!
 
     """
     Investor, who invested in the project
+    Value is static
     """
     investor: Investor!
 
     """
     Investment Id, which is number of investments made by the investor in the project - 1
     Starts from 0
+    Value is static
     """
     investmentId: Int!
 
     """
     Full investment that this single investment belongs to
+    Value is static
     """
     projectInvestment: ProjectInvestment!
 
     """
     Milestone that this investment was made for
+    Value is static
     """
     milestone: Milestone!
 
     """
     Transaction hash of the investment
+    Value is static
     """
     transactionHash: Bytes!
 
     """
     Amount of funds that was invested by the investor
     Specified in wei [10^18 ETH]
+    Value is static
     """
     investedAmount: BigInt!
 }
@@ -508,24 +653,28 @@ type AcceptedSuperToken @entity(immutable: true) {
     """
     Super token address
     Example: 0x8aE68021f6170E5a766bE613cEA0d75236ECCa9a
+    Value is static
     """
     id: ID!
 
     """
     Token symbol
     Example: fUSDCx
+    Value is static
     """
     symbol: String!
 
     """
     Token name
     Example: Super fUSDC Fake Token (fUSDCx)
+    Value is static
     """
     name: String!
 
     """
     Token decimals
     Example: 18
+    Value is static
     """
     decimals: Int!
 }
@@ -537,24 +686,28 @@ type ProjectToken @entity(immutable: true) {
     """
     ERC20 token address
     Example: 0x4090edE451b5Fe11AfCC1d823aED08EE8A60a73D
+    Value is static
     """
     id: ID!
 
     """
     Token symbol
     Example: BDL1
+    Value is static
     """
     symbol: String!
 
     """
     Token name
     Example: Buidl1
+    Value is static
     """
     name: String!
 
     """
     Token decimals
     Example: 18
+    Value is static
     """
     decimals: Int!
 }
@@ -567,28 +720,33 @@ type VotingToken @entity {
     ERC1155 token id that is investment pool address converted to a number
     Example below is 0x1234567890abcdef1234567890abcdef1234567890 address converted to a strigified number
     Example: 26605825358829505721434779085324195740956759586960
+    Value is static
     """
     id: ID!
 
     """
     Id of the governancePool entity that this voting token belongs to
+    Value is static
     """
     governancePool: GovernancePool!
 
     """
     Address of the voting token contract
+    Value is static
     """
     address: Bytes!
 
     """
     The current number of tokens that have been minted and are in circulation
     Specified in wei [10^18 ETH]
+    Value is dynamic
     """
     currentSupply: BigInt!
 
     """
     The maximum number of tokens that can be minted if the project is successful and reaches the hard cap
     Specified in wei [10^18 ETH]
+    Value is static
     """
     supplyCap: BigInt!
 }
