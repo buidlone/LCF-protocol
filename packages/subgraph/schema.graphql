@@ -68,7 +68,7 @@ type Project @entity {
     """
     Investments that were made to this project by the investors
     """
-    investments: [ProjectInvestment!]! @derivedFrom(field: "project")
+    projectInvestments: [ProjectInvestment!]! @derivedFrom(field: "project")
 
     """
     Wallet address of the project creator
@@ -209,6 +209,11 @@ type Project @entity {
     Specified in percentage [0.00-100.00]
     """
     investmentCancelationPercentageFee: BigDecimal!
+
+    """
+    Number of investments that were made to the project
+    """
+    singleInvestmentsCount: Int!
 }
 
 """
@@ -445,7 +450,7 @@ type ProjectInvestment @entity {
     """
     All single investments that belong to this full investment
     """
-    singleInvestments: [SingleInvestment!]! @derivedFrom(field: "fullInvestment")
+    singleInvestments: [SingleInvestment!]! @derivedFrom(field: "projectInvestment")
 
     """
     Number of single investments that belong to this full investment
@@ -477,7 +482,7 @@ type SingleInvestment @entity {
     """
     Full investment that this single investment belongs to
     """
-    fullInvestment: ProjectInvestment!
+    projectInvestment: ProjectInvestment!
 
     """
     Milestone that this investment was made for
