@@ -98,6 +98,7 @@ export function getOrInitProject(projectAddress: Address): Project {
         project.investmentCancelationPercentageFee = ipContract
             .getInvestmentWithdrawPercentageFee()
             .toBigDecimal();
+        project.fundsUsedByCreator = BigInt.fromI32(0);
         project.save();
     }
 
@@ -212,6 +213,7 @@ export function getOrInitProjectInvestment(
     let projectInvestment = ProjectInvestment.load(projectInvestmentId);
 
     if (!projectInvestment) {
+        const zerosList = new Array<BigInt>(project.milestonesCount).fill(BigInt.fromI32(0));
         // If investor hasn't invested in this project before, create a new project investment entity
         projectInvestment = new ProjectInvestment(projectInvestmentId);
         projectInvestment.investor = investor.id;
@@ -220,7 +222,15 @@ export function getOrInitProjectInvestment(
         projectInvestment.allocatedProjectTokens = BigInt.fromI32(0);
         projectInvestment.votesAgainst = BigInt.fromI32(0);
         projectInvestment.claimedProjectTokens = BigInt.fromI32(0);
+        projectInvestment.unusedActiveVotes = new Array<BigInt>(project.milestonesCount).fill(
+            BigInt.fromI32(0)
+        );
         projectInvestment.singleInvestmentsCount = 0;
+        projectInvestment.isRefunded = false;
+        projectInvestment.investmentFlowrates = zerosList;
+        projectInvestment.investmentUsed = zerosList;
+        projectInvestment.projectTokenFlowrates = zerosList;
+        projectInvestment.projectTokensDistributed = zerosList;
         projectInvestment.save();
 
         // Update the number of investors

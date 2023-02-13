@@ -95,10 +95,18 @@ templates:
       eventHandlers:
         - event: Initialized(uint8)
           handler: handleInitialized
+        - event: MintVotingTokens(indexed address,indexed uint256,uint256)
+          handler: handleMintedVotingTokens
         - event: VoteAgainstProject(indexed address,uint256)
           handler: handleVotedAgainst
         - event: RetractVotes(indexed address,uint256)
           handler: handleRetractedVotes
+        - event: BurnVotes(indexed address,uint256)
+          handler: handleBurnedVotes
+        - event: TransferVotes(indexed address,indexed address,uint256)
+          handler: handleTransferedVotes
+        - event: LockVotingTokens(indexed address,uint256)
+          handler: handleLockedVotingTokens
       file: ./src/mappings/governance-pool.ts
 
   - kind: ethereum/contract

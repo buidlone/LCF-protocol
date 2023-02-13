@@ -8,11 +8,19 @@ import {
     LockedTokens as LockedTokensEvent,
 } from "../../generated/templates/DistributionPool/DistributionPool";
 import {ERC20 as ERC20Contract} from "../../generated/templates/ERC20/ERC20";
-import {Project, DistributionPool, ProjectToken, ProjectInvestment} from "../../generated/schema";
+import {
+    Project,
+    DistributionPool,
+    ProjectToken,
+    ProjectInvestment,
+    GovernancePool,
+} from "../../generated/schema";
 import {
     getOrInitDistributionPool,
     getOrInitProjectToken,
     getOrInitProjectInvestment,
+    getOrInitProject,
+    getOrInitMilestone,
 } from "../mappingHelpers";
 
 export function handleInitialized(event: InitializedEvent): void {
@@ -22,18 +30,49 @@ export function handleInitialized(event: InitializedEvent): void {
 }
 
 export function handleAllocated(event: AllocatedEvent): void {
-    updateAllocationInfo(event.address);
+    const distributionPool = getOrInitDistributionPool(event.address);
+    updateFlowrateInfo(distributionPool, event.params.investor);
+    updateAllocationInfo(distributionPool);
 }
 
 export function handleRemovedAllocation(event: RemovedAllocationEvent): void {
-    updateAllocationInfo(event.address);
+    const distributionPool = getOrInitDistributionPool(event.address);
+    updateFlowrateInfo(distributionPool, event.params.investor);
+    updateAllocationInfo(distributionPool);
 }
 
-function updateAllocationInfo(distributionPoolAddress: Address): void {
-    const dpContract: DistributionPoolContract =
-        DistributionPoolContract.bind(distributionPoolAddress);
+function updateFlowrateInfo(distributionPool: DistributionPool, investorAddress: Address): void {
+    const dpContract: DistributionPoolContract = DistributionPoolContract.bind(
+        Address.fromString(distributionPool.id)
+    );
+    const project = getOrInitProject(Address.fromString(distributionPool.project));
+    const milestonesCount = project.milestonesCount;
+    const tokensAllocations = new Array<BigInt>(0);
+    const flowrates = new Array<BigInt>(0);
 
-    const distributionPool = getOrInitDistributionPool(distributionPoolAddress);
+    let lastTokenAllocation = BigInt.fromI32(0);
+    for (let i = 0; i < milestonesCount; i++) {
+        const milestone = getOrInitMilestone(Address.fromString(project.id), BigInt.fromI32(i));
+        const tokenAllocation = dpContract.getAllocatedAmount(investorAddress, BigInt.fromI32(i));
+
+        lastTokenAllocation = lastTokenAllocation.plus(tokenAllocation);
+        tokensAllocations.push(lastTokenAllocation);
+        flowrates.push(tokenAllocation.div(milestone.duration));
+    }
+
+    const projectInvestment = getOrInitProjectInvestment(
+        Address.fromString(project.id),
+        investorAddress
+    );
+    projectInvestment.projectTokenFlowrates = flowrates;
+    projectInvestment.projectTokensDistributed = tokensAllocations;
+    projectInvestment.save();
+}
+
+function updateAllocationInfo(distributionPool: DistributionPool): void {
+    const dpContract: DistributionPoolContract = DistributionPoolContract.bind(
+        Address.fromString(distributionPool.id)
+    );
     distributionPool.totalAllocatedTokens = dpContract.getTotalAllocatedTokens();
     distributionPool.save();
 }

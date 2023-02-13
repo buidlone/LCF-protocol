@@ -11,19 +11,9 @@ import {
     GelatoFeeTransfer as TerminatedByGelatoEvent,
 } from "../../generated/InvestmentPool/InvestmentPool";
 import {DistributionPool as DistributionPoolContract} from "../../generated/templates/InvestmentPool/DistributionPool";
-import {ERC20 as ERC20Contract} from "../../generated/templates/ERC20/ERC20";
-import {
-    Project,
-    DistributionPool,
-    Milestone,
-    AcceptedSuperToken,
-    Investor,
-    ProjectInvestment,
-} from "../../generated/schema";
+import {Project} from "../../generated/schema";
 import {
     getOrInitProject,
-    getOrInitAcceptedSuperToken,
-    getOrInitInvestor,
     getOrInitProjectInvestment,
     getOrInitMilestone,
     getOrInitSingleInvestment,
@@ -36,6 +26,7 @@ export function handleInitialized(event: InitializedEvent): void {
 
 export function handleInvested(event: InvestEvent): void {
     const project = getOrInitProject(event.address);
+    updateFlowrateInfo(project, event.params.caller);
     updateMilestoneInfo(project);
 
     const dpContract: DistributionPoolContract = DistributionPoolContract.bind(
@@ -66,6 +57,7 @@ export function handleInvested(event: InvestEvent): void {
 
 export function handleUnpledged(event: UnpledgeEvent): void {
     const project = getOrInitProject(event.address);
+    updateFlowrateInfo(project, event.params.caller);
     updateMilestoneInfo(project);
 
     const dpContract: DistributionPoolContract = DistributionPoolContract.bind(
@@ -103,6 +95,36 @@ export function handleUnpledged(event: UnpledgeEvent): void {
     project.singleInvestmentsCount -= 1;
     project.isSoftCapReached = project.totalInvested >= project.softCap;
     project.save();
+}
+
+function updateFlowrateInfo(project: Project, investorAddress: Address): void {
+    const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(
+        Address.fromString(project.id)
+    );
+
+    const milestonesCount = project.milestonesCount;
+    const tokensAllocations = new Array<BigInt>(0);
+    const flowrates = new Array<BigInt>(0);
+
+    let lastTokenAllocation = BigInt.fromI32(0);
+    for (let i = 0; i < milestonesCount; i++) {
+        const milestone = getOrInitMilestone(Address.fromString(project.id), BigInt.fromI32(i));
+        const tokenAllocation = ipContract.getInvestorTokensAllocation(
+            investorAddress,
+            BigInt.fromI32(i)
+        );
+        lastTokenAllocation = lastTokenAllocation.plus(tokenAllocation);
+        tokensAllocations.push(lastTokenAllocation);
+        flowrates.push(tokenAllocation.div(milestone.duration));
+    }
+
+    const projectInvestment = getOrInitProjectInvestment(
+        Address.fromString(project.id),
+        investorAddress
+    );
+    projectInvestment.investmentFlowrates = flowrates;
+    projectInvestment.investmentUsed = tokensAllocations;
+    projectInvestment.save();
 }
 
 function updateMilestoneInfo(project: Project): void {
@@ -162,7 +184,9 @@ export function handleCanceled(event: CancelEvent): void {
 }
 
 export function handleRefunded(event: RefundedEvent): void {
-    // Currently not needed as no data changes after refunding
+    const projectInvestment = getOrInitProjectInvestment(event.address, event.params.caller);
+    projectInvestment.isRefunded = true;
+    projectInvestment.save();
 }
 
 export function handleClaimedFunds(event: ClaimedFundsEvent): void {
@@ -186,6 +210,7 @@ export function handleClaimedFunds(event: ClaimedFundsEvent): void {
     const currentMilestone = ipContract.getCurrentMilestoneId();
     const newCurrentMilestone = getOrInitMilestone(event.address, currentMilestone);
     project.currentMilestone = newCurrentMilestone.id;
+    project.fundsUsedByCreator = ipContract.getFundsUsed();
     project.save();
 }
 
@@ -201,8 +226,11 @@ export function handleTerminatedStream(event: TerminatedStreamEvent): void {
     milestone.isSeedAllocationPaid = milestoneData.seedAmountPaid;
     milestone.isTotalAllocationPaid = milestoneData.paid;
     milestone.isStreamOngoing = milestoneData.streamOngoing;
-
     milestone.save();
+
+    const project = getOrInitProject(event.address);
+    project.fundsUsedByCreator = ipContract.getFundsUsed();
+    project.save();
 }
 
 export function handleTerminatedByGelato(event: TerminatedByGelatoEvent): void {
