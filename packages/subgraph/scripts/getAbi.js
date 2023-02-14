@@ -11,7 +11,7 @@ const contracts = [
 
 const packages = ["investment-pool", "governance-pool", "distribution-pool"];
 
-fs.mkdir("../abis/", (err) => {
+fs.mkdir("./abis/", (err) => {
     if (err) return;
     console.log("abis/ directory created");
 });
@@ -28,7 +28,7 @@ packages.forEach((package) => {
             // abiFile = path/{contractName}.sol/{contractName}.json
             const abiFile = require(path.join(packagePath, contractDir, contractName));
             const abi = abiFile.abi;
-            fs.writeFile(`../abis/${contractName}.json`, JSON.stringify(abi), (err) => {
+            fs.writeFile(`./abis/${contractName}.json`, JSON.stringify(abi), (err) => {
                 if (err) throw err;
                 console.log(`- ${contractName}`);
             });
