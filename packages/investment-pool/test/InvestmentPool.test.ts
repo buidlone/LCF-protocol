@@ -816,7 +816,7 @@ describe("Investment Pool", async () => {
 
                     await expect(investmentPool.connect(investorA).invest(investedAmount, false))
                         .to.emit(investmentPool, "Invest")
-                        .withArgs(investorA.address, investedAmount);
+                        .withArgs(investorA.address, 0, investedAmount);
                 });
 
                 it("[IP][3.1.6] In milestone 0 period investors investment should update memMilestoneInvestments", async () => {
@@ -918,7 +918,7 @@ describe("Investment Pool", async () => {
 
                     await expect(investmentPool.connect(investorB).invest(investedAmount2, false))
                         .to.emit(investmentPool, "Invest")
-                        .withArgs(investorB.address, investedAmount2);
+                        .withArgs(investorB.address, 1, investedAmount2);
                 });
 
                 it("[IP][3.1.11] In milestone 0 period, project should have milestones ongoing state", async () => {
@@ -1193,7 +1193,7 @@ describe("Investment Pool", async () => {
 
                     await expect(investmentPool.connect(investorA).invest(investedAmount, false))
                         .to.emit(investmentPool, "Invest")
-                        .withArgs(investorA.address, hardCap);
+                        .withArgs(investorA.address, 0, hardCap);
                 });
 
                 it("[IP][3.2.13] Investors should be able to collectively raise the soft cap", async () => {
@@ -1291,7 +1291,7 @@ describe("Investment Pool", async () => {
 
                     await expect(investmentPool.connect(investorA).unpledge())
                         .to.emit(investmentPool, "Unpledge")
-                        .withArgs(investorA.address, investedAmount);
+                        .withArgs(investorA.address, 0, investedAmount);
                 });
 
                 it("[IP][4.1.6] In milestone 0 period unpledge should update memMilestoneInvestments", async () => {
@@ -1393,7 +1393,7 @@ describe("Investment Pool", async () => {
 
                     await expect(investmentPool.connect(investorB).unpledge())
                         .to.emit(investmentPool, "Unpledge")
-                        .withArgs(investorB.address, investedAmount2);
+                        .withArgs(investorB.address, 1, investedAmount2);
                 });
 
                 it("[IP][4.1.11] In fundraiser period should remove milestone id from the milestonesWithInvestment", async () => {
@@ -1575,7 +1575,7 @@ describe("Investment Pool", async () => {
 
                     await expect(investmentPool.connect(investorA).unpledge())
                         .to.emit(investmentPool, "Unpledge")
-                        .withArgs(investorA.address, investedAmount);
+                        .withArgs(investorA.address, 0, investedAmount);
 
                     const investorsBalance = await tokenBalanceOf(fUSDTx, investorA.address);
                     const contractBalance = await tokenBalanceOf(fUSDTx, investmentPool.address);
