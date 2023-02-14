@@ -807,7 +807,7 @@ describe("Governance Pool", async () => {
                         .to.emit(governancePool, "FinishVoting")
                         .withArgs()
                         .to.emit(governancePool, "VoteAgainstProject")
-                        .withArgs(investorA.address, votesAgainst);
+                        .withArgs(investorA.address, 0, votesAgainst);
                 });
 
                 it("[GP][8.1.4] Shouldn't emit finish event if threshold was not reached", async () => {
@@ -822,7 +822,7 @@ describe("Governance Pool", async () => {
                         .setApprovalForAll(governancePool.address, true);
                     await expect(governancePool.connect(investorA).voteAgainst(votesAgainst))
                         .to.emit(governancePool, "VoteAgainstProject")
-                        .withArgs(investorA.address, votesAgainst);
+                        .withArgs(investorA.address, 0, votesAgainst);
                 });
             });
 
@@ -1058,7 +1058,7 @@ describe("Governance Pool", async () => {
 
                     await expect(governancePool.connect(investorA).retractVotes(votesToRetract))
                         .to.emit(governancePool, "RetractVotes")
-                        .withArgs(investorA.address, votesToRetract);
+                        .withArgs(investorA.address, 0, votesToRetract);
                 });
 
                 it("[GP][9.2.4] Retracting 0 amount of votes should revert", async () => {
