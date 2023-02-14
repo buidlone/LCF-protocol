@@ -1,4 +1,5 @@
 build/
 generated/
 abis/*
+!abis/standard/
 package-lock.json
