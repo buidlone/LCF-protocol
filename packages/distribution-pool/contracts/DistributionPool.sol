@@ -62,9 +62,9 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
     /** EVENTS */
 
     event LockedTokens();
-    event WithdrewTokens();
-    event Allocated(address indexed investor, uint16 milestoneId);
-    event RemovedAllocation(address indexed investor, uint16 milestoneId);
+    event WithdrewTokens(uint256 amount);
+    event Allocated(address indexed investor, uint256 amount, uint16 indexed milestoneId);
+    event RemovedAllocation(address indexed investor, uint256 amount, uint16 indexed milestoneId);
     event Claimed(address indexed investor, uint256 tokensAmount);
 
     /** MODIFIERS */
@@ -153,7 +153,7 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
         allocatedTokens[_investor] += tokenAllocation;
         totalAllocatedTokens += tokenAllocation;
 
-        emit Allocated(_investor, _milestoneId);
+        emit Allocated(_investor, tokenAllocation, _milestoneId);
     }
 
     /**
@@ -175,7 +175,7 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
         milestonesWithAllocation[_investor].pop();
         memMilestoneAllocation[_investor][_milestoneId] = 0;
 
-        emit RemovedAllocation(_investor, _milestoneId);
+        emit RemovedAllocation(_investor, tokenAllocation, _milestoneId);
     }
 
     /**
@@ -247,7 +247,7 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
         bool success = projectToken.transfer(_msgSender(), withdrawAmount);
         if (!success) revert DistributionPool__TokenTransferFailed();
 
-        emit WithdrewTokens();
+        emit WithdrewTokens(withdrawAmount);
     }
 
     /** PUBLIC FUNCTIONS */

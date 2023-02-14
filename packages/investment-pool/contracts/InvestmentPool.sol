@@ -142,16 +142,16 @@ contract InvestmentPool is AbstractInvestmentPool, SuperAppBase, Context, Initia
     /** EVENTS */
 
     event Cancel();
-    event Invest(address indexed caller, uint256 amount);
-    event Unpledge(address indexed caller, uint256 amount);
+    event Invest(address indexed caller, uint16 indexed milestoneId, uint256 amount);
+    event Unpledge(address indexed caller, uint16 indexed milestoneId, uint256 amount);
     event ClaimFunds(
-        uint16 milestoneId,
+        uint16 indexed milestoneId,
         bool gotSeedFunds,
         bool gotStreamAmount,
         bool openedStream
     );
     event Refund(address indexed caller, uint256 amount);
-    event TerminateStream(uint16 milestoneId);
+    event TerminateStream(uint16 indexed milestoneId);
     event GelatoFeeTransfer(uint256 fee, address feeToken);
 
     /** MODIFIERS */
@@ -341,7 +341,7 @@ contract InvestmentPool is AbstractInvestmentPool, SuperAppBase, Context, Initia
             memMilestonePortions[investToMilestoneId]
         );
 
-        emit Invest(_msgSender(), _amount);
+        emit Invest(_msgSender(), investToMilestoneId, _amount);
     }
 
     /**
@@ -367,7 +367,7 @@ contract InvestmentPool is AbstractInvestmentPool, SuperAppBase, Context, Initia
         governancePool.burnVotes(unpledgeFromMilestoneId, _msgSender());
         distributionPool.removeTokensAllocation(unpledgeFromMilestoneId, _msgSender());
 
-        emit Unpledge(_msgSender(), amount);
+        emit Unpledge(_msgSender(), unpledgeFromMilestoneId, amount);
     }
 
     /**

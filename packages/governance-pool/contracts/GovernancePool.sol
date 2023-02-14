@@ -61,13 +61,18 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
 
     /** EVENTS */
 
-    event MintVotingTokens(address indexed investor, uint16 indexed milestoneId, uint256 amount);
-    event VoteAgainstProject(address indexed investor, uint256 amount);
     event FinishVoting();
-    event RetractVotes(address indexed investor, uint256 amount);
-    event BurnVotes(address indexed investor, uint256 amount);
-    event TransferVotes(address indexed sender, address indexed recipient, uint256 amount);
-    event LockVotingTokens(address indexed investor, uint256 amount);
+    event MintVotingTokens(address indexed investor, uint16 indexed milestoneId, uint256 amount);
+    event VoteAgainstProject(address indexed investor, uint16 indexed milestoneId, uint256 amount);
+    event RetractVotes(address indexed investor, uint16 indexed milestoneId, uint256 amount);
+    event BurnVotes(address indexed investor, uint16 indexed milestoneId, uint256 amount);
+    event TransferVotes(
+        address indexed sender,
+        uint16 indexed milestoneId,
+        address indexed recipient,
+        uint256 amount
+    );
+    event LockVotingTokens(address indexed investor, uint16 indexed milestoneId, uint256 amount);
 
     /** MODIFIERS */
 
@@ -194,7 +199,8 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
             ""
         );
 
-        emit VoteAgainstProject(_msgSender(), _amount);
+        uint16 milestoneId = investmentPool.getCurrentMilestoneId();
+        emit VoteAgainstProject(_msgSender(), milestoneId, _amount);
 
         // If threshold is reached, it means that project needs to be ended
         if (thresholdWillBeReached) {
@@ -241,7 +247,8 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
             ""
         );
 
-        emit RetractVotes(_msgSender(), _retractAmount);
+        uint16 milestoneId = investmentPool.getCurrentMilestoneId();
+        emit RetractVotes(_msgSender(), milestoneId, _retractAmount);
     }
 
     /** @notice Burn voting tokens, when user unpledges the investment. Prior voting token approval is needed.
@@ -273,7 +280,8 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
         // Investment pool address is converted to uint256 number and is used as a unique voting token identifier
         votingToken.burn(_investor, getInvestmentPoolId(), burnAmount);
 
-        emit BurnVotes(_investor, burnAmount);
+        uint16 milestoneId = investmentPool.getCurrentMilestoneId();
+        emit BurnVotes(_investor, milestoneId, burnAmount);
     }
 
     /** @notice transfer voting tokens (tokens can be locked too) with the ownership to it
@@ -317,7 +325,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
         // Investment pool address is converted to uint256 number and is used as a unique voting token identifier
         votingToken.safeTransferFrom(_msgSender(), _recipient, getInvestmentPoolId(), _amount, "");
 
-        emit TransferVotes(_msgSender(), _recipient, _amount);
+        emit TransferVotes(_msgSender(), currentMilestoneId, _recipient, _amount);
     }
 
     /** @notice Permanently transfer voting tokens from investor to governance pool
@@ -360,7 +368,7 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
             ""
         );
 
-        emit LockVotingTokens(_msgSender(), _votes);
+        emit LockVotingTokens(_msgSender(), currentMilestoneId, _votes);
     }
 
     /** PUBLIC FUNCTIONS */

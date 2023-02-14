@@ -25,10 +25,10 @@ let milestone1StartDate: number;
 let milestone1EndDate: number;
 
 // Percentages (in divider format)
-let percentageDivider: BigNumber = BigNumber.from(0);
-let formated5Percent: BigNumber;
-let formated20Percent: BigNumber;
-let formated70Percent: BigNumber;
+let percentageDivider: number = 0;
+let formated5Percent: number;
+let formated20Percent: number;
+let formated70Percent: number;
 
 // Project state values
 let canceledProjectStateValue: number;
@@ -43,8 +43,8 @@ let terminatedByGelatoStateValue: number;
 let successfullyEndedStateValue: number;
 let unknownStateValue: number;
 
-const formatPercentage = (percent: BigNumberish): BigNumber => {
-    return percentageDivider.mul(percent).div(100);
+const formatPercentage = (percent: number): number => {
+    return (percentageDivider * percent) / 100;
 };
 
 const dateToSeconds = (date: string): number => {
