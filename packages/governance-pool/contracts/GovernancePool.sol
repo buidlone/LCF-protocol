@@ -303,10 +303,6 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
         onlyVotingTokenContract
         allowedInvestmentPoolStates(getAnyMilestoneOngoingStateValue())
     {
-        if (_sender == address(this) || _recipient == address(this)) {
-            return;
-        }
-
         if (_amount == 0) revert GovernancePool__AmountIsZero();
         uint16 currentMilestoneId = investmentPool.getCurrentMilestoneId();
         uint256 votesLeft = getUnusedVotes(_sender);

@@ -224,6 +224,7 @@ export function getOrInitProjectInvestment(
         projectInvestment.allocatedProjectTokens = BigInt.fromI32(0);
         projectInvestment.votesAgainst = BigInt.fromI32(0);
         projectInvestment.claimedProjectTokens = BigInt.fromI32(0);
+        projectInvestment.currentVotesBalance = BigInt.fromI32(0);
         projectInvestment.unusedActiveVotes = new Array<BigInt>(project.milestonesCount).fill(
             BigInt.fromI32(0)
         );

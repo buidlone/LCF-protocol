@@ -31,7 +31,10 @@ contract VotingToken is ERC1155, AccessControl, ERC1155Burnable, ERC1155Supply {
         // Update balance in governance pool
         IInvestmentPool investmentPool = IInvestmentPool(address(uint160(investmentPoolId)));
         IGovernancePool governancePool = IGovernancePool(investmentPool.getGovernancePool());
-        governancePool.transferVotes(from, to, amount);
+
+        if (from != address(governancePool) && to != address(governancePool)) {
+            governancePool.transferVotes(from, to, amount);
+        }
 
         // Update balance in voting token contract
         _safeTransferFrom(from, to, investmentPoolId, amount, data);
