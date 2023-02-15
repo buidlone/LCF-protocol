@@ -1,4 +1,4 @@
-import {BigInt, dataSource, Address} from "@graphprotocol/graph-ts";
+import {BigInt, Address} from "@graphprotocol/graph-ts";
 import {
     DistributionPool as DistributionPoolContract,
     Initialized as InitializedEvent,
@@ -7,21 +7,20 @@ import {
     Claimed as ClaimedEvent,
     LockedTokens as LockedTokensEvent,
 } from "../../generated/templates/DistributionPool/DistributionPool";
-import {ERC20 as ERC20Contract} from "../../generated/templates/ERC20/ERC20";
-import {
-    Project,
-    DistributionPool,
-    ProjectToken,
-    ProjectInvestment,
-    GovernancePool,
-} from "../../generated/schema";
+import {DistributionPool} from "../../generated/schema";
 import {
     getOrInitDistributionPool,
     getOrInitProjectToken,
     getOrInitProjectInvestment,
     getOrInitProject,
     getOrInitMilestone,
+    getOrInitSingleInvestment,
 } from "../mappingHelpers";
+
+enum AllocationAction {
+    Allocate,
+    RemoveAllocation,
+}
 
 export function handleInitialized(event: InitializedEvent): void {
     // INITIALIZATION
@@ -32,13 +31,36 @@ export function handleInitialized(event: InitializedEvent): void {
 export function handleAllocated(event: AllocatedEvent): void {
     const distributionPool = getOrInitDistributionPool(event.address);
     updateFlowrateInfo(distributionPool, event.params.investor);
-    updateAllocationInfo(distributionPool);
+    updateAllocationInfo(
+        distributionPool,
+        event.params.investor,
+        event.params.amount,
+        AllocationAction.Allocate
+    );
+
+    const projectInvestment = getOrInitProjectInvestment(
+        Address.fromString(distributionPool.project),
+        event.params.investor
+    );
+    const singleInvestment = getOrInitSingleInvestment(
+        Address.fromString(distributionPool.project),
+        event.params.investor,
+        BigInt.fromI32(projectInvestment.singleInvestmentsCount - 1)
+    );
+
+    singleInvestment.allocatedProjectTokens = event.params.amount;
+    singleInvestment.save();
 }
 
 export function handleRemovedAllocation(event: RemovedAllocationEvent): void {
     const distributionPool = getOrInitDistributionPool(event.address);
     updateFlowrateInfo(distributionPool, event.params.investor);
-    updateAllocationInfo(distributionPool);
+    updateAllocationInfo(
+        distributionPool,
+        event.params.investor,
+        event.params.amount,
+        AllocationAction.RemoveAllocation
+    );
 }
 
 function updateFlowrateInfo(distributionPool: DistributionPool, investorAddress: Address): void {
@@ -53,7 +75,7 @@ function updateFlowrateInfo(distributionPool: DistributionPool, investorAddress:
     let lastTokenAllocation = BigInt.fromI32(0);
     for (let i = 0; i < milestonesCount; i++) {
         const milestone = getOrInitMilestone(Address.fromString(project.id), BigInt.fromI32(i));
-        const tokenAllocation = dpContract.getAllocatedAmount(investorAddress, BigInt.fromI32(i));
+        const tokenAllocation = dpContract.getAllocatedAmount(investorAddress, i);
 
         lastTokenAllocation = lastTokenAllocation.plus(tokenAllocation);
         tokensAllocations.push(lastTokenAllocation);
@@ -69,11 +91,34 @@ function updateFlowrateInfo(distributionPool: DistributionPool, investorAddress:
     projectInvestment.save();
 }
 
-function updateAllocationInfo(distributionPool: DistributionPool): void {
-    const dpContract: DistributionPoolContract = DistributionPoolContract.bind(
-        Address.fromString(distributionPool.id)
+function updateAllocationInfo(
+    distributionPool: DistributionPool,
+    investorAddress: Address,
+    amount: BigInt,
+    action: AllocationAction
+): void {
+    const project = getOrInitProject(Address.fromString(distributionPool.project));
+    const projectInvestment = getOrInitProjectInvestment(
+        Address.fromString(project.id),
+        investorAddress
     );
-    distributionPool.totalAllocatedTokens = dpContract.getTotalAllocatedTokens();
+
+    switch (action) {
+        case AllocationAction.Allocate:
+            distributionPool.totalAllocatedTokens =
+                distributionPool.totalAllocatedTokens.plus(amount);
+            projectInvestment.allocatedProjectTokens =
+                projectInvestment.allocatedProjectTokens.plus(amount);
+            break;
+
+        case AllocationAction.RemoveAllocation:
+            distributionPool.totalAllocatedTokens =
+                distributionPool.totalAllocatedTokens.minus(amount);
+            projectInvestment.allocatedProjectTokens =
+                projectInvestment.allocatedProjectTokens.minus(amount);
+            break;
+    }
+
     distributionPool.save();
 }
 

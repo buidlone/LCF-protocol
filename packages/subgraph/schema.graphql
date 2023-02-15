@@ -548,6 +548,13 @@ type ProjectInvestment @entity {
     unusedActiveVotes: [BigInt!]!
 
     """
+    Current investor's voting tokens balance
+    Specified in wei [10^18 ETH]
+    Value is dynamic
+    """
+    currentVotesBalance: BigInt!
+
+    """
     All single investments that belong to this full investment
     Value is dynamic
     """
@@ -644,6 +651,21 @@ type SingleInvestment @entity {
     Value is static
     """
     investedAmount: BigInt!
+
+    """
+    Amount of tokens that was allocated for this specific investment
+    This amount will be fully available for the investor after the project is finished
+    Specified in wei [10^18 ETH]
+    Value is static
+    """
+    allocatedProjectTokens: BigInt!
+
+    """
+    Amount of voting tokens that governance pool minted for this specific investment
+    Specified in wei [10^18 ETH]
+    Value is static
+    """
+    votingTokensMinted: BigInt!
 }
 
 """

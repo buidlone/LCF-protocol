@@ -1,6 +1,5 @@
 import {Address, BigDecimal, BigInt, dataSource} from "@graphprotocol/graph-ts";
 import {
-    GovernancePool as GovernancePoolContract,
     Initialized as InitializedEvent,
     VoteAgainstProject as VoteAgainstEvent,
     RetractVotes as RetractVotesEvent,
@@ -9,13 +8,14 @@ import {
     TransferVotes as TransferedVotesEvent,
     LockVotingTokens as LockedVotingTokensEvent,
 } from "../../generated/templates/GovernancePool/GovernancePool";
-import {InvestmentPool as InvestmentPoolContract} from "../../generated/InvestmentPool/InvestmentPool";
+import {InvestmentPool as InvestmentPoolContract} from "../../generated/templates/InvestmentPool/InvestmentPool";
 import {
     getOrInitGovernancePool,
+    getOrInitProject,
     getOrInitProjectInvestment,
+    getOrInitSingleInvestment,
     getOrInitVotingToken,
 } from "../mappingHelpers";
-import {InvestmentPool} from "../../generated/templates/InvestmentPool/InvestmentPool";
 
 enum VotingAction {
     VoteAgainst,
@@ -37,12 +37,8 @@ export function handleInitialized(event: InitializedEvent): void {
 }
 
 export function handleVotedAgainst(event: VoteAgainstEvent): void {
-    const governancePool = getOrInitGovernancePool(event.address);
-    const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(
-        Address.fromString(governancePool.project)
-    );
+    const milestoneId = event.params.milestoneId;
 
-    const milestoneId = ipContract.getCurrentMilestoneId().toI32();
     updateIndividualBalance(
         event.address,
         event.params.investor,
@@ -60,12 +56,8 @@ export function handleVotedAgainst(event: VoteAgainstEvent): void {
 }
 
 export function handleRetractedVotes(event: RetractVotesEvent): void {
-    const governancePool = getOrInitGovernancePool(event.address);
-    const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(
-        Address.fromString(governancePool.project)
-    );
+    const milestoneId = event.params.milestoneId;
 
-    const milestoneId = ipContract.getCurrentMilestoneId().toI32();
     updateIndividualBalance(
         event.address,
         event.params.investor,
@@ -83,7 +75,7 @@ export function handleRetractedVotes(event: RetractVotesEvent): void {
 }
 
 export function handleMintedVotingTokens(event: MintedVotingTokensEvent): void {
-    const milestoneId = event.params.milestoneId.toI32();
+    const milestoneId = event.params.milestoneId;
 
     updateIndividualBalance(
         event.address,
@@ -92,17 +84,24 @@ export function handleMintedVotingTokens(event: MintedVotingTokensEvent): void {
         event.params.amount,
         TokenAction.Receive
     );
+
+    const governancePool = getOrInitGovernancePool(event.address);
+    const projectInvestment = getOrInitProjectInvestment(
+        Address.fromString(governancePool.project),
+        event.params.investor
+    );
+    const singleInvestment = getOrInitSingleInvestment(
+        Address.fromString(governancePool.project),
+        event.params.investor,
+        BigInt.fromI32(projectInvestment.singleInvestmentsCount)
+    );
+
+    singleInvestment.votingTokensMinted = event.params.amount;
+    singleInvestment.save();
 }
 
 export function handleBurnedVotes(event: BurnedVotesEvent): void {
-    const governancePool = getOrInitGovernancePool(event.address);
-    const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(
-        Address.fromString(governancePool.project)
-    );
-
-    const milestoneId = ipContract.isFundraiserOngoingNow()
-        ? 0
-        : ipContract.getCurrentMilestoneId().toI32() + 1;
+    const milestoneId = event.params.milestoneId;
 
     updateIndividualBalance(
         event.address,
@@ -114,12 +113,8 @@ export function handleBurnedVotes(event: BurnedVotesEvent): void {
 }
 
 export function handleTransferedVotes(event: TransferedVotesEvent): void {
-    const governancePool = getOrInitGovernancePool(event.address);
-    const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(
-        Address.fromString(governancePool.project)
-    );
+    const milestoneId = event.params.milestoneId;
 
-    const milestoneId = ipContract.getCurrentMilestoneId().toI32();
     updateIndividualBalance(
         event.address,
         event.params.sender,
@@ -137,12 +132,8 @@ export function handleTransferedVotes(event: TransferedVotesEvent): void {
 }
 
 export function handleLockedVotingTokens(event: LockedVotingTokensEvent): void {
-    const governancePool = getOrInitGovernancePool(event.address);
-    const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(
-        Address.fromString(governancePool.project)
-    );
+    const milestoneId = event.params.milestoneId;
 
-    const milestoneId = ipContract.getCurrentMilestoneId().toI32();
     updateIndividualBalance(
         event.address,
         event.params.investor,

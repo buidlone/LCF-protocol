@@ -215,10 +215,15 @@ describe("Governance Pool", async () => {
                     await votingToken
                         .connect(investorA)
                         .setApprovalForAll(governancePool.address, true);
-                    await governancePool
+                    await votingToken
                         .connect(investorA)
-                        .transferVotes(investorB.address, tokensToMintA);
-
+                        .safeTransferFrom(
+                            investorA.address,
+                            investorB.address,
+                            governancePool.getInvestmentPoolId(),
+                            tokensToMintA,
+                            "0x"
+                        );
                     const activeTokensForVoting = await governancePool.getActiveVotes(
                         2,
                         investorA.address
@@ -1214,9 +1219,15 @@ describe("Governance Pool", async () => {
                     await votingToken
                         .connect(investorA)
                         .setApprovalForAll(governancePool.address, true);
-                    await governancePool
+                    await votingToken
                         .connect(investorA)
-                        .transferVotes(investorB.address, transferAmount);
+                        .safeTransferFrom(
+                            investorA.address,
+                            investorB.address,
+                            governancePool.getInvestmentPoolId(),
+                            transferAmount,
+                            "0x"
+                        );
 
                     const endingSenderMilestonesIds = await governancePool.getMilestonesWithVotes(
                         investorA.address
@@ -1243,9 +1254,15 @@ describe("Governance Pool", async () => {
                     await votingToken
                         .connect(investorA)
                         .setApprovalForAll(governancePool.address, true);
-                    await governancePool
+                    await votingToken
                         .connect(investorA)
-                        .transferVotes(investorB.address, transferAmount);
+                        .safeTransferFrom(
+                            investorA.address,
+                            investorB.address,
+                            governancePool.getInvestmentPoolId(),
+                            transferAmount,
+                            "0x"
+                        );
 
                     const endingRecipientMilestonesIds =
                         await governancePool.getMilestonesWithVotes(investorB.address);
@@ -1270,9 +1287,15 @@ describe("Governance Pool", async () => {
                     await votingToken
                         .connect(investorA)
                         .setApprovalForAll(governancePool.address, true);
-                    await governancePool
+                    await votingToken
                         .connect(investorA)
-                        .transferVotes(investorB.address, transferAmount);
+                        .safeTransferFrom(
+                            investorA.address,
+                            investorB.address,
+                            governancePool.getInvestmentPoolId(),
+                            transferAmount,
+                            "0x"
+                        );
 
                     const endingSenderMilestonesIds = await governancePool.getMilestonesWithVotes(
                         investorA.address
@@ -1292,16 +1315,28 @@ describe("Governance Pool", async () => {
                     await votingToken
                         .connect(investorA)
                         .setApprovalForAll(governancePool.address, true);
-                    await governancePool
+                    await votingToken
                         .connect(investorA)
-                        .transferVotes(investorB.address, transferAmount);
+                        .safeTransferFrom(
+                            investorA.address,
+                            investorB.address,
+                            governancePool.getInvestmentPoolId(),
+                            transferAmount,
+                            "0x"
+                        );
 
                     const priorRecipientMilestonesIds =
                         await governancePool.getMilestonesWithVotes(investorB.address);
 
-                    await governancePool
+                    await votingToken
                         .connect(investorA)
-                        .transferVotes(investorB.address, transferAmount);
+                        .safeTransferFrom(
+                            investorA.address,
+                            investorB.address,
+                            governancePool.getInvestmentPoolId(),
+                            transferAmount,
+                            "0x"
+                        );
                     const endingRecipientMilestonesIds =
                         await governancePool.getMilestonesWithVotes(investorB.address);
 
@@ -1332,9 +1367,15 @@ describe("Governance Pool", async () => {
                     await votingToken
                         .connect(investorA)
                         .setApprovalForAll(governancePool.address, true);
-                    await governancePool
+                    await votingToken
                         .connect(investorA)
-                        .transferVotes(investorB.address, transferAmount);
+                        .safeTransferFrom(
+                            investorA.address,
+                            investorB.address,
+                            governancePool.getInvestmentPoolId(),
+                            transferAmount,
+                            "0x"
+                        );
 
                     const endingSenderBalance = await governancePool.getMemActiveTokens(
                         investorA.address,
@@ -1367,9 +1408,15 @@ describe("Governance Pool", async () => {
                     await votingToken
                         .connect(investorA)
                         .setApprovalForAll(governancePool.address, true);
-                    await governancePool
+                    await votingToken
                         .connect(investorA)
-                        .transferVotes(investorB.address, transferAmount);
+                        .safeTransferFrom(
+                            investorA.address,
+                            investorB.address,
+                            governancePool.getInvestmentPoolId(),
+                            transferAmount,
+                            "0x"
+                        );
 
                     const endingRecipientBalance = await governancePool.getMemActiveTokens(
                         investorB.address,
@@ -1392,7 +1439,15 @@ describe("Governance Pool", async () => {
 
                     await investmentPool.setProjectState(milestonesOngoingBeforeLastStateValue);
                     await expect(
-                        governancePool.connect(investorA).transferVotes(investorB.address, 0)
+                        votingToken
+                            .connect(investorA)
+                            .safeTransferFrom(
+                                investorA.address,
+                                investorB.address,
+                                governancePool.getInvestmentPoolId(),
+                                0,
+                                "0x"
+                            )
                     ).to.be.revertedWithCustomError(
                         governancePool,
                         "GovernancePool__AmountIsZero"
@@ -1407,9 +1462,15 @@ describe("Governance Pool", async () => {
 
                     await investmentPool.setProjectState(milestonesOngoingBeforeLastStateValue);
                     await expect(
-                        governancePool
+                        votingToken
                             .connect(investorA)
-                            .transferVotes(investorB.address, tokensToMint.add(100))
+                            .safeTransferFrom(
+                                investorA.address,
+                                investorB.address,
+                                governancePool.getInvestmentPoolId(),
+                                tokensToMint.add(100),
+                                "0x"
+                            )
                     ).to.be.revertedWithCustomError(
                         governancePool,
                         "GovernancePool__CannotTransferMoreThanUnlockedTokens"
@@ -1427,9 +1488,15 @@ describe("Governance Pool", async () => {
                         .connect(investorA)
                         .setApprovalForAll(governancePool.address, true);
                     await expect(
-                        governancePool
+                        votingToken
                             .connect(investorA)
-                            .transferVotes(investorB.address, tokensToMint)
+                            .safeTransferFrom(
+                                investorA.address,
+                                investorB.address,
+                                governancePool.getInvestmentPoolId(),
+                                tokensToMint,
+                                "0x"
+                            )
                     ).to.emit(votingToken, "TransferSingle");
                 });
 
@@ -1445,9 +1512,15 @@ describe("Governance Pool", async () => {
                         .connect(investorA)
                         .setApprovalForAll(governancePool.address, true);
                     await expect(
-                        governancePool
+                        votingToken
                             .connect(investorA)
-                            .transferVotes(investorB.address, transferAmount)
+                            .safeTransferFrom(
+                                investorA.address,
+                                investorB.address,
+                                governancePool.getInvestmentPoolId(),
+                                transferAmount,
+                                "0x"
+                            )
                     ).to.emit(votingToken, "TransferSingle");
                 });
 
@@ -1469,9 +1542,15 @@ describe("Governance Pool", async () => {
                     await votingToken
                         .connect(investorA)
                         .setApprovalForAll(governancePool.address, true);
-                    await governancePool
+                    await votingToken
                         .connect(investorA)
-                        .transferVotes(investorB.address, transferAmount);
+                        .safeTransferFrom(
+                            investorA.address,
+                            investorB.address,
+                            governancePool.getInvestmentPoolId(),
+                            transferAmount,
+                            "0x"
+                        );
 
                     const senderBalance = await governancePool.getVotingTokenBalance(
                         investorA.address
@@ -1497,9 +1576,15 @@ describe("Governance Pool", async () => {
                     await investmentPool.mintVotingTokens(0, investorA.address, tokensToMint);
 
                     await expect(
-                        governancePool
+                        votingToken
                             .connect(investorA)
-                            .transferVotes(investorB.address, tokensToMint)
+                            .safeTransferFrom(
+                                investorA.address,
+                                investorB.address,
+                                governancePool.getInvestmentPoolId(),
+                                tokensToMint,
+                                "0x"
+                            )
                     )
                         .to.be.revertedWithCustomError(
                             governancePool,
@@ -1520,9 +1605,15 @@ describe("Governance Pool", async () => {
                         .setApprovalForAll(governancePool.address, true);
 
                     await expect(
-                        governancePool
+                        votingToken
                             .connect(investorA)
-                            .transferVotes(investorB.address, tokensToMint)
+                            .safeTransferFrom(
+                                investorA.address,
+                                investorB.address,
+                                governancePool.getInvestmentPoolId(),
+                                tokensToMint,
+                                "0x"
+                            )
                     ).not.to.be.reverted;
                 });
             });

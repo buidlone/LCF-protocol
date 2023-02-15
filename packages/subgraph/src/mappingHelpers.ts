@@ -29,7 +29,7 @@ export function getOrInitProjectFactory(projectFactoryAddress: Address): Project
 
         // Create new project factory entity
         projectFactory = new ProjectFactory(projectFactoryId);
-        projectFactory.maxMilesonesCount = ipFactoryContract.getMaxMilestoneCount().toI32();
+        projectFactory.maxMilesonesCount = ipFactoryContract.getMaxMilestoneCount();
         projectFactory.terminationWindow = ipFactoryContract.getTerminationWindow();
         projectFactory.minMilestoneDuration = ipFactoryContract.getMilestoneMinDuration();
         projectFactory.maxMilestoneDuration = ipFactoryContract.getMilestoneMaxDuration();
@@ -50,7 +50,7 @@ export function getOrInitProject(projectAddress: Address): Project {
         const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(projectAddress);
 
         let milestoneIds: string[] = [];
-        const milestonesCount = ipContract.getMilestonesCount().toI32();
+        const milestonesCount = ipContract.getMilestonesCount();
         // Loop through each milestone and create a new milestone entity with the data
         for (let milestoneId = 0; milestoneId < milestonesCount; milestoneId++) {
             const milestone = getOrInitMilestone(projectAddress, BigInt.fromI32(milestoneId));
@@ -74,14 +74,14 @@ export function getOrInitProject(projectAddress: Address): Project {
         project.hardCap = ipContract.getHardCap();
         project.isSoftCapReached = false;
         project.totalInvested = BigInt.fromI32(0);
-        project.softCapMultiplier = ipContract.getSoftCapMultiplier().toI32();
-        project.hardCapMultiplier = ipContract.getHardCapMultiplier().toI32();
+        project.softCapMultiplier = ipContract.getSoftCapMultiplier();
+        project.hardCapMultiplier = ipContract.getHardCapMultiplier();
         project.maximumWeightDivisor = ipContract.getMaximumWeightDivisor();
         project.governancePool = context.getString("governancePoolAddress");
         project.distributionPool = context.getString("distributionPoolAddress");
         project.creator = Address.fromString(context.getString("creator"));
         project.milestones = milestoneIds;
-        project.milestonesCount = ipContract.getMilestonesCount().toI32();
+        project.milestonesCount = ipContract.getMilestonesCount();
         project.currentMilestone = milestoneIds[0];
         project.fundraiserStartTime = ipContract.getFundraiserStartTime();
         project.fundraiserEndTime = ipContract.getFundraiserEndTime();
@@ -156,21 +156,23 @@ export function getOrInitDistributionPool(distributionPoolAddress: Address): Dis
     return distributionPool;
 }
 export function getOrInitMilestone(projectAddress: Address, milestoneId: BigInt): Milestone {
+    const milestoneIdInt = milestoneId.toI32();
+
     const projectId = projectAddress.toHex();
-    const milestoneFullId: string = `${projectId}-${milestoneId.toString()}`;
+    const milestoneFullId: string = `${projectId}-${milestoneIdInt.toString()}`;
     let milestone = Milestone.load(milestoneFullId);
 
     if (!milestone) {
         const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(
             Address.fromString(projectId)
         );
-        const milestoneData = ipContract.getMilestone(milestoneId);
+        const milestoneData = ipContract.getMilestone(milestoneIdInt);
 
         // Create new milestone entity
         milestone = new Milestone(milestoneFullId);
         milestone.project = projectId;
         // number type cannot be assigned to i32 type so we need to convert it
-        milestone.milestoneId = milestoneId.toI32();
+        milestone.milestoneId = milestoneIdInt;
         milestone.startTime = milestoneData.startDate;
         milestone.endTime = milestoneData.endDate;
         milestone.duration = milestone.endTime.minus(milestone.startTime);
@@ -252,7 +254,10 @@ export function getOrInitSingleInvestment(
 
     if (!singleInvestment) {
         const ipContract = InvestmentPoolContract.bind(projectAddress);
-        const milestone = getOrInitMilestone(projectAddress, ipContract.getCurrentMilestoneId());
+        const milestone = getOrInitMilestone(
+            projectAddress,
+            BigInt.fromI32(ipContract.getCurrentMilestoneId())
+        );
 
         singleInvestment = new SingleInvestment(singleInvestmentId);
         singleInvestment.investor = investorAddress.toHex();
@@ -261,6 +266,9 @@ export function getOrInitSingleInvestment(
         singleInvestment.milestone = milestone.id;
         singleInvestment.transactionHash = Bytes.fromI32(0);
         singleInvestment.investedAmount = BigInt.fromI32(0);
+        singleInvestment.allocatedProjectTokens = BigInt.fromI32(0);
+        singleInvestment.votingTokensMinted = BigInt.fromI32(0);
+        singleInvestment.save();
 
         // Update the number of single investments
         projectInvestment.singleInvestmentsCount += 1;

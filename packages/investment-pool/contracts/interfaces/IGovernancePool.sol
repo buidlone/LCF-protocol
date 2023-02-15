@@ -14,7 +14,7 @@ interface IGovernancePool {
 
     function burnVotes(uint16 _milestoneId, address _investor) external;
 
-    function transferVotes(address _recipient, uint256 _amount) external;
+    function transferVotes(address _sender, address _recipient, uint256 _amount) external;
 
     function permanentlyLockVotes(uint256 _votes) external;
 

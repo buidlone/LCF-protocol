@@ -10,7 +10,7 @@ dataSources:
     name: InvestmentPoolFactory
     network: goerli
     source:
-      address: "0xD53124C3d78b589C1484B7b165Ae814bEaFfFFe9"
+      address: "0xfcb73e5277fA2fE4cc04262D7f2637668FA1b2B0"
       abi: InvestmentPoolFactory
       startBlock: 8100000
     mapping:
@@ -51,24 +51,27 @@ templates:
         - name: DistributionPool
           file: ./abis/DistributionPool.json
         - name: ERC20
-          file: ./abis/ERC20.json
+          file: ./abis/standard/ERC20.json
       entities:
         - Project
         - Milestone
+        - Investor
+        - ProjectInvestment
+        - SingleInvestment
       eventHandlers:
         - event: Initialized(uint8)
           handler: handleInitialized
-        - event: Invest(indexed address,uint256)
+        - event: Invest(indexed address,indexed uint16,uint256)
           handler: handleInvested
         - event: Cancel()
           handler: handleCanceled
-        - event: Unpledge(indexed address,uint256)
+        - event: Unpledge(indexed address,indexed uint16,uint256)
           handler: handleUnpledged
-        - event: ClaimFunds(uint256,bool,bool,bool)
+        - event: ClaimFunds(indexed uint16,bool,bool,bool)
           handler: handleClaimedFunds
         - event: Refund(indexed address,uint256)
           handler: handleRefunded
-        - event: TerminateStream(uint256)
+        - event: TerminateStream(indexed uint16)
           handler: handleTerminatedStream
         - event: GelatoFeeTransfer(uint256,address)
           handler: handleTerminatedByGelato
@@ -95,17 +98,17 @@ templates:
       eventHandlers:
         - event: Initialized(uint8)
           handler: handleInitialized
-        - event: MintVotingTokens(indexed address,indexed uint256,uint256)
+        - event: MintVotingTokens(indexed address,indexed uint16,uint256)
           handler: handleMintedVotingTokens
-        - event: VoteAgainstProject(indexed address,uint256)
+        - event: VoteAgainstProject(indexed address,indexed uint16,uint256)
           handler: handleVotedAgainst
-        - event: RetractVotes(indexed address,uint256)
+        - event: RetractVotes(indexed address,indexed uint16,uint256)
           handler: handleRetractedVotes
-        - event: BurnVotes(indexed address,uint256)
+        - event: BurnVotes(indexed address,indexed uint16,uint256)
           handler: handleBurnedVotes
-        - event: TransferVotes(indexed address,indexed address,uint256)
+        - event: TransferVotes(indexed address,indexed uint16,indexed address,uint256)
           handler: handleTransferedVotes
-        - event: LockVotingTokens(indexed address,uint256)
+        - event: LockVotingTokens(indexed address,indexed uint16,uint256)
           handler: handleLockedVotingTokens
       file: ./src/mappings/governance-pool.ts
 
@@ -122,15 +125,15 @@ templates:
         - name: DistributionPool
           file: ./abis/DistributionPool.json
         - name: ERC20
-          file: ./abis/ERC20.json
+          file: ./abis/standard/ERC20.json
       entities:
         - DistributionPool
       eventHandlers:
         - event: Initialized(uint8)
           handler: handleInitialized
-        - event: Allocated(indexed address,uint256)
+        - event: Allocated(indexed address,uint256,indexed uint16)
           handler: handleAllocated
-        - event: RemovedAllocation(indexed address,uint256)
+        - event: RemovedAllocation(indexed address,uint256,indexed uint16)
           handler: handleRemovedAllocation
         - event: Claimed(indexed address,uint256)
           handler: handleClaimed
@@ -153,9 +156,8 @@ templates:
       entities:
         - VotingToken
       eventHandlers:
-        # eventHandlers required option, so we define event, but we don't actually need to index the erc1155
-        # We will only use this template to bind ERC1155 tokens and request needed details
-        - event: TransferSingle(indexed address,indexed address,indexed address,uint256,uint256)
+        - event: TransferSingle(indexed address,indexed address,indexed
+            address,uint256,uint256)
           handler: handleTransfer
       file: ./src/mappings/voting-token.ts
 
@@ -170,13 +172,11 @@ templates:
       language: wasm/assemblyscript
       abis:
         - name: ERC20
-          file: ./abis/ERC20.json
+          file: ./abis/standard/ERC20.json
       entities:
         - AcceptedSuperToken
         - ProjectToken
       eventHandlers:
-        # eventHandlers required option, so we define event, but we don't actually need to index the erc20
-        # We will only use this template to bind ERC20 tokens and request needed details
         - event: Transfer(indexed address,indexed address,uint256)
           handler: handleTransfer
       file: ./src/mappings/erc20-token.ts

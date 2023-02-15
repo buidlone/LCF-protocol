@@ -1,6 +1,5 @@
 import {BigInt, BigDecimal, Address} from "@graphprotocol/graph-ts";
 import {TransferSingle as TransferSingleEvent} from "../../generated/templates/VotingToken/VotingToken";
-import {GovernancePool, VotingToken} from "../../generated/schema";
 import {getOrInitGovernancePool, getOrInitVotingToken} from "../mappingHelpers";
 
 enum TokenAction {
