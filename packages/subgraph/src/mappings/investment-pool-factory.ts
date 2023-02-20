@@ -23,12 +23,13 @@ export function handleCreated(event: CreatedEvent): void {
     /** @notice investment id is used in ERC1155 voting token as project id */
     const votingTokenId = gpContract.getInvestmentPoolId();
 
+    // Check if project factory was already created.
+    // If not, create it and create voting token.
     if (ProjectFactory.load(event.address.toHex()) === null) {
+        // INITIALIZATION
+        getOrInitProjectFactory(event.address);
         VotingToken.create(votingTokenAddress);
     }
-
-    // INITIALIZATION
-    getOrInitProjectFactory(event.address);
 
     // Create data source context
     let context = new DataSourceContext();
