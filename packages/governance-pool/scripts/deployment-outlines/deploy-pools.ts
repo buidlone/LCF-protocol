@@ -46,7 +46,7 @@ export const deployPools = async (
     );
 
     const receipt = await creationTx.wait(blockConfirmations);
-    const creationEvent = receipt.events?.find((e: any) => e.event === "Created");
+    const creationEvent: any = receipt.events?.find((e: any) => e.event === "Created");
     const ipAddress = creationEvent?.args?.ipContract;
     const gpAddress = creationEvent?.args?.gpContract;
     const dpAddress = creationEvent?.args?.dpContract;

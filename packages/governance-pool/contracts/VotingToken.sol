@@ -7,12 +7,37 @@ import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
+import {IInvestmentPool} from "@buidlone/investment-pool/contracts/interfaces/IInvestmentPool.sol";
+import {IGovernancePool} from "@buidlone/investment-pool/contracts/interfaces/IGovernancePool.sol";
 
 contract VotingToken is ERC1155, AccessControl, ERC1155Burnable, ERC1155Supply {
     bytes32 public constant GOVERNANCE_POOL_ROLE = keccak256("GOVERNANCE_POOL_ROLE");
 
     constructor() ERC1155("") {
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
+    }
+
+    function safeTransferFrom(
+        address from,
+        address to,
+        uint256 investmentPoolId,
+        uint256 amount,
+        bytes memory data
+    ) public override {
+        require(
+            from == _msgSender() || isApprovedForAll(from, _msgSender()),
+            "ERC1155: caller is not token owner nor approved"
+        );
+        // Update balance in governance pool
+        IInvestmentPool investmentPool = IInvestmentPool(address(uint160(investmentPoolId)));
+        IGovernancePool governancePool = IGovernancePool(investmentPool.getGovernancePool());
+
+        if (from != address(governancePool) && to != address(governancePool)) {
+            governancePool.transferVotes(from, to, amount);
+        }
+
+        // Update balance in voting token contract
+        _safeTransferFrom(from, to, investmentPoolId, amount, data);
     }
 
     function mint(

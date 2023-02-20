@@ -1,4 +1,5 @@
-import {Address, BigInt, dataSource, store} from "@graphprotocol/graph-ts";
+import {Address, BigInt, store} from "@graphprotocol/graph-ts";
+// import {i32} from "assemblyscript/std/assembly/index";
 import {
     InvestmentPool as InvestmentPoolContract,
     Initialized as InitializedEvent,
@@ -9,8 +10,7 @@ import {
     ClaimFunds as ClaimedFundsEvent,
     TerminateStream as TerminatedStreamEvent,
     GelatoFeeTransfer as TerminatedByGelatoEvent,
-} from "../../generated/InvestmentPool/InvestmentPool";
-import {DistributionPool as DistributionPoolContract} from "../../generated/templates/InvestmentPool/DistributionPool";
+} from "../../generated/templates/InvestmentPool/InvestmentPool";
 import {Project} from "../../generated/schema";
 import {
     getOrInitProject,
@@ -29,20 +29,15 @@ export function handleInvested(event: InvestEvent): void {
     updateFlowrateInfo(project, event.params.caller);
     updateMilestoneInfo(project);
 
-    const dpContract: DistributionPoolContract = DistributionPoolContract.bind(
-        Address.fromString(project.distributionPool)
-    );
-
     // Update project investment details
     const projectInvestment = getOrInitProjectInvestment(event.address, event.params.caller);
-    projectInvestment.allocatedProjectTokens = dpContract.getAllocatedTokens(event.params.caller);
     projectInvestment.investedAmount = projectInvestment.investedAmount.plus(event.params.amount);
     projectInvestment.save();
 
     const singleInvestment = getOrInitSingleInvestment(
         event.address,
         event.params.caller,
-        BigInt.fromI32(projectInvestment.singleInvestmentsCount)
+        BigInt.fromI32(projectInvestment.singleInvestmentsCount - 1)
     );
     singleInvestment.transactionHash = event.transaction.hash;
     singleInvestment.investedAmount = event.params.amount;
@@ -60,10 +55,6 @@ export function handleUnpledged(event: UnpledgeEvent): void {
     updateFlowrateInfo(project, event.params.caller);
     updateMilestoneInfo(project);
 
-    const dpContract: DistributionPoolContract = DistributionPoolContract.bind(
-        Address.fromString(project.distributionPool)
-    );
-
     const projectInvestment = getOrInitProjectInvestment(event.address, event.params.caller);
     const singleInvestment = getOrInitSingleInvestment(
         event.address,
@@ -80,9 +71,6 @@ export function handleUnpledged(event: UnpledgeEvent): void {
         project.investorsCount -= 1;
     } else {
         // Update investor's details
-        projectInvestment.allocatedProjectTokens = dpContract.getAllocatedTokens(
-            event.params.caller
-        );
         projectInvestment.investedAmount = projectInvestment.investedAmount.minus(
             event.params.amount
         );
@@ -109,10 +97,7 @@ function updateFlowrateInfo(project: Project, investorAddress: Address): void {
     let lastTokenAllocation = BigInt.fromI32(0);
     for (let i = 0; i < milestonesCount; i++) {
         const milestone = getOrInitMilestone(Address.fromString(project.id), BigInt.fromI32(i));
-        const tokenAllocation = ipContract.getInvestorTokensAllocation(
-            investorAddress,
-            BigInt.fromI32(i)
-        );
+        const tokenAllocation = ipContract.getInvestorTokensAllocation(investorAddress, i);
         lastTokenAllocation = lastTokenAllocation.plus(tokenAllocation);
         tokensAllocations.push(lastTokenAllocation);
         flowrates.push(tokenAllocation.div(milestone.duration));
@@ -133,7 +118,7 @@ function updateMilestoneInfo(project: Project): void {
     );
 
     // Get memoized investments list
-    const memoizedInvestments: BigInt[] = ipContract.getMilestonesInvestmentsListForFormula();
+    const memoizedInvestments: BigInt[] = ipContract.getMemoizedInvestmentsList();
     const milestones: string[] = project.milestones;
     const percentageDivider = project.percentageDivider;
 
@@ -171,11 +156,11 @@ export function handleCanceled(event: CancelEvent): void {
     // If project was canceled before the fundraiser started, no data needs to be updated
     if (!project.isCanceledBeforeFundraiserStart) {
         // After canceling the project, milestone id stays the same
-        const milestoneIdBI: BigInt = ipContract.getCurrentMilestoneId();
-        const milestoneData = ipContract.getMilestone(milestoneIdBI);
+        const milestoneId = ipContract.getCurrentMilestoneId() | 0;
+        const milestoneData = ipContract.getMilestone(milestoneId);
 
         // Update milestone data
-        const milestone = getOrInitMilestone(event.address, milestoneIdBI);
+        const milestone = getOrInitMilestone(event.address, BigInt.fromI32(milestoneId));
         milestone.isTotalAllocationPaid = milestoneData.paid;
         milestone.isStreamOngoing = milestoneData.streamOngoing;
         milestone.paidAmount = milestoneData.paidAmount;
@@ -195,11 +180,11 @@ export function handleClaimedFunds(event: ClaimedFundsEvent): void {
     // Get project entity
     const project = getOrInitProject(event.address);
 
-    const milestoneIdBI: BigInt = event.params.milestoneId;
-    const milestoneData = ipContract.getMilestone(milestoneIdBI);
+    const milestoneId = event.params.milestoneId | 0;
+    const milestoneData = ipContract.getMilestone(milestoneId);
 
     // Update milestone data from the event data passed in
-    const milestone = getOrInitMilestone(event.address, milestoneIdBI);
+    const milestone = getOrInitMilestone(event.address, BigInt.fromI32(milestoneId));
     milestone.paidAmount = milestoneData.paidAmount;
     milestone.isSeedAllocationPaid = event.params.gotSeedFunds;
     milestone.isTotalAllocationPaid = event.params.gotStreamAmount;
@@ -207,8 +192,11 @@ export function handleClaimedFunds(event: ClaimedFundsEvent): void {
     milestone.save();
 
     // Update current milestone id
-    const currentMilestone = ipContract.getCurrentMilestoneId();
-    const newCurrentMilestone = getOrInitMilestone(event.address, currentMilestone);
+    const currentMilestone = event.params.milestoneId | 0;
+    const newCurrentMilestone = getOrInitMilestone(
+        event.address,
+        BigInt.fromI32(currentMilestone)
+    );
     project.currentMilestone = newCurrentMilestone.id;
     project.fundsUsedByCreator = ipContract.getFundsUsed();
     project.save();
@@ -217,11 +205,11 @@ export function handleClaimedFunds(event: ClaimedFundsEvent): void {
 export function handleTerminatedStream(event: TerminatedStreamEvent): void {
     const ipContract: InvestmentPoolContract = InvestmentPoolContract.bind(event.address);
 
-    const milestoneIdBI: BigInt = event.params.milestoneId;
-    const milestoneData = ipContract.getMilestone(milestoneIdBI);
+    const milestoneId = event.params.milestoneId | 0;
+    const milestoneData = ipContract.getMilestone(milestoneId);
 
     // Update milestone data from the event data passed in
-    const milestone = getOrInitMilestone(event.address, milestoneIdBI);
+    const milestone = getOrInitMilestone(event.address, BigInt.fromI32(milestoneId));
     milestone.paidAmount = milestoneData.paidAmount;
     milestone.isSeedAllocationPaid = milestoneData.seedAmountPaid;
     milestone.isTotalAllocationPaid = milestoneData.paid;

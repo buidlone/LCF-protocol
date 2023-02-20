@@ -23,6 +23,7 @@ error GovernancePool__TotalSupplyIsSmallerThanVotesAgainst(uint256 totalSupply, 
 error GovernancePool__InvestmentPoolStateNotAllowed(uint24 stateValue);
 error GovernancePool__CannotTransferMoreThanUnlockedTokens();
 error GovernancePool__NoVotingTokensMintedDuringCurrentMilestone();
+error GovernancePool__NotVotingTokenContract();
 
 /// @title Governance Pool contract.
 contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context, Initializable {
@@ -86,6 +87,11 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
 
     modifier onlyInvestmentPool() {
         if (_msgSender() != getInvestmentPool()) revert GovernancePool__NotInvestmentPool();
+        _;
+    }
+
+    modifier onlyVotingTokenContract() {
+        if (_msgSender() != address(votingToken)) revert GovernancePool__NotVotingTokenContract();
         _;
     }
 
@@ -289,43 +295,40 @@ contract GovernancePool is IInitializableGovernancePool, ERC1155Holder, Context,
      *  @param _amount to transfer from sender to recipient
      */
     function transferVotes(
+        address _sender,
         address _recipient,
         uint256 _amount
-    ) external allowedInvestmentPoolStates(getAnyMilestoneOngoingStateValue()) {
+    )
+        external
+        onlyVotingTokenContract
+        allowedInvestmentPoolStates(getAnyMilestoneOngoingStateValue())
+    {
         if (_amount == 0) revert GovernancePool__AmountIsZero();
         uint16 currentMilestoneId = investmentPool.getCurrentMilestoneId();
-        uint256 votesLeft = getUnusedVotes(_msgSender());
+        uint256 votesLeft = getUnusedVotes(_sender);
 
         if (_amount > votesLeft) revert GovernancePool__CannotTransferMoreThanUnlockedTokens();
 
-        uint256 senderActiveVotingTokensBalance = _getActiveVotes(
-            currentMilestoneId,
-            _msgSender()
-        );
+        uint256 senderActiveVotingTokensBalance = _getActiveVotes(currentMilestoneId, _sender);
         uint256 recipientActiveVotingTokensBalance = _getActiveVotes(
             currentMilestoneId,
             _recipient
         );
 
-        if (memActiveTokens[_msgSender()][currentMilestoneId] == 0) {
-            milestonesWithVotes[_msgSender()].push(currentMilestoneId);
+        if (memActiveTokens[_sender][currentMilestoneId] == 0) {
+            milestonesWithVotes[_sender].push(currentMilestoneId);
         }
 
         if (memActiveTokens[_recipient][currentMilestoneId] == 0) {
             milestonesWithVotes[_recipient].push(currentMilestoneId);
         }
 
-        memActiveTokens[_msgSender()][currentMilestoneId] =
-            senderActiveVotingTokensBalance -
-            _amount;
+        memActiveTokens[_sender][currentMilestoneId] = senderActiveVotingTokensBalance - _amount;
         memActiveTokens[_recipient][currentMilestoneId] =
             recipientActiveVotingTokensBalance +
             _amount;
 
-        // Investment pool address is converted to uint256 number and is used as a unique voting token identifier
-        votingToken.safeTransferFrom(_msgSender(), _recipient, getInvestmentPoolId(), _amount, "");
-
-        emit TransferVotes(_msgSender(), currentMilestoneId, _recipient, _amount);
+        emit TransferVotes(_sender, currentMilestoneId, _recipient, _amount);
     }
 
     /** @notice Permanently transfer voting tokens from investor to governance pool

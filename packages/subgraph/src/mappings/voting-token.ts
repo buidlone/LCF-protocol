@@ -1,11 +1,20 @@
 import {BigInt, BigDecimal, Address} from "@graphprotocol/graph-ts";
 import {TransferSingle as TransferSingleEvent} from "../../generated/templates/VotingToken/VotingToken";
-import {GovernancePool, VotingToken} from "../../generated/schema";
-import {getOrInitGovernancePool, getOrInitVotingToken} from "../mappingHelpers";
+import {
+    getOrInitGovernancePool,
+    getOrInitProject,
+    getOrInitProjectInvestment,
+    getOrInitVotingToken,
+} from "../mappingHelpers";
 
-enum TokenAction {
+enum SupplyAction {
     Mint,
     Burn,
+}
+
+enum TransferAction {
+    Send,
+    Receive,
 }
 
 export function handleTransfer(event: TransferSingleEvent): void {
@@ -16,25 +25,52 @@ export function handleTransfer(event: TransferSingleEvent): void {
 
     if (fromAddress.toHex() == Address.zero().toHex()) {
         // Mint
-        updateCurrentSupply(tokenId.toString(), amount, TokenAction.Mint);
+        updateCurrentSupply(tokenId, amount, SupplyAction.Mint);
+    } else if (fromAddress.toHex() != event.address.toHex()) {
+        updateIndividualBalance(tokenId, fromAddress, amount, TransferAction.Send);
     }
 
     if (toAddress.toHex() == Address.zero().toHex()) {
         // Burn
-        updateCurrentSupply(tokenId.toString(), amount, TokenAction.Burn);
+        updateCurrentSupply(tokenId, amount, SupplyAction.Burn);
+    } else if (toAddress.toHex() != event.address.toHex()) {
+        updateIndividualBalance(tokenId, toAddress, amount, TransferAction.Receive);
     }
 }
 
-function updateCurrentSupply(tokenId: string, amount: BigInt, action: TokenAction): void {
-    const votingToken = getOrInitVotingToken(tokenId);
+function updateIndividualBalance(
+    tokenId: BigInt,
+    investor: Address,
+    amount: BigInt,
+    action: TransferAction
+): void {
+    const ipAddress = Address.fromString(tokenId.toHex());
+    const projectInvestment = getOrInitProjectInvestment(ipAddress, investor);
+
+    switch (action) {
+        case TransferAction.Send:
+            projectInvestment.currentVotesBalance =
+                projectInvestment.currentVotesBalance.minus(amount);
+            break;
+
+        case TransferAction.Receive:
+            projectInvestment.currentVotesBalance =
+                projectInvestment.currentVotesBalance.plus(amount);
+            break;
+    }
+    projectInvestment.save();
+}
+
+function updateCurrentSupply(tokenId: BigInt, amount: BigInt, action: SupplyAction): void {
+    const votingToken = getOrInitVotingToken(tokenId.toString());
     const governancePool = getOrInitGovernancePool(Address.fromString(votingToken.governancePool));
 
     switch (action) {
-        case TokenAction.Mint:
+        case SupplyAction.Mint:
             votingToken.currentSupply = votingToken.currentSupply.plus(amount);
             break;
 
-        case TokenAction.Burn:
+        case SupplyAction.Burn:
             votingToken.currentSupply = votingToken.currentSupply.minus(amount);
             break;
     }
