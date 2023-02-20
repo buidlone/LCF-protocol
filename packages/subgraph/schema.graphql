@@ -634,6 +634,13 @@ type SingleInvestment @entity {
     projectInvestment: ProjectInvestment!
 
     """
+    Timestamp of the investment creation
+    Specified in seconds
+    Value is static
+    """
+    creationTime: BigInt!
+
+    """
     Milestone that this investment was made for
     Value is static
     """
