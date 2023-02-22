@@ -30,3 +30,8 @@ jobs:
       working-directory: ./packages/investment-pool
       run: yarn test
 
+    - name: prepare subgraph
+      working-directory: ./packages/subgraph
+      run: |
+        yarn abi
+        yarn codegen
