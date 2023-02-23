@@ -39,12 +39,6 @@ jobs:
     - name: yarn install monorepo
       run: yarn install
 
-    - name: prepare subgraph
-      working-directory: ./packages/subgraph
-      run: |
-        yarn abi
-        yarn codegen
-
     - name: yarn install, build
       working-directory: ./packages/governance-pool
       run: |
