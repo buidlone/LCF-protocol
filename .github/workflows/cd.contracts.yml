@@ -12,13 +12,25 @@ jobs:
     steps:
     - uses: actions/checkout@v3
   
-    - name: Create .env
+    - name: Create .env [governance-pool]
       run: |
         cp packages/governance-pool/.env.example packages/governance-pool/.env
 
     - uses: cschleiden/replace-tokens@v1
       with:
         files: '["packages/governance-pool/.env"]'
+      env:
+        DEPLOYER_PRIVATE_KEY:  ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+        ETHERSCAN_API_KEY:  ${{ secrets.ETHERSCAN_API_KEY }}
+        GOERLI_URL:  ${{ secrets.GOERLI_URL }}
+
+    - name: Create .env [investment-pool]
+      run: |
+        cp packages/investment-pool/.env.example packages/investment-pool/.env
+
+    - uses: cschleiden/replace-tokens@v1
+      with:
+        files: '["packages/investment-pool/.env"]'
       env:
         DEPLOYER_PRIVATE_KEY:  ${{ secrets.DEPLOYER_PRIVATE_KEY }}
         ETHERSCAN_API_KEY:  ${{ secrets.ETHERSCAN_API_KEY }}
