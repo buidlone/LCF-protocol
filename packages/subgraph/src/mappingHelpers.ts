@@ -269,6 +269,7 @@ export function getOrInitSingleInvestment(
         singleInvestment.investedAmount = BigInt.fromI32(0);
         singleInvestment.allocatedProjectTokens = BigInt.fromI32(0);
         singleInvestment.votingTokensMinted = BigInt.fromI32(0);
+        singleInvestment.creationTime = BigInt.fromI32(0);
         singleInvestment.save();
 
         // Update the number of single investments

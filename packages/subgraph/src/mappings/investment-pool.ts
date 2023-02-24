@@ -41,6 +41,7 @@ export function handleInvested(event: InvestEvent): void {
     );
     singleInvestment.transactionHash = event.transaction.hash;
     singleInvestment.investedAmount = event.params.amount;
+    singleInvestment.creationTime = event.block.timestamp;
     singleInvestment.save();
 
     // Update total invested amount

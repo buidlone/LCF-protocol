@@ -120,6 +120,7 @@ function updateAllocationInfo(
     }
 
     distributionPool.save();
+    projectInvestment.save();
 }
 
 export function handleClaimed(event: ClaimedEvent): void {
