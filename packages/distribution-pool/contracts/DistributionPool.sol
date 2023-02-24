@@ -20,6 +20,7 @@ error DistributionPool__AllTokensAreAllocated();
 error DistributionPool__StateIsInvalidForWithdrawal();
 error DistributionPool__ProjectTokensNotLocked();
 error DistributionPool__InvestmentPoolStateNotAllowed(uint24 state);
+error DistributionPool__NoAllocationsFound();
 
 contract DistributionPool is IInitializableDistributionPool, Context, Initializable {
     using Arrays for uint16[];
@@ -166,8 +167,10 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
         address _investor
     ) external onlyInvestmentPool {
         /// @dev Function is called only by investment pool that's why we don't check if data is valid
+        if (getMilestonesWithAllocation(_investor).length == 0)
+            revert DistributionPool__NoAllocationsFound();
 
-        uint256 tokenAllocation = getAllocatedAmount(_investor, _milestoneId);
+        uint256 tokenAllocation = getInvestmentAllocation(_investor, _milestoneId);
 
         allocatedTokens[_investor] -= tokenAllocation;
         totalAllocatedTokens -= tokenAllocation;
@@ -278,6 +281,19 @@ contract DistributionPool is IInitializableDistributionPool, Context, Initializa
             (_getMemoizedMilestoneAllocation(_investor, _milestoneId) *
                 (milestone.intervalSeedPortion + milestone.intervalStreamingPortion)) /
             getPercentageDivider();
+    }
+
+    /**
+     * @notice Function calculates how many tokens are allocated to investments in the provided milestone
+     * @notice If investors invested in milestone 1, we can be sure that pool allocated tokens for milestone 1 and the following milestones
+     */
+    function getInvestmentAllocation(
+        address _investor,
+        uint16 _milestoneId
+    ) public view returns (uint256) {
+        return
+            (_getMemoizedMilestoneAllocation(_investor, _milestoneId) *
+                investmentPool.getMilestonesPortionLeft(_milestoneId)) / getPercentageDivider();
     }
 
     /**

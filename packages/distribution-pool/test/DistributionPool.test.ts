@@ -29,6 +29,9 @@ let percentageDivider: number = 0;
 let formated5Percent: number;
 let formated20Percent: number;
 let formated70Percent: number;
+let weightDivisor: BigNumber;
+let lockedTokens: BigNumber = ethers.utils.parseEther("15000000");
+let milestonesPortionsLeft: number[] = [];
 
 // Project state values
 let canceledProjectStateValue: number;
@@ -55,6 +58,7 @@ const getConstantVariablesFromContract = async () => {
     await createProject();
 
     percentageDivider = await distributionPool.getPercentageDivider();
+    weightDivisor = await investmentPool.getMaximumWeightDivisor();
     await defineStateValues(investmentPool);
 };
 
@@ -77,6 +81,7 @@ const createProject = async () => {
     formated5Percent = formatPercentage(5);
     formated20Percent = formatPercentage(20);
     formated70Percent = formatPercentage(70);
+    milestonesPortionsLeft = [percentageDivider, formated20Percent + formated5Percent, 0];
 
     const investmentPoolDep = await ethers.getContractFactory(
         "InvestmentPoolMockForIntegration",
@@ -99,11 +104,7 @@ const createProject = async () => {
     await investmentPool.deployed();
 
     // Initializer
-    distributionPool.initialize(
-        investmentPool.address,
-        buidl1Token.address,
-        ethers.utils.parseEther("15000000")
-    );
+    distributionPool.initialize(investmentPool.address, buidl1Token.address, lockedTokens);
 
     await buidl1Token.connect(creator).approve(distributionPool.address, constants.MaxUint256);
 };
@@ -172,6 +173,27 @@ describe("Distribution Pool", async () => {
 
                     assert.isFalse(areTokensLocked);
                 });
+
+                it("[DP][1.1.5] Creator shouldn't be able to lock tokens twice", async () => {
+                    await distributionPool.connect(creator).lockTokens();
+                    await expect(
+                        distributionPool.connect(creator).lockTokens()
+                    ).to.be.revertedWithCustomError(
+                        distributionPool,
+                        "DistributionPool__ProjectTokensAlreadyLocked"
+                    );
+                });
+
+                it("[DP][1.1.6] Distribution pool balance for project token should increase by locked tokens amount", async () => {
+                    const initialBalance = await buidl1Token.balanceOf(distributionPool.address);
+                    await distributionPool.connect(creator).lockTokens();
+                    const finalBalance = await buidl1Token.balanceOf(distributionPool.address);
+
+                    assert.equal(
+                        finalBalance.toString(),
+                        initialBalance.add(lockedTokens).toString()
+                    );
+                });
             });
         });
 
@@ -225,8 +247,6 @@ describe("Distribution Pool", async () => {
                 });
 
                 it("[DP][2.1.6] Should return correct amount if milestone 0 is ongoing", async () => {
-                    const weightDivisor = await investmentPool.getMaximumWeightDivisor();
-
                     await distributionPool.connect(creator).lockTokens();
                     await investmentPool.allocateTokens(
                         0,
@@ -254,8 +274,6 @@ describe("Distribution Pool", async () => {
                 });
 
                 it("[DP][2.1.7] Should return correct amount if milestone 1 is ongoing", async () => {
-                    const weightDivisor = await investmentPool.getMaximumWeightDivisor();
-
                     await distributionPool.connect(creator).lockTokens();
                     await investmentPool.allocateTokens(
                         0,
@@ -291,7 +309,6 @@ describe("Distribution Pool", async () => {
                 });
 
                 it("[DP][2.1.8] Should return correct amount if project was terminated by voting", async () => {
-                    const weightDivisor = await investmentPool.getMaximumWeightDivisor();
                     const terminationTimestamp = dateToSeconds("2100/11/01");
                     const timePassed = terminationTimestamp - milestone1StartDate;
 
@@ -332,7 +349,6 @@ describe("Distribution Pool", async () => {
                 });
 
                 it("[DP][2.1.9] Should return correct amount if project was terminated by gelato", async () => {
-                    const weightDivisor = await investmentPool.getMaximumWeightDivisor();
                     const terminationTimestamp = dateToSeconds("2100/11/01");
                     const timePassed = terminationTimestamp - milestone1StartDate;
 
@@ -373,7 +389,6 @@ describe("Distribution Pool", async () => {
                 });
 
                 it("[DP][2.1.10] Should return correct amount if project ended successfully", async () => {
-                    const weightDivisor = await investmentPool.getMaximumWeightDivisor();
                     await distributionPool.connect(creator).lockTokens();
                     await investmentPool.allocateTokens(
                         0,
@@ -398,6 +413,291 @@ describe("Distribution Pool", async () => {
                         fullAllocation.toString()
                     );
                     assert.equal(allocationData.allocationFlowRate.toString(), "0");
+                });
+            });
+        });
+        describe("3. allocateTokens() function", () => {
+            describe("3.1 Public state", () => {
+                it("[DP][3.1.1] Should push milestone to milestonesWithAllocation if no allocation was made for that milestone", async () => {
+                    const investmentWeight = weightDivisor.div(10);
+                    const allocationCoefficient = percentageDivider / 4;
+                    investmentPool.allocateTokens(
+                        1,
+                        investorA.address,
+                        investmentWeight,
+                        weightDivisor,
+                        allocationCoefficient
+                    );
+
+                    const milestonesWithAllocation =
+                        await distributionPool.getMilestonesWithAllocation(investorA.address);
+                    assert.equal(milestonesWithAllocation.length, 1);
+                    assert.equal(milestonesWithAllocation[0], 1);
+                });
+
+                it("[DP][3.1.2] Shouldn't push milestone to milestonesWithAllocation if allocation was made for that milestone", async () => {
+                    const investmentWeight = weightDivisor.div(10);
+                    const allocationCoefficient = percentageDivider / 4;
+                    investmentPool.allocateTokens(
+                        1,
+                        investorA.address,
+                        investmentWeight,
+                        weightDivisor,
+                        allocationCoefficient
+                    );
+
+                    investmentPool.allocateTokens(
+                        1,
+                        investorA.address,
+                        investmentWeight,
+                        weightDivisor,
+                        allocationCoefficient
+                    );
+
+                    const milestonesWithAllocation =
+                        await distributionPool.getMilestonesWithAllocation(investorA.address);
+                    assert.equal(milestonesWithAllocation.length, 1);
+                    assert.equal(milestonesWithAllocation[0], 1);
+                });
+
+                it("[DP][3.1.3] Should update memMilestoneAllocation with new allocation (1st allocation)", async () => {
+                    const investmentWeight = weightDivisor.div(10);
+                    const allocationCoefficient = percentageDivider / 4;
+                    const memoizedMilestoneAllocation =
+                        await distributionPool.getMemoizedMilestoneAllocation(
+                            investorA.address,
+                            1
+                        );
+
+                    investmentPool.allocateTokens(
+                        1,
+                        investorA.address,
+                        investmentWeight,
+                        weightDivisor,
+                        allocationCoefficient
+                    );
+
+                    const newMemMilestoneAllocation =
+                        await distributionPool.getMemMilestoneAllocation(investorA.address, 1);
+                    const tokenAllocation = investmentWeight.mul(lockedTokens).div(weightDivisor);
+                    const scaledAllocation = tokenAllocation
+                        .mul(percentageDivider)
+                        .div(allocationCoefficient);
+
+                    assert.equal(
+                        newMemMilestoneAllocation.toString(),
+                        memoizedMilestoneAllocation.add(scaledAllocation).toString()
+                    );
+                });
+
+                it("[DP][3.1.4] Should update memMilestoneAllocation with new allocation (2nd allocation)", async () => {
+                    const investmentWeight = weightDivisor.div(10);
+                    const allocationCoefficient = percentageDivider / 4;
+                    const memoizedMilestoneAllocation =
+                        await distributionPool.getMemoizedMilestoneAllocation(
+                            investorA.address,
+                            1
+                        );
+
+                    investmentPool.allocateTokens(
+                        1,
+                        investorA.address,
+                        investmentWeight,
+                        weightDivisor,
+                        allocationCoefficient
+                    );
+
+                    investmentPool.allocateTokens(
+                        1,
+                        investorA.address,
+                        investmentWeight.mul(2),
+                        weightDivisor,
+                        allocationCoefficient
+                    );
+
+                    const newMemMilestoneAllocation =
+                        await distributionPool.getMemMilestoneAllocation(investorA.address, 1);
+                    const tokenAllocation = investmentWeight
+                        .mul(3)
+                        .mul(lockedTokens)
+                        .div(weightDivisor);
+                    const scaledAllocation = tokenAllocation
+                        .mul(percentageDivider)
+                        .div(allocationCoefficient);
+
+                    assert.equal(
+                        newMemMilestoneAllocation.toString(),
+                        memoizedMilestoneAllocation.add(scaledAllocation).toString()
+                    );
+                });
+
+                it("[DP][3.1.5] Should update allocatedTokens for investor (2nd allocation)", async () => {
+                    const investmentWeight = weightDivisor.div(10);
+                    const allocationCoefficient = percentageDivider / 4;
+
+                    investmentPool.allocateTokens(
+                        1,
+                        investorA.address,
+                        investmentWeight,
+                        weightDivisor,
+                        allocationCoefficient
+                    );
+
+                    const tokenAllocation = investmentWeight.mul(lockedTokens).div(weightDivisor);
+                    const allocatedTokensInContract = await distributionPool.getAllocatedTokens(
+                        investorA.address
+                    );
+
+                    assert.equal(allocatedTokensInContract.toString(), tokenAllocation.toString());
+                });
+
+                it("[DP][3.1.6] Should update allocatedTokens for investor (1st allocation)", async () => {
+                    const investmentWeight = weightDivisor.div(10);
+                    const allocationCoefficient = percentageDivider / 4;
+
+                    investmentPool.allocateTokens(
+                        1,
+                        investorA.address,
+                        investmentWeight,
+                        weightDivisor,
+                        allocationCoefficient
+                    );
+
+                    investmentPool.allocateTokens(
+                        1,
+                        investorA.address,
+                        investmentWeight.mul(2),
+                        weightDivisor,
+                        allocationCoefficient
+                    );
+
+                    const tokenAllocation = investmentWeight
+                        .mul(3)
+                        .mul(lockedTokens)
+                        .div(weightDivisor);
+                    const allocatedTokensInContract = await distributionPool.getAllocatedTokens(
+                        investorA.address
+                    );
+
+                    assert.equal(allocatedTokensInContract.toString(), tokenAllocation.toString());
+                });
+
+                it("[DP][3.1.7] Should update totalAllocatedTokens (1st allocation)", async () => {
+                    const investmentWeight = weightDivisor.div(10);
+                    const allocationCoefficient = percentageDivider / 4;
+
+                    investmentPool.allocateTokens(
+                        1,
+                        investorA.address,
+                        investmentWeight,
+                        weightDivisor,
+                        allocationCoefficient
+                    );
+
+                    const tokenAllocation = investmentWeight.mul(lockedTokens).div(weightDivisor);
+                    const allocatedTokensInContract =
+                        await distributionPool.getTotalAllocatedTokens();
+
+                    assert.equal(allocatedTokensInContract.toString(), tokenAllocation.toString());
+                });
+
+                it("[DP][3.1.8] Should update totalAllocatedTokens (2nd allocation)", async () => {
+                    const investmentWeight = weightDivisor.div(10);
+                    const allocationCoefficient = percentageDivider / 4;
+
+                    investmentPool.allocateTokens(
+                        1,
+                        investorA.address,
+                        investmentWeight,
+                        weightDivisor,
+                        allocationCoefficient
+                    );
+
+                    investmentPool.allocateTokens(
+                        1,
+                        investorA.address,
+                        investmentWeight.mul(2),
+                        weightDivisor,
+                        allocationCoefficient
+                    );
+
+                    const tokenAllocation = investmentWeight
+                        .mul(3)
+                        .mul(lockedTokens)
+                        .div(weightDivisor);
+                    const allocatedTokensInContract =
+                        await distributionPool.getTotalAllocatedTokens();
+
+                    assert.equal(allocatedTokensInContract.toString(), tokenAllocation.toString());
+                });
+            });
+            describe("3.2 Interactions", () => {
+                it("[DP][3.2.1] Investor shouldn't be able to allocate tokens", async () => {
+                    const investmentWeight = weightDivisor.div(10);
+                    const allocationCoefficient = percentageDivider / 4;
+                    await expect(
+                        distributionPool.allocateTokens(
+                            0,
+                            investorA.address,
+                            investmentWeight,
+                            weightDivisor,
+                            allocationCoefficient
+                        )
+                    ).to.be.revertedWithCustomError(
+                        distributionPool,
+                        "DistributionPool__NotInvestmentPool"
+                    );
+                });
+
+                it("[DP][3.2.2] Investment pool should be able to allocate tokens and emit event", async () => {
+                    const investmentWeight = weightDivisor.div(10);
+                    const allocationCoefficient = percentageDivider / 4;
+                    await expect(
+                        investmentPool.allocateTokens(
+                            0,
+                            investorA.address,
+                            investmentWeight,
+                            weightDivisor,
+                            allocationCoefficient
+                        )
+                    )
+                        .to.emit(distributionPool, "Allocated")
+                        .withArgs(investorA.address, lockedTokens.div(10), 0);
+                });
+            });
+        });
+        describe("4. removeTokensAllocation() function", () => {
+            describe("4.1 Public state", () => {});
+            describe("4.2 Interactions", () => {
+                it("[DP][4.2.1] Investor shouldn't be able to remove tokens allocation", async () => {
+                    await expect(
+                        distributionPool.removeTokensAllocation(0, investorA.address)
+                    ).to.be.revertedWithCustomError(
+                        distributionPool,
+                        "DistributionPool__NotInvestmentPool"
+                    );
+                });
+
+                it("[DP][4.2.2] Investment pool should be able to allocate tokens and emit event", async () => {
+                    const milestoneId = 1;
+                    const investmentWeight = weightDivisor.div(10);
+                    investmentPool.allocateTokens(
+                        milestoneId,
+                        investorA.address,
+                        investmentWeight,
+                        weightDivisor,
+                        milestonesPortionsLeft[milestoneId]
+                    );
+
+                    const tokenAllocation = await distributionPool.getInvestmentAllocation(
+                        investorA.address,
+                        milestoneId
+                    );
+                    await expect(
+                        investmentPool.removeTokensAllocation(milestoneId, investorA.address)
+                    )
+                        .to.emit(distributionPool, "RemovedAllocation")
+                        .withArgs(investorA.address, tokenAllocation, milestoneId);
                 });
             });
         });

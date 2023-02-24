@@ -16,6 +16,8 @@ contract InvestmentPoolMockForIntegration is AbstractInvestmentPool, AbstractEmp
     uint16 internal currentMilestone = 0;
     uint24 internal investmentPoolStateValue;
 
+    mapping(uint16 => uint48) internal memMilestonePortions;
+
     mapping(uint16 => IInvestmentPool.Milestone) internal milestones;
 
     constructor(
@@ -25,6 +27,9 @@ contract InvestmentPoolMockForIntegration is AbstractInvestmentPool, AbstractEmp
     ) {
         distributionPool = _distributionPool;
         creator = _creator;
+
+        // 100% of the project is "left" at the start
+        memMilestonePortions[0] = getPercentageDivider();
 
         MilestoneInterval memory interval;
         for (uint16 i = 0; i < _milestones.length; ++i) {
@@ -39,6 +44,9 @@ contract InvestmentPoolMockForIntegration is AbstractInvestmentPool, AbstractEmp
                 intervalSeedPortion: interval.intervalSeedPortion,
                 intervalStreamingPortion: interval.intervalStreamingPortion
             });
+            memMilestonePortions[i + 1] =
+                memMilestonePortions[i] -
+                (_milestones[i].intervalSeedPortion + _milestones[i].intervalStreamingPortion);
         }
     }
 
@@ -56,6 +64,10 @@ contract InvestmentPoolMockForIntegration is AbstractInvestmentPool, AbstractEmp
             _weightDivisor,
             _allocationCoefficient
         );
+    }
+
+    function removeTokensAllocation(uint16 _milestoneId, address _investor) external {
+        distributionPool.removeTokensAllocation(_milestoneId, _investor);
     }
 
     function getCreator()
@@ -154,5 +166,11 @@ contract InvestmentPoolMockForIntegration is AbstractInvestmentPool, AbstractEmp
 
     function setEmergencyTerminationTimestamp(uint48 _timestamp) external {
         emergencyTerminationTimestamp = _timestamp;
+    }
+
+    function getMilestonesPortionLeft(
+        uint16 _milestoneId
+    ) public view override(AbstractEmptyInvestmentPool, IInvestmentPool) returns (uint48) {
+        return memMilestonePortions[_milestoneId];
     }
 }

@@ -32,6 +32,11 @@ interface IDistributionPool {
         uint16 _milestoneId
     ) external view returns (uint256);
 
+    function getInvestmentAllocation(
+        address _investor,
+        uint16 _milestoneId
+    ) external view returns (uint256);
+
     function getAllocationData(address _investor) external view returns (uint256, uint256);
 
     function getAllocatedTokens(address _investor) external view returns (uint256);

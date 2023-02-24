@@ -43,6 +43,11 @@ contract DistributionPoolMockForIntegration is IInitializableDistributionPool {
         uint16 _milestoneId
     ) public view returns (uint256) {}
 
+    function getInvestmentAllocation(
+        address _investor,
+        uint16 _milestoneId
+    ) public view returns (uint256) {}
+
     function getAllocationData(address _investor) public view returns (uint256, uint256) {}
 
     function getAllocatedTokens(address _investor) public view returns (uint256) {}
